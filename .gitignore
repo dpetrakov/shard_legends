@@ -1,0 +1,39 @@
+# IDE and tools
+.obsidian
+.claude
+.claude/settings.local.json
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment and configuration
+.env
+.env.local
+.env.*.local
+*.env
+!.env.example
+!.env.local.example
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Docker
+docker-compose.override.yml
+
+# OS
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~
+.~*
+
+# Local development
+.local/

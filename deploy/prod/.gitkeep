@@ -1,0 +1,3 @@
+# This file ensures that git tracks the deploy/prod/ directory
+# This directory will contain:
+# - Production environment configuration (TBD) 

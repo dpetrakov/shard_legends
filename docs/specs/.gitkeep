@@ -1,0 +1,5 @@
+# This file ensures that git tracks the specs/ directory
+# This directory will contain:
+# - API specifications (OpenAPI YAML)
+# - Event specifications
+# - Data contract schemas 

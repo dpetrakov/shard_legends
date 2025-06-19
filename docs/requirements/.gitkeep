@@ -1,0 +1,5 @@
+# This file ensures that git tracks the requirements/ directory
+# This directory will contain:
+# - SRS (Software Requirements Specification)
+# - Non-functional requirements
+# - Risk matrix 
