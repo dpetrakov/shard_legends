@@ -53,14 +53,14 @@ const GameBoardComponent: React.FC<GameBoardProps> = ({
         if (c < BOARD_COLS - 1) {
           const crystalToSwap = currentBoard[r][c+1];
           if (crystalToSwap) {
-            const testBoard = logicalSwap(currentBoard, {r,c}, {r, c: c+1});
+            const testBoard = logicalSwap(currentBoard, {row: r, col: c}, {row: r, col: c+1});
             if (findMatchGroups(testBoard).length > 0) return true;
           }
         }
         if (r < BOARD_ROWS - 1) {
            const crystalToSwap = currentBoard[r+1]?.[c];
            if (crystalToSwap) {
-            const testBoard = logicalSwap(currentBoard, {r,c}, {r: r+1, c});
+            const testBoard = logicalSwap(currentBoard, {row: r, col: c}, {row: r+1, col: c});
             if (findMatchGroups(testBoard).length > 0) return true;
           }
         }

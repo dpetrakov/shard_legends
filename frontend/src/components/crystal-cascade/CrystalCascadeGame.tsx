@@ -358,8 +358,8 @@ const CrystalCascadeGame: React.FC = () => {
             className="absolute inset-0 w-full h-full backface-hidden bg-card/90 backdrop-blur-sm p-2 sm:p-4 rounded-lg shadow-xl flex items-center justify-center"
             style={{ transform: 'rotateY(180deg)' }}
           >
-            <div className="grid grid-cols-2 gap-2 sm:gap-3 w-full h-full">
-              {[...Array(4)].map((_, index) => (
+            <div className="grid grid-cols-3 gap-2 sm:gap-3 w-full h-full">
+              {[...Array(6)].map((_, index) => (
                 <Card
                   key={`game-card-wrapper-${index}`}
                   className="bg-transparent shadow-md flex flex-col items-center justify-center p-0 cursor-pointer overflow-hidden relative rounded-lg"

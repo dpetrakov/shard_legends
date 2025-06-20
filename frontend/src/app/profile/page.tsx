@@ -5,7 +5,6 @@ import { useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { api, ApiError } from "@/lib/api";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,13 +40,24 @@ export default function ProfilePage() {
     setIsPinging(true);
     setPingModalMessage("Pinging server...");
     setIsPingModalOpen(true);
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+
+    if (!apiUrl) {
+      setPingModalMessage("Ошибка: Переменная окружения NEXT_PUBLIC_API_URL не установлена.");
+      setIsPinging(false);
+      return;
+    }
+
     try {
-      const data = await api.getJson<{message: string}>('/api/ping');
-      setPingModalMessage(`Ответ сервера: ${data.message}`);
+      const response = await fetch(`${apiUrl}/api/ping`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText || 'Unknown server error'}`);
+      }
+      const data = await response.text();
+      setPingModalMessage(`Ответ сервера: ${data}`);
     } catch (error) {
-      if (error instanceof ApiError) {
-        setPingModalMessage(`Ошибка: ${error.message} (Код: ${error.status})`);
-      } else if (error instanceof Error) {
+      if (error instanceof Error) {
         setPingModalMessage(`Ошибка: ${error.message}`);
       } else {
         setPingModalMessage(`Произошла неизвестная ошибка.`);
@@ -71,6 +81,23 @@ export default function ProfilePage() {
           <span className="text-2xl font-headline">Имя пользователя</span>
           <Button variant="outline" className="border-primary text-primary hover:bg-primary/10 hover:text-primary-foreground">
             Подключить кошелек
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Backend Test Section */}
+      <Card className="w-full max-w-md backdrop-blur-md shadow-xl">
+        <CardHeader>
+          <CardTitle className="text-2xl font-headline text-center text-primary">Тест Бэкенда</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col items-center">
+          <Button onClick={handlePingServer} variant="outline" className="border-accent text-accent hover:bg-accent/10 hover:text-accent-foreground" disabled={isPinging}>
+            {isPinging ? (
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+            ) : (
+              <Wifi className="mr-2 h-5 w-5" />
+            )}
+            Ping Сервера
           </Button>
         </CardContent>
       </Card>
@@ -161,23 +188,6 @@ export default function ProfilePage() {
           >
             <ImageIcon className="mr-2 h-5 w-5" />
             IN-match3
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Backend Test Section */}
-      <Card className="w-full max-w-md backdrop-blur-md shadow-xl">
-        <CardHeader>
-          <CardTitle className="text-2xl font-headline text-center text-primary">Тест Бэкенда</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col items-center">
-          <Button onClick={handlePingServer} variant="outline" className="border-accent text-accent hover:bg-accent/10 hover:text-accent-foreground" disabled={isPinging}>
-            {isPinging ? (
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-            ) : (
-              <Wifi className="mr-2 h-5 w-5" />
-            )}
-            Ping Сервера
           </Button>
         </CardContent>
       </Card>
