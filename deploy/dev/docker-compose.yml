@@ -24,6 +24,24 @@ services:
       retries: 3
       start_period: 40s
 
+  # Ping service (test microservice)
+  ping-service:
+    build:
+      context: ../../services/ping-service
+      dockerfile: Dockerfile
+    container_name: slcw-ping-service-dev
+    ports:
+      - "127.0.0.1:8081:8080"
+    networks:
+      - slcw-dev
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
   # API service (placeholder for future backend)
   # api:
   #   image: slcw-api-dev:latest
