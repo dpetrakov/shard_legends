@@ -9,6 +9,11 @@
     "build": "npm --prefix frontend run build",
     "start": "npm --prefix frontend run start",
     "lint": "npm --prefix frontend run lint",
-    "typecheck": "npm --prefix frontend run typecheck"
+    "typecheck": "npm --prefix frontend run typecheck",
+    "dev:docker:start": "docker-compose -f deploy/dev/docker-compose.yml up -d",
+    "dev:docker:stop": "docker-compose -f deploy/dev/docker-compose.yml down",
+    "dev:docker:logs": "docker-compose -f deploy/dev/docker-compose.yml logs -f",
+    "dev:docker:debug": "docker-compose -f deploy/dev/docker-compose.yml ps",
+    "dev:docker:rebuild": "docker-compose -f deploy/dev/docker-compose.yml build --no-cache"
   }
 } 
