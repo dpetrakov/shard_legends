@@ -10,10 +10,10 @@ services:
     environment:
       - NODE_ENV=development
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8082}
-    volumes:
-      # Hot reload for development
-      - ../../frontend/src:/app/src:ro
-      - ../../frontend/public:/app/public:ro
+    # volumes:
+    #   # Hot reload for development (commented out for now)
+    #   - ../../frontend/src:/app/src:ro
+    #   - ../../frontend/public:/app/public:ro
     networks:
       - slcw-dev
     restart: unless-stopped
