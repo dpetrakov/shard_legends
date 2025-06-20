@@ -6,7 +6,7 @@ services:
       dockerfile: deploy/dev/frontend.Dockerfile
     container_name: slcw-frontend-dev
     ports:
-      - "8092:3000"  # Map to dev frontend port as per nginx config
+      - "127.0.0.1:8092:3000"  # Map to dev frontend port as per nginx config
     environment:
       - NODE_ENV=development
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8082}
