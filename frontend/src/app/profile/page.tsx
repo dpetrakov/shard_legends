@@ -1,13 +1,24 @@
 
 "use client";
 
+import { useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { api, ApiError } from "@/lib/api";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useChests } from "@/contexts/ChestContext";
 import type { ChestType } from "@/types/profile";
-import { User, Gem, Candy, Skull as SkullIcon, Dog as DogIcon, Image as ImageIcon } from "lucide-react"; // Added ImageIcon
-import NextImage from 'next/image'; // Renamed to avoid conflict with Lucide Image
+import { User, Gem, Candy, Skull as SkullIcon, Dog as DogIcon, Image as ImageIcon, Wifi, Loader2 } from "lucide-react";
+import NextImage from 'next/image';
 import { useIconSet } from "@/contexts/IconSetContext";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +32,30 @@ const chestVisualData: Record<ChestType, { name: string; hint: string }> = {
 export default function ProfilePage() {
   const { chestCounts } = useChests();
   const { iconSet, setIconSet } = useIconSet();
+
+  const [isPingModalOpen, setIsPingModalOpen] = useState(false);
+  const [pingModalMessage, setPingModalMessage] = useState("");
+  const [isPinging, setIsPinging] = useState(false);
+
+  const handlePingServer = async () => {
+    setIsPinging(true);
+    setPingModalMessage("Pinging server...");
+    setIsPingModalOpen(true);
+    try {
+      const data = await api.getJson<{message: string}>('/api/ping');
+      setPingModalMessage(`Ответ сервера: ${data.message}`);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setPingModalMessage(`Ошибка: ${error.message} (Код: ${error.status})`);
+      } else if (error instanceof Error) {
+        setPingModalMessage(`Ошибка: ${error.message}`);
+      } else {
+        setPingModalMessage(`Произошла неизвестная ошибка.`);
+      }
+    } finally {
+      setIsPinging(false);
+    }
+  };
 
   return (
     <div className="flex flex-col items-center justify-start min-h-screen p-4 pt-6 space-y-6 text-foreground pb-20">
@@ -129,6 +164,48 @@ export default function ProfilePage() {
           </Button>
         </CardContent>
       </Card>
+
+      {/* Backend Test Section */}
+      <Card className="w-full max-w-md backdrop-blur-md shadow-xl">
+        <CardHeader>
+          <CardTitle className="text-2xl font-headline text-center text-primary">Тест Бэкенда</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col items-center">
+          <Button onClick={handlePingServer} variant="outline" className="border-accent text-accent hover:bg-accent/10 hover:text-accent-foreground" disabled={isPinging}>
+            {isPinging ? (
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+            ) : (
+              <Wifi className="mr-2 h-5 w-5" />
+            )}
+            Ping Сервера
+          </Button>
+        </CardContent>
+      </Card>
+
+      <AlertDialog open={isPingModalOpen} onOpenChange={(isOpen) => {
+        if (!isPinging) { // Only allow closing if not actively pinging
+          setIsPingModalOpen(isOpen);
+        }
+      }}>
+        <AlertDialogContent className="bg-card/90 backdrop-blur-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-primary">Результат Ping</AlertDialogTitle>
+            <AlertDialogDescription className="text-card-foreground whitespace-pre-wrap">
+              {pingModalMessage}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction
+              onClick={() => setIsPingModalOpen(false)}
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
+              disabled={isPinging}
+            >
+              OK
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </div>
   );
 }

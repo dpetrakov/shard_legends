@@ -105,18 +105,18 @@ const GameBoardComponent: React.FC<GameBoardProps> = ({
         onCreateFloatingScore(pointsForThisMatch);
       }
 
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await new Promise(resolve => setTimeout(resolve, 300)); // Duration for matched crystals to animate (e.g., fade out/shrink)
 
       const { newBoard: shiftedBoard } = shiftAndFillCrystals(boardAfterMatches, matchGroups, activeIconsRef.current);
       boardAfterMatches = shiftedBoard;
       setBoard(boardAfterMatches);
 
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await new Promise(resolve => setTimeout(resolve, 300)); // Duration for new crystals to fall and settle
 
       matchGroups = findMatchGroups(boardAfterMatches);
     }
 
-    if (matchGroups.length === 0) {
+    if (matchGroups.length === 0) { // Ensure this is called only once after all cascades
        onNoMatchOrComboEnd();
     }
     return boardAfterMatches;
@@ -127,18 +127,30 @@ const GameBoardComponent: React.FC<GameBoardProps> = ({
     setIsProcessing(true);
 
     const tempSwappedBoard = logicalSwap(board, pos1, pos2);
+    setBoard(tempSwappedBoard); // Update UI to show swapped crystals. `layout` in CrystalCell animates positions.
     
+    // Wait for the visual swap animation to complete (or be clearly visible)
+    await new Promise(resolve => setTimeout(resolve, 250)); 
+
     const matchGroupsFound = findMatchGroups(tempSwappedBoard);
+    
     if (matchGroupsFound.length > 0) {
-      setBoard(tempSwappedBoard); 
+      // Matches found, proceed with match processing.
+      // processMatchesInternal will handle further setBoard calls for match animations & refilling.
       const finalBoard = await processMatchesInternal(tempSwappedBoard, true);
-      setBoard(finalBoard);
+      setBoard(finalBoard); // Set the board to the state after all cascades
     } else {
-      setBoard(tempSwappedBoard); 
-      await new Promise(resolve => setTimeout(resolve, 150)); 
-      setBoard(logicalSwap(tempSwappedBoard, pos2, pos1)); 
+      // No matches found, animate swap back.
+      // Board is currently showing tempSwappedBoard. Wait a bit for user to see the "no match" state.
+      await new Promise(resolve => setTimeout(resolve, 200)); 
+      
+      const boardToSwapBack = logicalSwap(tempSwappedBoard, pos2, pos1);
+      setBoard(boardToSwapBack); // Animate swap back
+      
+      // Wait for swap back animation to complete
+      await new Promise(resolve => setTimeout(resolve, 250)); 
+      
       onNoMatchOrComboEnd(); 
-      await new Promise(resolve => setTimeout(resolve, 300)); 
     }
     setIsProcessing(false);
   }, [board, isProcessing, processMatchesInternal, onNoMatchOrComboEnd, isProcessingExternally]);
@@ -205,3 +217,4 @@ const GameBoardComponent: React.FC<GameBoardProps> = ({
 };
 
 export default GameBoardComponent;
+

@@ -12,8 +12,8 @@ import { useIconSet } from '@/contexts/IconSetContext';
 import { useChests } from '@/contexts/ChestContext';
 import Image from 'next/image';
 import { BOARD_COLS, BOARD_ROWS } from '@/components/crystal-cascade/crystal-definitions';
-import { FlipHorizontal } from 'lucide-react';
-// import { Button } from '@/components/ui/button'; // Button for manual flip removed
+import { Button } from '@/components/ui/button';
+import { RefreshCcw } from 'lucide-react'; // Import RefreshCcw icon
 
 interface ComboStyle {
   background: string;
@@ -40,6 +40,8 @@ const comboStyles: ComboStyle[] = [
 
 const SCORE_STORAGE_KEY = 'crystalCascadeGameScore';
 const MAX_COMBO_STORAGE_KEY = 'crystalCascadeMaxCombo';
+const REWARD_REQUIREMENT_STORAGE_KEY = 'crystalCascadeRewardRequirement';
+const MAX_REWARD_COMBO_THRESHOLD = 15; // Max combo requirement for reward
 
 const chestVisualData: Record<ChestType, { name: string; hint: string; imageUrl?: string }> = {
   small: { name: "Малый", hint: "small treasure chest", imageUrl: "https://placehold.co/150x200/deb887/000000.png?text=Малый+Сундук" },
@@ -67,7 +69,7 @@ const CrystalCascadeGame: React.FC = () => {
   const [floatingScores, setFloatingScores] = useState<FloatingScoreItem[]>([]);
 
   const [comboCount, setComboCount] = useState(0);
-  const comboCountRef = useRef(0); // Ref to hold the latest combo count
+  const comboCountRef = useRef(0);
   const [maxCombo, setMaxCombo] = useState(0);
   const [showComboText, setShowComboText] = useState(false);
   const [comboDisplayKey, setComboDisplayKey] = useState(0);
@@ -84,6 +86,7 @@ const CrystalCascadeGame: React.FC = () => {
   const [isRevealingFlippedCard, setIsRevealingFlippedCard] = useState<boolean>(false);
   const [revealedFlippedCardImageUrl, setRevealedFlippedCardImageUrl] = useState<string | null>(null);
   const [awaitingCardPick, setAwaitingCardPick] = useState(false);
+  const [currentRewardComboRequirement, setCurrentRewardComboRequirement] = useState(5);
 
 
   useEffect(() => {
@@ -93,22 +96,23 @@ const CrystalCascadeGame: React.FC = () => {
 
     const loadedMaxCombo = parseInt(localStorage.getItem(MAX_COMBO_STORAGE_KEY) || '0', 10);
     setMaxCombo(loadedMaxCombo);
+
+    const loadedRewardRequirement = parseInt(localStorage.getItem(REWARD_REQUIREMENT_STORAGE_KEY) || '5', 10);
+    setCurrentRewardComboRequirement(loadedRewardRequirement);
     
     setComboCount(0);
-    // comboCountRef.current = 0; // useEffect will handle this based on setComboCount(0)
     setShowComboText(false);
     if (comboTimeoutRef.current) clearTimeout(comboTimeoutRef.current);
     setIsBoardFlipped(false);
     setAwaitingCardPick(false);
     setRevealedGameCardIndex(null);
     setIsRevealingFlippedCard(false);
-
+    console.log(`[DEBUG] Game initialized/reset (gameKey: ${gameKey}). Score: ${loadedScore}, MaxCombo: ${loadedMaxCombo}, RewardReq: ${loadedRewardRequirement}`);
   }, [gameKey]);
 
-  // Effect to synchronize comboCount state with comboCountRef
   useEffect(() => {
     comboCountRef.current = comboCount;
-    console.log(`[EFFECT] comboCount updated to: ${comboCount}, comboCountRef.current now: ${comboCountRef.current}`);
+     console.log(`[DEBUG] useEffect: comboCount updated to ${comboCount}. comboCountRef.current is now ${comboCountRef.current}`);
   }, [comboCount]);
 
 
@@ -124,6 +128,10 @@ const CrystalCascadeGame: React.FC = () => {
   useEffect(() => {
     localStorage.setItem(MAX_COMBO_STORAGE_KEY, maxCombo.toString());
   }, [maxCombo]);
+
+  useEffect(() => {
+    localStorage.setItem(REWARD_REQUIREMENT_STORAGE_KEY, currentRewardComboRequirement.toString());
+  }, [currentRewardComboRequirement]);
 
   useEffect(() => {
     const controls = animate(displayScore, score, {
@@ -167,10 +175,10 @@ const CrystalCascadeGame: React.FC = () => {
     setComboCount(prevCombo => {
       const newComboBase = isFirstStepInChain ? 0 : prevCombo;
       const newCombo = newComboBase + numberOfDistinctGroupsInStep;
-      console.log(`[DEBUG] handleMatchProcessed: prevCombo=${prevCombo}, newComboBase=${newComboBase}, groups=${numberOfDistinctGroupsInStep}, newCombo=${newCombo}`);
       if (newCombo > maxCombo) {
         setMaxCombo(newCombo);
       }
+      console.log(`[DEBUG] handleMatchProcessed: newCombo: ${newCombo}, isFirstStep: ${isFirstStepInChain}, groups: ${numberOfDistinctGroupsInStep}`);
       return newCombo;
     });
 
@@ -183,27 +191,26 @@ const CrystalCascadeGame: React.FC = () => {
   }, [maxCombo]);
 
   const handleNoMatchOrComboEnd = useCallback(() => {
-    // Read from the ref for the most up-to-date value
+    console.log(`[DEBUG] handleNoMatchOrComboEnd called. Current comboCount (from ref): ${comboCountRef.current}`);
     const finalComboCount = comboCountRef.current; 
+    console.log(`[DEBUG] finalComboCount: ${finalComboCount}`);
     
-    console.log('[DEBUG] handleNoMatchOrComboEnd called. comboCount (state):', comboCount, 'comboCountRef.current:', comboCountRef.current);
-    console.log('[DEBUG] finalComboCount (from ref):', finalComboCount);
-
     if (comboTimeoutRef.current) clearTimeout(comboTimeoutRef.current);
     setShowComboText(false);
     
-    if (finalComboCount >= 2) {
-      console.log('[DEBUG] Combo >= 2 detected (using ref value). Flipping board.');
+    if (finalComboCount >= currentRewardComboRequirement && currentRewardComboRequirement <= MAX_REWARD_COMBO_THRESHOLD) {
+      console.log(`[DEBUG] Combo threshold met (${finalComboCount} >= ${currentRewardComboRequirement}). Flipping board.`);
       setTimeout(() => { 
         setIsBoardFlipped(true);
         setTimeout(() => { 
           setAwaitingCardPick(true);
         }, 600); 
       }, 500); 
+    } else {
+      console.log(`[DEBUG] Combo threshold NOT met (${finalComboCount} < ${currentRewardComboRequirement} or req > ${MAX_REWARD_COMBO_THRESHOLD}). Not flipping board.`);
     }
-    // Reset state, which will trigger the useEffect to update the ref
     setComboCount(0); 
-  }, [setIsBoardFlipped, setAwaitingCardPick, setShowComboText, comboCount]);
+  }, [currentRewardComboRequirement, setIsBoardFlipped, setAwaitingCardPick, setShowComboText]);
   
 
   const currentComboTextDisplay = comboCount > 1 ? `COMBO ${comboCount}x` : (comboCount === 1 ? "MATCH!" : "");
@@ -239,9 +246,17 @@ const CrystalCascadeGame: React.FC = () => {
         setRevealedGameCardIndex(null); 
         setRevealedFlippedCardImageUrl(null);
         setIsBoardFlipped(false); 
+        if (currentRewardComboRequirement <= MAX_REWARD_COMBO_THRESHOLD) {
+            setCurrentRewardComboRequirement(prev => prev + 1);
+        }
       }, animationDuration);
 
     }, showDuration); 
+  };
+
+  const handleResetRewardRequirement = () => {
+    setCurrentRewardComboRequirement(5);
+    console.log("[DEBUG] Reward requirement reset to 5 by test button.");
   };
 
 
@@ -264,6 +279,29 @@ const CrystalCascadeGame: React.FC = () => {
             >
               {maxCombo > 0 ? `${maxCombo}x` : '0'}
             </span>
+          </div>
+           <div className="flex items-center gap-2"> {/* Increased gap for icon */}
+            <span className="text-muted-foreground text-xs">
+              {currentRewardComboRequirement <= MAX_REWARD_COMBO_THRESHOLD 
+                ? "Приз за:" 
+                : "Наград:"}
+            </span>
+            <span className="font-headline text-base text-primary">
+              {currentRewardComboRequirement <= MAX_REWARD_COMBO_THRESHOLD
+                ? `Комбо ${currentRewardComboRequirement}+`
+                : "сегодня нет"}
+            </span>
+            {currentRewardComboRequirement <= MAX_REWARD_COMBO_THRESHOLD && (
+              <Button 
+                onClick={handleResetRewardRequirement} 
+                variant="ghost" 
+                size="icon" 
+                className="h-5 w-5 text-muted-foreground hover:text-primary" // Adjusted size and colors
+                aria-label="Сбросить требование комбо"
+              >
+                <RefreshCcw className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -397,4 +435,8 @@ const CrystalCascadeGame: React.FC = () => {
 };
 
 export default CrystalCascadeGame;
+    
+
+    
+
     
