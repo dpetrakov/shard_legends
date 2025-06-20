@@ -1,16 +1,17 @@
+
 "use client";
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import GameBoardComponent from './GameBoard';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import type { FloatingScoreItem } from '@/types/shard-legends';
+import type { FloatingScoreItem } from '@/types/crystal-cascade';
 import type { ChestType } from '@/types/profile';
 import FloatingScoreManager from './FloatingScoreEffect';
 import { animate, motion, AnimatePresence } from "framer-motion";
 import { useIconSet } from '@/contexts/IconSetContext';
 import { useChests } from '@/contexts/ChestContext';
 import Image from 'next/image';
-import { BOARD_COLS, BOARD_ROWS } from '@/components/shard-legends/shard-definitions';
+import { BOARD_COLS, BOARD_ROWS } from '@/components/crystal-cascade/crystal-definitions';
 import { FlipHorizontal } from 'lucide-react';
 // import { Button } from '@/components/ui/button'; // Button for manual flip removed
 
@@ -37,8 +38,8 @@ const comboStyles: ComboStyle[] = [
   { background: 'rgb(205, 0, 0)', text: 'rgb(245, 245, 245)' }    
 ];
 
-const SCORE_STORAGE_KEY = 'shardLegendsGameScore';
-const MAX_COMBO_STORAGE_KEY = 'shardLegendsMaxCombo';
+const SCORE_STORAGE_KEY = 'crystalCascadeGameScore';
+const MAX_COMBO_STORAGE_KEY = 'crystalCascadeMaxCombo';
 
 const chestVisualData: Record<ChestType, { name: string; hint: string; imageUrl?: string }> = {
   small: { name: "Малый", hint: "small treasure chest", imageUrl: "https://placehold.co/150x200/deb887/000000.png?text=Малый+Сундук" },
@@ -58,7 +59,7 @@ const determineChestReward = (): ChestType => {
 };
 
 
-const ShardLegendsGame: React.FC = () => {
+const CrystalCascadeGame: React.FC = () => {
   const [score, setScore] = useState(0);
   const [displayScore, setDisplayScore] = useState(0);
   const [gameKey, setGameKey] = useState(() => Date.now());
@@ -342,14 +343,12 @@ const ShardLegendsGame: React.FC = () => {
                        >
                         <div className="relative w-full h-full">
                           <Image
-                            src={revealedFlippedCardImageUrl}
+                            src={revealedFlippedCardImageUrl} 
                             alt={`Открытая карта ${index + 1}`}
-                            fill
-                            priority
-                            sizes="(max-width: 768px) 50vw, 25vw"
-                            style={{ objectFit: 'contain' }}
+                            layout="fill"
+                            objectFit="contain"
                             className="rounded-sm"
-                            data-ai-hint={chestVisualData[determineChestReward()]?.hint || "treasure card"}
+                            data-ai-hint={chestVisualData[determineChestReward()]?.hint || "treasure card"} 
                           />
                         </div>
                       </motion.div>
@@ -366,10 +365,8 @@ const ShardLegendsGame: React.FC = () => {
                            <Image
                             src="/images/card-back.png"
                             alt={`Карта ${index + 1}`}
-                            fill
-                            priority
-                            sizes="(max-width: 768px) 50vw, 25vw"
-                            style={{ objectFit: 'contain' }}
+                            layout="fill"
+                            objectFit="contain"
                             className="rounded-sm"
                             data-ai-hint="card back"
                           />
@@ -399,5 +396,5 @@ const ShardLegendsGame: React.FC = () => {
   );
 };
 
-export default ShardLegendsGame;
+export default CrystalCascadeGame;
     

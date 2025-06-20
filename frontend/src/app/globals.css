@@ -51,12 +51,12 @@
     --sidebar-border: 240 40% 18%;
     --sidebar-ring: 270 90% 65%;
 
-    /* Shard specific colors for Fantasy Casual theme (Classic Set - 5 types) */
-    --shard-red: 0 90% 65%;
-    --shard-sky-blue: 195 90% 60%;
-    --shard-yellow: 50 100% 60%;
-    --shard-pink: 325 90% 70%;
-    --shard-green: 120 70% 55%;
+    /* Crystal specific colors for Fantasy Casual theme (Classic Set - 5 types) */
+    --crystal-red: 0 90% 65%;
+    --crystal-sky-blue: 195 90% 60%;
+    --crystal-yellow: 50 100% 60%;
+    --crystal-pink: 325 90% 70%;
+    --crystal-green: 120 70% 55%;
 
     /* Candy specific colors for Fantasy Casual theme (Sweets Set - 5 types) */
     --candy-red: 350 90% 70%;     /* Bright Red for Lollipop */
@@ -127,12 +127,12 @@
     --sidebar-border: 240 40% 18%;
     --sidebar-ring: 270 90% 65%;
 
-    /* Shard specific colors for Neon theme (Classic Set - 5 types) - same as Fantasy Casual */
-    --shard-red: 0 90% 65%;
-    --shard-sky-blue: 195 90% 60%;
-    --shard-yellow: 50 100% 60%;
-    --shard-pink: 325 90% 70%;
-    --shard-green: 120 70% 55%;
+    /* Crystal specific colors for Neon theme (Classic Set - 5 types) - same as Fantasy Casual */
+    --crystal-red: 0 90% 65%;
+    --crystal-sky-blue: 195 90% 60%;
+    --crystal-yellow: 50 100% 60%;
+    --crystal-pink: 325 90% 70%;
+    --crystal-green: 120 70% 55%;
 
     /* Candy specific colors for Neon theme (Sweets Set - 5 types) - same as Fantasy Casual */
     --candy-red: 350 90% 70%;
@@ -188,12 +188,12 @@
   }
 }
 
-.shard-cell {
+.crystal-cell {
   @apply flex items-center justify-center rounded-md shadow-lg;
   aspect-ratio: 1 / 1;
 }
 
-.shard-cell.selected {
+.crystal-cell.selected {
   @apply ring-2 ring-inset ring-accent;
 }
 

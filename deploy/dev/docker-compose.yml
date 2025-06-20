@@ -6,7 +6,7 @@ services:
       dockerfile: deploy/dev/frontend.Dockerfile
     container_name: slcw-frontend-dev
     ports:
-      - "127.0.0.1:8092:3000"  # Map to dev frontend port as per nginx config
+      - "127.0.0.1:8092:9002"  # Map to dev frontend port as per nginx config
     environment:
       - NODE_ENV=development
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8082}
@@ -18,7 +18,7 @@ services:
       - slcw-dev
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9002"]
       interval: 30s
       timeout: 10s
       retries: 3

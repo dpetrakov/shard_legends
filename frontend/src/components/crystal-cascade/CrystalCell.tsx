@@ -1,53 +1,54 @@
+
 "use client";
 
 import type React from 'react';
-import type { Shard, Position } from '@/types/shard-legends';
+import type { Crystal, Position } from '@/types/crystal-cascade';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 
-interface ShardCellProps {
-  shard: Shard | null;
+interface CrystalCellProps {
+  crystal: Crystal | null;
   position: Position;
   isSelected: boolean;
   isHint?: boolean;
-  onShardClick: (position: Position) => void;
+  onCrystalClick: (position: Position) => void;
 }
 
-const ShardCell: React.FC<ShardCellProps> = ({
-  shard,
+const CrystalCell: React.FC<CrystalCellProps> = ({
+  crystal,
   position,
   isSelected,
   isHint,
-  onShardClick,
+  onCrystalClick,
 }) => {
   const isDarkerSquare = (position.row + position.col) % 2 === 0;
 
   const cellBgClass = isDarkerSquare ? "bg-background" : "bg-card";
-  const shardBgClass = "bg-card/50 backdrop-blur-sm";
+  const crystalBgClass = "bg-card/50 backdrop-blur-sm";
 
-  const LucideShardComponent = shard?.type.iconType === 'lucide' ? shard.type.component : null;
+  const LucideCrystalComponent = crystal?.type.iconType === 'lucide' ? crystal.type.component : null;
 
   return (
     <div
       className={cn(
-        "shard-cell relative",
+        "crystal-cell relative",
         cellBgClass,
-        isSelected && shard && "selected",
-        isHint && shard && "animate-pulse ring-2 ring-green-400"
+        isSelected && crystal && "selected",
+        isHint && crystal && "animate-pulse ring-2 ring-green-400"
       )}
-      onClick={() => shard && onShardClick(position)}
-      aria-label={shard ? `Shard type ${shard.type.name} at row ${position.row}, column ${position.col}` : `Empty cell at row ${position.row}, column ${position.col}`}
+      onClick={() => crystal && onCrystalClick(position)}
+      aria-label={crystal ? `Crystal type ${crystal.type.name} at row ${position.row}, column ${position.col}` : `Empty cell at row ${position.row}, column ${position.col}`}
     >
       <AnimatePresence mode="wait">
-        {shard && shard.type.iconType === 'lucide' && LucideShardComponent && (
+        {crystal && crystal.type.iconType === 'lucide' && LucideCrystalComponent && (
           <motion.div
-            key={`${shard.id}-lucide`}
+            key={`${crystal.id}-lucide`}
             layout
             initial={{ opacity: 0, y: -60, scale: 0.5 }}
             animate={{
-              opacity: shard.isMatched ? 0.2 : 1,
-              scale: shard.isMatched ? 0.5 : 1,
+              opacity: crystal.isMatched ? 0.2 : 1,
+              scale: crystal.isMatched ? 0.5 : 1,
               y: 0,
               transition: { duration: 0.3, ease: "easeInOut" }
             }}
@@ -59,23 +60,23 @@ const ShardCell: React.FC<ShardCellProps> = ({
             }}
             className={cn(
               "absolute inset-0 flex items-center justify-center cursor-pointer",
-              shardBgClass,
+              crystalBgClass,
               "rounded-md shadow-lg"
             )}
           >
-            <LucideShardComponent
-              className={cn("w-3/4 h-3/4", shard.type.colorClass)}
+            <LucideCrystalComponent
+              className={cn("w-3/4 h-3/4", crystal.type.colorClass)}
             />
           </motion.div>
         )}
-        {shard && shard.type.iconType === 'image' && shard.type.imageSrc && (
+        {crystal && crystal.type.iconType === 'image' && crystal.type.imageSrc && (
           <motion.div
-            key={`${shard.id}-image`}
+            key={`${crystal.id}-image`}
             layout
             initial={{ opacity: 0, y: -60, scale: 0.5 }}
             animate={{
-              opacity: shard.isMatched ? 0.2 : 1,
-              scale: shard.isMatched ? 0.5 : 1,
+              opacity: crystal.isMatched ? 0.2 : 1,
+              scale: crystal.isMatched ? 0.5 : 1,
               y: 0,
               transition: { duration: 0.3, ease: "easeInOut" }
             }}
@@ -87,18 +88,17 @@ const ShardCell: React.FC<ShardCellProps> = ({
             }}
             className={cn(
               "absolute inset-0 flex items-center justify-center cursor-pointer",
-              shardBgClass,
+              crystalBgClass,
               "rounded-md shadow-lg"
             )}
           >
             <div className="relative w-5/6 h-5/6">
               <Image
-                src={shard.type.imageSrc}
-                alt={shard.type.name}
-                fill
+                src={crystal.type.imageSrc}
+                alt={crystal.type.name}
+                layout="fill"
+                objectFit="contain"
                 priority
-                sizes="(max-width: 768px) 10vw, 48px"
-                style={{ objectFit: 'contain' }}
               />
             </div>
           </motion.div>
@@ -108,4 +108,4 @@ const ShardCell: React.FC<ShardCellProps> = ({
   );
 };
 
-export default ShardCell;
+export default CrystalCell;

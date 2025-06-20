@@ -4,7 +4,7 @@
 import type { RewardContextType } from '@/types/rewards';
 import React, { createContext, useContext, useState, useEffect, type ReactNode, useCallback } from 'react';
 
-const REWARD_STORAGE_KEY = 'shardLegendsRewardPoints';
+const REWARD_STORAGE_KEY = 'crystalCascadeRewardPoints';
 
 const RewardContext = createContext<RewardContextType | undefined>(undefined);
 

@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useState, useEffect, type ReactNode, useCallback } from 'react';
 import type { ChestType, ChestCounts, ChestContextType, ChestData } from '@/types/profile';
 
-const CHEST_STORAGE_KEY = 'shardLegendsChestCounts';
+const CHEST_STORAGE_KEY = 'crystalCascadeChestCounts';
 
 const initialChestCounts: ChestCounts = {
   small: 0,
