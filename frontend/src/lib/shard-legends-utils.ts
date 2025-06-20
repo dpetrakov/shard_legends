@@ -1,16 +1,16 @@
 
-import type { GameBoard, Crystal, Position, CrystalIcon } from '@/types/crystal-cascade';
-import { BOARD_ROWS, BOARD_COLS } from '@/components/crystal-cascade/crystal-definitions';
+import type { GameBoard, Shard, Position, ShardIcon } from '@/types/shard-legends';
+import { BOARD_ROWS, BOARD_COLS } from '@/components/shard-legends/shard-definitions';
 
-let nextCrystalId = 0;
+let nextShardId = 0;
 
-export function createCrystal(row: number, col: number, icons: CrystalIcon[], specificTypeIndex?: number): Crystal {
+export function createShard(row: number, col: number, icons: ShardIcon[], specificTypeIndex?: number): Shard {
   const typeIndex = specificTypeIndex !== undefined ? specificTypeIndex : Math.floor(Math.random() * icons.length);
   if (typeIndex < 0 || typeIndex >= icons.length) {
-    console.error("Invalid typeIndex in createCrystal", typeIndex, icons.length);
+    console.error("Invalid typeIndex in createShard", typeIndex, icons.length);
     // Fallback to a valid index, e.g., the first icon
     return {
-        id: nextCrystalId++,
+        id: nextShardId++,
         type: icons[0],
         row,
         col,
@@ -18,7 +18,7 @@ export function createCrystal(row: number, col: number, icons: CrystalIcon[], sp
       };
   }
   return {
-    id: nextCrystalId++,
+    id: nextShardId++,
     type: icons[typeIndex],
     row,
     col,
@@ -26,9 +26,9 @@ export function createCrystal(row: number, col: number, icons: CrystalIcon[], sp
   };
 }
 
-export function generateInitialBoard(icons: CrystalIcon[]): GameBoard {
+export function generateInitialBoard(icons: ShardIcon[]): GameBoard {
   let board: GameBoard = [];
-  nextCrystalId = 0;
+  nextShardId = 0;
 
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   while (true) {
@@ -36,20 +36,20 @@ export function generateInitialBoard(icons: CrystalIcon[]): GameBoard {
     for (let r = 0; r < BOARD_ROWS; r++) {
       board[r] = [];
       for (let c = 0; c < BOARD_COLS; c++) {
-        const crystal = createCrystal(r, c, icons);
-        board[r][c] = crystal;
+        const shard = createShard(r, c, icons);
+        board[r][c] = shard;
       }
     }
 
     const initialMatchGroups = findMatchGroups(board);
     if (initialMatchGroups.length === 0) {
-      // Ensure all crystals have correct row/col before returning
+      // Ensure all shards have correct row/col before returning
       for (let r = 0; r < BOARD_ROWS; r++) {
         for (let c = 0; c < BOARD_COLS; c++) {
-          const crystal = board[r][c];
-          if (crystal) {
-            crystal.row = r;
-            crystal.col = c;
+          const shard = board[r][c];
+          if (shard) {
+            shard.row = r;
+            shard.col = c;
           }
         }
       }
@@ -66,7 +66,7 @@ export function isAdjacent(pos1: Position, pos2: Position): boolean {
   return (rowDiff === 1 && colDiff === 0) || (rowDiff === 0 && colDiff === 1);
 }
 
-export function swapCrystals(board: GameBoard, pos1: Position, pos2: Position): GameBoard {
+export function swapShards(board: GameBoard, pos1: Position, pos2: Position): GameBoard {
   if (
     !board || !Array.isArray(board) || board.length !== BOARD_ROWS ||
     !board.every(row => Array.isArray(row) && row.length === BOARD_COLS) ||
@@ -78,8 +78,8 @@ export function swapCrystals(board: GameBoard, pos1: Position, pos2: Position): 
       safeCopy[r] = [];
       for (let c = 0; c < BOARD_COLS; c++) {
         const originalCell = board?.[r]?.[c];
-        // This part needs to be careful if icons array is not available here for createCrystal
-        // For now, just copy or null. If createCrystal is needed, icons must be passed.
+        // This part needs to be careful if icons array is not available here for createShard
+        // For now, just copy or null. If createShard is needed, icons must be passed.
         safeCopy[r][c] = (originalCell && typeof originalCell === 'object' && 'id' in originalCell) ? { ...originalCell, row:r, col:c } : null;
       }
     }
@@ -185,14 +185,14 @@ export function findMatchGroups(board: GameBoard): Position[][] {
 }
 
 
-export function shiftAndFillCrystals(initialBoard: GameBoard, matchGroups: Position[][], icons: CrystalIcon[] ): { newBoard: GameBoard, newScore: number } {
+export function shiftAndFillShards(initialBoard: GameBoard, matchGroups: Position[][], icons: ShardIcon[] ): { newBoard: GameBoard, newScore: number } {
   const allMatchedPositionsSet = new Set<string>();
   matchGroups.flat().forEach(p => allMatchedPositionsSet.add(`${p.row}-${p.col}`));
 
   const workingBoard: GameBoard = initialBoard.map((row, r) => {
     if (!Array.isArray(row) || row.length !== BOARD_COLS) {
       // Ensure icons array is available and used if creating new crystals here
-      return new Array(BOARD_COLS).fill(null).map((_, cIdx) => createCrystal(r, cIdx, icons));
+      return new Array(BOARD_COLS).fill(null).map((_, cIdx) => createShard(r, cIdx, icons));
     }
     return row.map(crystal => crystal ? { ...crystal, isMatched: false } : null);
   });
@@ -228,7 +228,7 @@ export function shiftAndFillCrystals(initialBoard: GameBoard, matchGroups: Posit
     }
     for (let c = 0; c < BOARD_COLS; c++) {
       if (workingBoard[r][c] === null) {
-        workingBoard[r][c] = createCrystal(r, c, icons);
+        workingBoard[r][c] = createShard(r, c, icons);
       }
     }
   }
@@ -239,7 +239,7 @@ export function shiftAndFillCrystals(initialBoard: GameBoard, matchGroups: Posit
         return { ...crystal, row: r, col: c, isMatched: false };
       }
       // This case should ideally not be hit if logic above is correct, but as a fallback:
-      return createCrystal(r,c, icons);
+      return createShard(r,c, icons);
     })
   );
 

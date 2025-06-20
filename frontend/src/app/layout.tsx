@@ -6,8 +6,8 @@ import { ChestProvider } from '@/contexts/ChestContext';
 import { IconSetProvider } from '@/contexts/IconSetContext'; // Import IconSetProvider
 
 export const metadata: Metadata = {
-  title: 'Crystal Cascade',
-  description: 'A match-3 game by Firebase Studio',
+  title: 'Shard Legends: Clan Wars',
+  description: 'Epic clan warfare strategy game',
 };
 
 export default function RootLayout({

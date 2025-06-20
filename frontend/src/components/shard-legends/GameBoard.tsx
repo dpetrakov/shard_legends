@@ -2,10 +2,10 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import type { GameBoard, Position, CrystalIcon } from '@/types/crystal-cascade';
-import CrystalCell from './CrystalCell';
-import { BOARD_ROWS, BOARD_COLS } from './crystal-definitions';
-import { isAdjacent, swapCrystals as logicalSwap, findMatchGroups, shiftAndFillCrystals, generateInitialBoard } from '@/lib/crystal-cascade-utils';
+import type { GameBoard, Position, ShardIcon } from '@/types/shard-legends';
+import ShardCell from './ShardCell';
+import { BOARD_ROWS, BOARD_COLS } from './shard-definitions';
+import { isAdjacent, swapShards as logicalSwap, findMatchGroups, shiftAndFillShards, generateInitialBoard } from '@/lib/shard-legends-utils';
 import { useIconSet } from '@/contexts/IconSetContext';
 
 interface GameBoardProps {
@@ -29,15 +29,15 @@ const GameBoardComponent: React.FC<GameBoardProps> = ({
 }) => {
   const { getActiveIconList } = useIconSet();
   const [board, setBoard] = useState<GameBoard>([]);
-  const [selectedCrystal, setSelectedCrystal] = useState<Position | null>(null);
+  const [selectedShard, setSelectedShard] = useState<Position | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const activeIconsRef = useRef<CrystalIcon[]>(getActiveIconList());
+  const activeIconsRef = useRef<ShardIcon[]>(getActiveIconList());
 
 
   useEffect(() => {
     activeIconsRef.current = getActiveIconList();
     setBoard(generateInitialBoard(activeIconsRef.current));
-    setSelectedCrystal(null);
+    setSelectedShard(null);
     setIsProcessing(false);
   }, [getActiveIconList, gameKeyProp]);
 
@@ -47,19 +47,19 @@ const GameBoardComponent: React.FC<GameBoardProps> = ({
     for (let r = 0; r < BOARD_ROWS; r++) {
       if (!currentBoard[r] || currentBoard[r].length !== BOARD_COLS) return false;
       for (let c = 0; c < BOARD_COLS; c++) {
-        const crystal = currentBoard[r][c];
-        if (!crystal) continue;
+        const shard = currentBoard[r][c];
+        if (!shard) continue;
 
         if (c < BOARD_COLS - 1) {
-          const crystalToSwap = currentBoard[r][c+1];
-          if (crystalToSwap) {
+          const shardToSwap = currentBoard[r][c+1];
+          if (shardToSwap) {
             const testBoard = logicalSwap(currentBoard, {r,c}, {r, c: c+1});
             if (findMatchGroups(testBoard).length > 0) return true;
           }
         }
         if (r < BOARD_ROWS - 1) {
-           const crystalToSwap = currentBoard[r+1]?.[c];
-           if (crystalToSwap) {
+           const shardToSwap = currentBoard[r+1]?.[c];
+           if (shardToSwap) {
             const testBoard = logicalSwap(currentBoard, {r,c}, {r: r+1, c});
             if (findMatchGroups(testBoard).length > 0) return true;
           }
@@ -90,11 +90,11 @@ const GameBoardComponent: React.FC<GameBoardProps> = ({
 
       const allMatchedPositions = matchGroups.flat();
       const boardWithMarkedMatches = boardAfterMatches.map(row =>
-        row.map(crystal => {
-          if (crystal && allMatchedPositions.some(p => p.row === crystal.row && p.col === crystal.col)) {
-            return { ...crystal, isMatched: true };
+        row.map(shard => {
+          if (shard && allMatchedPositions.some(p => p.row === shard.row && p.col === shard.col)) {
+            return { ...shard, isMatched: true };
           }
-          return crystal;
+          return shard;
         })
       );
       setBoard(boardWithMarkedMatches);
@@ -107,7 +107,7 @@ const GameBoardComponent: React.FC<GameBoardProps> = ({
 
       await new Promise(resolve => setTimeout(resolve, 300));
 
-      const { newBoard: shiftedBoard } = shiftAndFillCrystals(boardAfterMatches, matchGroups, activeIconsRef.current);
+      const { newBoard: shiftedBoard } = shiftAndFillShards(boardAfterMatches, matchGroups, activeIconsRef.current);
       boardAfterMatches = shiftedBoard;
       setBoard(boardAfterMatches);
 
@@ -144,31 +144,31 @@ const GameBoardComponent: React.FC<GameBoardProps> = ({
   }, [board, isProcessing, processMatchesInternal, onNoMatchOrComboEnd, isProcessingExternally]);
 
 
-  const handleCrystalClick = useCallback((position: Position) => {
+  const handleShardClick = useCallback((position: Position) => {
     if (isProcessing || isProcessingExternally) return;
 
-    const clickedCrystalOnBoard = board[position.row]?.[position.col];
-    if (!clickedCrystalOnBoard) {
-      setSelectedCrystal(null);
+    const clickedShardOnBoard = board[position.row]?.[position.col];
+    if (!clickedShardOnBoard) {
+      setSelectedShard(null);
       return;
     }
 
-    if (!selectedCrystal) {
-      setSelectedCrystal(position);
+    if (!selectedShard) {
+      setSelectedShard(position);
     } else {
-      if (selectedCrystal.row === position.row && selectedCrystal.col === position.col) {
-        setSelectedCrystal(null);
-      } else if (isAdjacent(selectedCrystal, position)) {
-        const currentSelectedCrystalOnBoard = board[selectedCrystal.row]?.[selectedCrystal.col];
-        if (currentSelectedCrystalOnBoard) {
-           performSwapAndProcess(selectedCrystal, position);
+      if (selectedShard.row === position.row && selectedShard.col === position.col) {
+        setSelectedShard(null);
+      } else if (isAdjacent(selectedShard, position)) {
+        const currentSelectedShardOnBoard = board[selectedShard.row]?.[selectedShard.col];
+        if (currentSelectedShardOnBoard) {
+           performSwapAndProcess(selectedShard, position);
         }
-        setSelectedCrystal(null);
+        setSelectedShard(null);
       } else {
-        setSelectedCrystal(position); 
+        setSelectedShard(position); 
       }
     }
-  }, [isProcessing, board, selectedCrystal, performSwapAndProcess, isProcessingExternally]);
+  }, [isProcessing, board, selectedShard, performSwapAndProcess, isProcessingExternally]);
 
 
   if (board.length !== BOARD_ROWS || !board.every(row => Array.isArray(row) && row.length === BOARD_COLS && row.every(cell => cell === null || (typeof cell === 'object' && cell !== null && 'id' in cell && 'type' in cell )))) {
@@ -183,19 +183,19 @@ const GameBoardComponent: React.FC<GameBoardProps> = ({
         gridTemplateRows: `repeat(${BOARD_ROWS}, minmax(0, 1fr))`,
       }}
       role="grid"
-      aria-label="Crystal Cascade game board"
+      aria-label="Shard Legends game board"
     >
       {board.map((row, r) =>
-        row.map((crystal, c) => {
+        row.map((shard, c) => {
           const currentPosition = { row: r, col: c };
-          const cellKey = crystal ? `crystal-${crystal.id}-${r}-${c}` : `empty-${r}-${c}`;
+          const cellKey = shard ? `shard-${shard.id}-${r}-${c}` : `empty-${r}-${c}`;
           return (
-            <CrystalCell
+            <ShardCell
               key={cellKey}
-              crystal={crystal}
+              shard={shard}
               position={currentPosition}
-              isSelected={!!selectedCrystal && selectedCrystal.row === currentPosition.row && selectedCrystal.col === currentPosition.col && !!crystal}
-              onCrystalClick={handleCrystalClick}
+              isSelected={!!selectedShard && selectedShard.row === currentPosition.row && selectedShard.col === currentPosition.col && !!shard}
+              onShardClick={handleShardClick}
             />
           );
         })

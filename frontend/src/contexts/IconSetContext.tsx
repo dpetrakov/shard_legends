@@ -3,10 +3,10 @@
 
 import React, { createContext, useContext, useState, useEffect, type ReactNode, useCallback } from 'react';
 import type { IconSet, IconSetContextType as ImportedIconSetContextType } from '@/types/icon-set';
-import type { CrystalIcon } from '@/types/crystal-cascade';
-import { ICON_SETS, CLASSIC_CRYSTAL_ICONS } from '@/components/crystal-cascade/crystal-definitions';
+import type { ShardIcon } from '@/types/shard-legends';
+import { ICON_SETS, CLASSIC_SHARD_ICONS } from '@/components/shard-legends/shard-definitions';
 
-const ICON_SET_STORAGE_KEY = 'crystalCascadeIconSet';
+const ICON_SET_STORAGE_KEY = 'shardLegendsIconSet';
 
 const IconSetContext = createContext<ImportedIconSetContextType | undefined>(undefined);
 
@@ -24,8 +24,8 @@ export const IconSetProvider = ({ children }: { children: ReactNode }) => {
     setIconSetState(newIconSet);
   }, []);
 
-  const getActiveIconList = useCallback((): CrystalIcon[] => {
-    return ICON_SETS[iconSet] || CLASSIC_CRYSTAL_ICONS; // Fallback to classic
+  const getActiveIconList = useCallback((): ShardIcon[] => {
+    return ICON_SETS[iconSet] || CLASSIC_SHARD_ICONS; // Fallback to classic
   }, [iconSet]);
 
   return (

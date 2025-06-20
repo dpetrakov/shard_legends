@@ -2,9 +2,9 @@
 import type { LucideProps } from 'lucide-react';
 import type React from 'react';
 
-export type CrystalColor = 'red' | 'blue' | 'yellow' | 'pink' | 'green' | 'purple';
+export type ShardColor = 'red' | 'blue' | 'yellow' | 'pink' | 'green' | 'purple';
 
-export interface CrystalIcon {
+export interface ShardIcon {
   iconType: 'lucide' | 'image';
   name: string;
   component?: React.ForwardRefExoticComponent<Omit<LucideProps, "ref"> & React.RefAttributes<SVGSVGElement>>; // Optional for image type
@@ -12,7 +12,7 @@ export interface CrystalIcon {
   colorClass: string; // For Lucide icons color, or fallback/border for images
 }
 
-export interface Crystal {
+export interface Shard {
   id: number;
   type: CrystalIcon;
   row: number;
@@ -20,7 +20,7 @@ export interface Crystal {
   isMatched?: boolean;
 }
 
-export type GameBoard = (Crystal | null)[][];
+export type GameBoard = (Shard | null)[][];
 
 export interface Position {
   row: number;
