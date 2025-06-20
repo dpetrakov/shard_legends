@@ -1,0 +1,40 @@
+services:
+  # Frontend service
+  frontend:
+    build:
+      context: ../..
+      dockerfile: deploy/dev/frontend.Dockerfile
+    container_name: slcw-frontend-dev
+    ports:
+      - "8092:3000"  # Map to dev frontend port as per nginx config
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8082}
+    volumes:
+      # Hot reload for development
+      - ../../frontend/src:/app/src:ro
+      - ../../frontend/public:/app/public:ro
+    networks:
+      - slcw-dev
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # API service (placeholder for future backend)
+  # api:
+  #   image: slcw-api-dev:latest
+  #   container_name: slcw-api-dev
+  #   ports:
+  #     - "8082:8080"
+  #   networks:
+  #     - slcw-dev
+  #   restart: unless-stopped
+
+networks:
+  slcw-dev:
+    name: slcw-dev
+    driver: bridge
