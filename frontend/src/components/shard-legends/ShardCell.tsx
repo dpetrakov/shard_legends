@@ -1,4 +1,3 @@
-
 "use client";
 
 import type React from 'react';
@@ -97,8 +96,9 @@ const ShardCell: React.FC<ShardCellProps> = ({
                 src={shard.type.imageSrc}
                 alt={shard.type.name}
                 fill
-                style={{ objectFit: 'contain' }}
                 priority
+                sizes="(max-width: 768px) 10vw, 48px"
+                style={{ objectFit: 'contain' }}
               />
             </div>
           </motion.div>

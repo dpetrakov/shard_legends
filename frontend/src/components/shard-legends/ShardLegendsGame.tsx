@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
@@ -343,12 +342,14 @@ const ShardLegendsGame: React.FC = () => {
                        >
                         <div className="relative w-full h-full">
                           <Image
-                            src={revealedFlippedCardImageUrl} 
+                            src={revealedFlippedCardImageUrl}
                             alt={`Открытая карта ${index + 1}`}
-                            layout="fill"
-                            objectFit="contain"
+                            fill
+                            priority
+                            sizes="(max-width: 768px) 50vw, 25vw"
+                            style={{ objectFit: 'contain' }}
                             className="rounded-sm"
-                            data-ai-hint={chestVisualData[determineChestReward()]?.hint || "treasure card"} 
+                            data-ai-hint={chestVisualData[determineChestReward()]?.hint || "treasure card"}
                           />
                         </div>
                       </motion.div>
@@ -366,6 +367,8 @@ const ShardLegendsGame: React.FC = () => {
                             src="/images/card-back.png"
                             alt={`Карта ${index + 1}`}
                             fill
+                            priority
+                            sizes="(max-width: 768px) 50vw, 25vw"
                             style={{ objectFit: 'contain' }}
                             className="rounded-sm"
                             data-ai-hint="card back"
