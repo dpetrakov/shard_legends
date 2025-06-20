@@ -1,0 +1,205 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* FANTASY CASUAL THEME */
+  .theme-fantasy-casual {
+    --background: 240 60% 12%; /* Deep, rich midnight blue */
+    --foreground: 220 25% 95%; /* Soft, cool off-white */
+
+    --card: 240 50% 18%; /* Slightly lighter midnight blue */
+    --card-foreground: 220 25% 95%;
+
+    --popover: 240 50% 16%; /* Similar to card, a touch darker */
+    --popover-foreground: 220 25% 95%;
+
+    --primary: 270 90% 65%; /* Vibrant, magical purple (amethyst) */
+    --primary-foreground: 0 0% 100%; /* Pure white */
+
+    --secondary: 180 70% 50%; /* Playful Teal/Aqua */
+    --secondary-foreground: 0 0% 100%; /* White */
+
+    --muted: 240 30% 25%; /* Desaturated blue-grey */
+    --muted-foreground: 220 20% 70%; /* Light grey-blue */
+
+    --accent: 330 85% 60%; /* Bright, whimsical Pink/Rose */
+    --accent-foreground: 0 0% 100%; /* White */
+
+    --destructive: 0 80% 60%; /* Vibrant, but not overly harsh Red */
+    --destructive-foreground: 0 0% 100%; /* White */
+
+    --border: 240 40% 22%; /* Subtle border, darker than card */
+    --input: 240 40% 20%; /* Slightly darker than border for input fields */
+    --ring: 270 90% 65%; /* Primary purple for rings */
+
+    --chart-1: 270 90% 65%; /* Purple - Primary */
+    --chart-2: 330 85% 60%; /* Pink - Accent */
+    --chart-3: 180 70% 50%; /* Teal - Secondary */
+    --chart-4: 45 100% 55%; /* Sunny Yellow/Orange */
+    /* --chart-5 removed as we are reducing to 5 crystal types */
+
+    --radius: 0.75rem; /* Slightly more rounded */
+
+    --sidebar-background: 240 60% 10%;
+    --sidebar-foreground: 220 25% 90%;
+    --sidebar-primary: 270 90% 65%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 330 85% 60%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 240 40% 18%;
+    --sidebar-ring: 270 90% 65%;
+
+    /* Crystal specific colors for Fantasy Casual theme (Classic Set - 5 types) */
+    --crystal-red: 0 90% 65%;
+    --crystal-sky-blue: 195 90% 60%;
+    --crystal-yellow: 50 100% 60%;
+    --crystal-pink: 325 90% 70%;
+    --crystal-green: 120 70% 55%;
+
+    /* Candy specific colors for Fantasy Casual theme (Sweets Set - 5 types) */
+    --candy-red: 350 90% 70%;     /* Bright Red for Lollipop */
+    --candy-pink: 330 95% 75%;    /* Vibrant Pink for Wrapped Candy */
+    --candy-brown: 30 50% 50%;     /* Brown for Cookie */
+    --candy-yellow: 50 100% 70%;   /* Lemon Yellow for CakeSlice */
+    --candy-lightblue: 195 85% 70%;/* Sky Blue for IceCream2 */
+
+    /* Gothic specific colors for Fantasy Casual theme (Gothic Set - 5 types) */
+    --gothic-crimson: 0 70% 45%;      /* Deep Red for Skull */
+    --gothic-midnight-blue: 220 30% 35%; /* Desaturated Dark Blue for Moon */
+    --gothic-ectoplasm: 180 30% 85%;  /* Pale Ghostly White/Cyan for Ghost */
+    --gothic-deep-purple: 270 40% 35%;/* Dark Purple for Bone */
+    --gothic-darkwood: 120 25% 30%;    /* Gothic Green for VenetianMask */
+
+    /* Animal specific colors for Fantasy Casual theme (Animals Set - 5 types) */
+    --animal-green: 120 70% 55%;  /* Green for Bird */
+    --animal-orange: 30 100% 65%;    /* Bright Orange for Cat */
+    --animal-red: 0 90% 65%;      /* Red for Dog */
+    --animal-blue: 210 85% 60%;      /* Medium Blue for Fish */
+    --animal-pink: 330 80% 80%;      /* Soft Pink for Rabbit */
+  }
+
+  /* NEON THEME - Copies Fantasy Casual but with a very dark background */
+  .theme-neon {
+    --background: 222 83% 4%; /* Very dark blue/black background */
+    --foreground: 220 25% 95%;
+
+    --card: 240 50% 18%;
+    --card-foreground: 220 25% 95%;
+
+    --popover: 240 50% 16%;
+    --popover-foreground: 220 25% 95%;
+
+    --primary: 270 90% 65%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 180 70% 50%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 240 30% 25%;
+    --muted-foreground: 220 20% 70%;
+
+    --accent: 330 85% 60%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 80% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 240 40% 22%;
+    --input: 240 40% 20%;
+    --ring: 270 90% 65%;
+
+    --chart-1: 270 90% 65%;
+    --chart-2: 330 85% 60%;
+    --chart-3: 180 70% 50%;
+    --chart-4: 45 100% 55%;
+    /* --chart-5 removed */
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 240 60% 10%;
+    --sidebar-foreground: 220 25% 90%;
+    --sidebar-primary: 270 90% 65%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 330 85% 60%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 240 40% 18%;
+    --sidebar-ring: 270 90% 65%;
+
+    /* Crystal specific colors for Neon theme (Classic Set - 5 types) - same as Fantasy Casual */
+    --crystal-red: 0 90% 65%;
+    --crystal-sky-blue: 195 90% 60%;
+    --crystal-yellow: 50 100% 60%;
+    --crystal-pink: 325 90% 70%;
+    --crystal-green: 120 70% 55%;
+
+    /* Candy specific colors for Neon theme (Sweets Set - 5 types) - same as Fantasy Casual */
+    --candy-red: 350 90% 70%;
+    --candy-pink: 330 95% 75%;
+    --candy-brown: 30 50% 50%;
+    --candy-yellow: 50 100% 70%;
+    --candy-lightblue: 195 85% 70%;
+
+    /* Gothic specific colors for Neon theme (Gothic Set - 5 types) - same as Fantasy Casual */
+    --gothic-crimson: 0 70% 45%;
+    --gothic-midnight-blue: 220 30% 35%;
+    --gothic-ectoplasm: 180 30% 85%;
+    --gothic-deep-purple: 270 40% 35%;
+    --gothic-darkwood: 120 25% 30%;
+
+    /* Animal specific colors for Neon theme (Animals Set - 5 types) - same as Fantasy Casual */
+    --animal-green: 120 70% 55%;
+    --animal-orange: 30 100% 65%;
+    --animal-red: 0 90% 65%;
+    --animal-blue: 210 85% 60%;
+    --animal-pink: 330 80% 80%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply text-foreground;
+  }
+
+  .theme-fantasy-casual body, .theme-fantasy-casual {
+    background-color: hsl(var(--background));
+    background-image:
+      radial-gradient(ellipse at center 60px, hsla(220, 25%, 95%, 0.03) 0%, transparent 50%),
+      url("data:image/svg+xml,%3Csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3Cpath id='s' d='M25 5 L28.5 21.5 L45 25 L28.5 28.5 L25 45 L21.5 28.5 L5 25 L21.5 21.5 Z'/%3E%3Cpattern id='patt' width='50' height='50' patternUnits='userSpaceOnUse' viewBox='0 0 50 50' patternTransform='rotate(15 25 25)'%3E%3Cg fill='hsla(220, 25%25, 95%25, 0.07)' stroke='none'%3E%3Cuse href='%23s' transform='translate(25 25) scale(0.6)'/%3E%3Cuse href='%23s' transform='translate(5 5) scale(0.3)'/%3E%3Cuse href='%23s' transform='translate(45 5) scale(0.2)'/%3E%3Cuse href='%23s' transform='translate(5 45) scale(0.25)'/%3E%3Cuse href='%23s' transform='translate(45 45) scale(0.3)'/%3E%3Cuse href='%23s' transform='translate(25 45) scale(0.2)'/%3E%3Cuse href='%23s' transform='translate(25 5) scale(0.18)'/%3E%3C/g%3E%3C/pattern%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='url(%23patt)'/%3E%3C/svg%3E");
+    background-repeat: no-repeat, repeat;
+    background-position: center top, center center;
+    background-size: 100% 400px, 50px 50px;
+    color: hsl(var(--foreground));
+  }
+
+  .theme-neon body, .theme-neon {
+    background-color: hsl(var(--background)); /* Uses the very dark Neon background */
+    background-image:
+      radial-gradient(ellipse at center 60px, hsla(220, 25%, 95%, 0.03) 0%, transparent 50%),
+      url("data:image/svg+xml,%3Csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3Cpath id='s' d='M25 5 L28.5 21.5 L45 25 L28.5 28.5 L25 45 L21.5 28.5 L5 25 L21.5 21.5 Z'/%3E%3Cpattern id='patt' width='50' height='50' patternUnits='userSpaceOnUse' viewBox='0 0 50 50' patternTransform='rotate(15 25 25)'%3E%3Cg fill='hsla(220, 25%25, 95%25, 0.07)' stroke='none'%3E%3Cuse href='%23s' transform='translate(25 25) scale(0.6)'/%3E%3Cuse href='%23s' transform='translate(5 5) scale(0.3)'/%3E%3Cuse href='%23s' transform='translate(45 5) scale(0.2)'/%3E%3Cuse href='%23s' transform='translate(5 45) scale(0.25)'/%3E%3Cuse href='%23s' transform='translate(45 45) scale(0.3)'/%3E%3Cuse href='%23s' transform='translate(25 45) scale(0.2)'/%3E%3Cuse href='%23s' transform='translate(25 5) scale(0.18)'/%3E%3C/g%3E%3C/pattern%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='url(%23patt)'/%3E%3C/svg%3E");
+    background-repeat: no-repeat, repeat;
+    background-position: center top, center center;
+    background-size: 100% 400px, 50px 50px;
+    color: hsl(var(--foreground));
+  }
+}
+
+.crystal-cell {
+  @apply flex items-center justify-center rounded-md shadow-lg;
+  aspect-ratio: 1 / 1;
+}
+
+.crystal-cell.selected {
+  @apply ring-2 ring-inset ring-accent;
+}
+
+.backface-hidden {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transform-style: preserve-3d;
+}
+
