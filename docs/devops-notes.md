@@ -19,4 +19,12 @@ docker compose build --no-cache
 docker compose up -d --build ping-service
 docker compose logs ping-service
 docker compose up -d
+
+# запуск с профилем
+docker compose --profile forly up -d
+```
+
+Генерация токена для TG
+```bash
+openssl rand -hex 32
 ```
