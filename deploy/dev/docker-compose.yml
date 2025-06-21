@@ -9,7 +9,7 @@ services:
       - "127.0.0.1:8092:9002"  # Map to dev frontend port as per nginx config
     environment:
       - NODE_ENV=development
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8082}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-}
     networks:
       - slcw-dev
     restart: unless-stopped
