@@ -10,10 +10,6 @@ services:
     environment:
       - NODE_ENV=development
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8082}
-    # volumes:
-    #   # Hot reload for development (commented out for now)
-    #   - ../../frontend/src:/app/src:ro
-    #   - ../../frontend/public:/app/public:ro
     networks:
       - slcw-dev
     restart: unless-stopped
@@ -31,7 +27,7 @@ services:
       dockerfile: Dockerfile
     container_name: slcw-ping-service-dev
     ports:
-      - "127.0.0.1:8082:8080"
+      - "127.0.0.1:9001:8080"
     networks:
       - slcw-dev
     restart: unless-stopped
@@ -41,16 +37,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
-
-  # API service (placeholder for future backend)
-  # api:
-  #   image: slcw-api-dev:latest
-  #   container_name: slcw-api-dev
-  #   ports:
-  #     - "8082:8080"
-  #   networks:
-  #     - slcw-dev
-  #   restart: unless-stopped
 
 networks:
   slcw-dev:
