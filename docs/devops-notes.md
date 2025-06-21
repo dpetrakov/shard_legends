@@ -32,11 +32,11 @@ openssl rand -hex 32
 # Управление миграциями
 ```bash
   # Применение миграций
-  docker-compose --profile migrations run --rm migrate up
+  docker compose --profile migrations run --rm migrate up
 
   # Откат миграций  
-  docker-compose --profile migrations run --rm migrate down 1
+  docker compose --profile migrations run --rm migrate down 1
 
   # Проверка версии
-  docker-compose --profile migrations run --rm migrate version
+  docker compose --profile migrations run --rm migrate version
 ```

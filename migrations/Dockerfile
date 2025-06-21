@@ -7,7 +7,16 @@ FROM alpine:3.19
 RUN apk add --no-cache \
     curl \
     postgresql-client && \
-    curl -L https://github.com/golang-migrate/migrate/releases/download/v4.17.0/migrate.linux-arm64.tar.gz | tar xvz && \
+    # Определение архитектуры системы
+    ARCH=$(case $(uname -m) in \
+        x86_64) echo "amd64" ;; \
+        aarch64) echo "arm64" ;; \
+        armv7l) echo "armv7" ;; \
+        *) echo "amd64" ;; \
+    esac) && \
+    echo "Detected architecture: $ARCH" && \
+    # Скачивание правильной версии migrate
+    curl -L "https://github.com/golang-migrate/migrate/releases/download/v4.17.0/migrate.linux-${ARCH}.tar.gz" | tar xvz && \
     mv migrate /usr/local/bin/migrate && \
     chmod +x /usr/local/bin/migrate
 
