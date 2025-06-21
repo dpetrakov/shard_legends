@@ -1,3 +1,5 @@
+github.com/PaulSonOfLars/gotgbot/v2 v2.0.0-rc.32 h1:+YzI72wzNTcaPUDVcSxeYQdHfvEk8mPGZh/yTk5kkRg=
+github.com/PaulSonOfLars/gotgbot/v2 v2.0.0-rc.32/go.mod h1:BSzsfjlE0wakLw2/U1FtO8rdVt+Z+4VyoGo/YcGD9QQ=
 github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1 h1:wG8n/XJQ07TmjbITcGiUaOtXxdrINDz1b0J1w0SzqDc=
 github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1/go.mod h1:A2S0CWkNylc2phvKXWBBdD3K0iGnDBGbzRpISP2zBl8=
 github.com/gorilla/mux v1.8.1 h1:TuBL49tXwgrFYWhqrNgrUNEY92u81SPhu7sTdzQEiWY=

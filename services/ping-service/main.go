@@ -17,7 +17,7 @@ func pingHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := Response{Message: "pong dim local"}
+	response := Response{Message: "pong"}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

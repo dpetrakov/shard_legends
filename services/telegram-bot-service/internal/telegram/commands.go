@@ -3,7 +3,6 @@ package telegram
 import (
 	"fmt"
 	"log"
-	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -13,44 +12,21 @@ func (b *Bot) handleStartCommand(update tgbotapi.Update) {
 		return
 	}
 
-	// Extract command arguments for deep linking
-	args := strings.TrimSpace(strings.TrimPrefix(update.Message.Text, "/start"))
-	
-	var messageText string
-	var startParam string
+	messageText := "🌟 Добро пожаловать в Shard Legends: Clan Wars!\n\n" +
+		"Присоединяйтесь к увлекательному миру стратегических битв и кланов. " +
+		"Откройте мини-приложение для начала игры!"
 
-	if args == "game" || args == " game" {
-		// Deep link: /start game
-		startParam = "game"
-		messageText = "🎮 Добро пожаловать в Shard Legends: Clan Wars!\n\n" +
-			"Готовы начать эпическое приключение? Нажмите кнопку ниже, чтобы запустить игру!"
-	} else {
-		// Regular /start command
-		messageText = "🌟 Добро пожаловать в Shard Legends: Clan Wars!\n\n" +
-			"Присоединяйтесь к увлекательному миру стратегических битв и кланов. " +
-			"Откройте мини-приложение для начала игры!"
-	}
+	// Create inline keyboard with Mini App button
+	miniAppURL := fmt.Sprintf("https://t.me/%s/%s", "SLCWDevBot", b.config.MiniAppShortName)
 
-	// Create inline keyboard with Web App button for Telegram Mini App
-	var keyboard tgbotapi.InlineKeyboardMarkup
-	var webAppURL string
-	
-	if startParam != "" {
-		// Use Web App with start parameter
-		webAppURL = fmt.Sprintf("%s?start=%s", b.config.WebAppBaseURL, startParam)
-	} else {
-		// Use Web App without parameters
-		webAppURL = b.config.WebAppBaseURL
-	}
-
-	// Create WebApp button - use URL button as fallback if WebApp not supported
-	webAppButton := tgbotapi.InlineKeyboardButton{
+	// Create URL button that opens the mini app directly
+	miniAppButton := tgbotapi.InlineKeyboardButton{
 		Text: "🚀 Открыть игру",
-		URL:  &webAppURL,
+		URL:  &miniAppURL,
 	}
 
-	keyboard = tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(webAppButton),
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(miniAppButton),
 	)
 
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, messageText)
@@ -61,7 +37,7 @@ func (b *Bot) handleStartCommand(update tgbotapi.Update) {
 		log.Printf("Failed to send start message: %v", err)
 	}
 
-	log.Printf("Sent start command response to user %d (args: '%s')", update.Message.From.ID, args)
+	log.Printf("Sent start command response to user %d", update.Message.From.ID)
 }
 
 func (b *Bot) handleCommand(update tgbotapi.Update) bool {
