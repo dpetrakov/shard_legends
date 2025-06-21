@@ -58,13 +58,20 @@ export default function ProfilePage() {
       console.log("window.Telegram?.WebApp:", window.Telegram?.WebApp);
       console.log("window.Telegram?.WebApp?.initData:", window.Telegram?.WebApp?.initData);
       
-      if (typeof window !== 'undefined' && window.Telegram?.WebApp?.initData) {
-        initData = window.Telegram.WebApp.initData;
-        console.log("Telegram initData found:", initData);
-        setPingModalMessage(`Telegram данные найдены:\n${initData.substring(0, 100)}...\n\nОтправляем на сервер...`);
+      // Проверяем, доступен ли Telegram Web App
+      if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
+        // Попробуем получить initData
+        const telegramInitData = window.Telegram.WebApp.initData;
+        if (telegramInitData && telegramInitData.trim()) {
+          initData = telegramInitData;
+          console.log("Telegram initData found:", initData);
+          setPingModalMessage(`Telegram данные найдены:\n${initData.substring(0, 100)}...\n\nОтправляем на сервер...`);
+        } else {
+          setPingModalMessage(`Предупреждение: Telegram Web App найден, но initData пуст или отсутствует.\n\nОтладка:\nTelegram Web App: ${!!window.Telegram?.WebApp}\ninitData: "${telegramInitData}"\n\nОтправляем запрос без Telegram данных...`);
+        }
       } else {
         const debugInfo = `window.Telegram: ${!!window.Telegram}\nwindow.Telegram.WebApp: ${!!window.Telegram?.WebApp}\ninitData: ${!!window.Telegram?.WebApp?.initData}`;
-        setPingModalMessage(`Предупреждение: Telegram Web App данные не найдены.\n\nОтладка:\n${debugInfo}`);
+        setPingModalMessage(`Предупреждение: Telegram Web App не найден.\n\nОтладка:\n${debugInfo}\n\nОтправляем запрос без Telegram данных...`);
       }
 
       const headers: HeadersInit = {
