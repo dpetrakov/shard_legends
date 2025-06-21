@@ -30,6 +30,25 @@ func TestLoad_Success(t *testing.T) {
 			},
 		},
 		{
+			name: "webhook mode with secret token",
+			envVars: map[string]string{
+				"TELEGRAM_BOT_TOKEN":    "bot123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11",
+				"TELEGRAM_BOT_MODE":     "webhook",
+				"WEBAPP_BASE_URL":       "https://example.com",
+				"TELEGRAM_WEBHOOK_URL":  "https://api.example.com/webhook",
+				"TELEGRAM_SECRET_TOKEN": "secret123",
+			},
+			expected: &Config{
+				TelegramBotToken:    "bot123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11",
+				TelegramBotMode:     "webhook",
+				WebAppBaseURL:       "https://example.com",
+				TelegramWebhookURL:  "https://api.example.com/webhook",
+				TelegramSecretToken: "secret123",
+				ServicePort:         "8080",
+				TelegramPollTimeout: 0,
+			},
+		},
+		{
 			name: "webhook mode with default port",
 			envVars: map[string]string{
 				"TELEGRAM_BOT_TOKEN":   "bot123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11",
@@ -102,6 +121,53 @@ func TestLoad_Success(t *testing.T) {
 				WebAppBaseURL:       "https://example.com",
 				TelegramWebhookURL:  "https://api.example.com/webhook",
 				ServicePort:         "8080",
+			},
+		},
+		{
+			name: "with allowed users list",
+			envVars: map[string]string{
+				"TELEGRAM_BOT_TOKEN":     "bot123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11",
+				"TELEGRAM_BOT_MODE":      "longpoll",
+				"WEBAPP_BASE_URL":        "https://example.com",
+				"TELEGRAM_ALLOWED_USERS": "dpetrakov78, Forly, testuser",
+			},
+			expected: &Config{
+				TelegramBotToken:     "bot123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11",
+				TelegramBotMode:      "longpoll",
+				WebAppBaseURL:        "https://example.com",
+				TelegramPollTimeout:  30,
+				TelegramAllowedUsers: []string{"dpetrakov78", "Forly", "testuser"},
+			},
+		},
+		{
+			name: "with allowed users list (single user)",
+			envVars: map[string]string{
+				"TELEGRAM_BOT_TOKEN":     "bot123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11",
+				"TELEGRAM_BOT_MODE":      "longpoll",
+				"WEBAPP_BASE_URL":        "https://example.com",
+				"TELEGRAM_ALLOWED_USERS": "onlyuser",
+			},
+			expected: &Config{
+				TelegramBotToken:     "bot123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11",
+				TelegramBotMode:      "longpoll",
+				WebAppBaseURL:        "https://example.com",
+				TelegramPollTimeout:  30,
+				TelegramAllowedUsers: []string{"onlyuser"},
+			},
+		},
+		{
+			name: "without allowed users (empty whitelist)",
+			envVars: map[string]string{
+				"TELEGRAM_BOT_TOKEN": "bot123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11",
+				"TELEGRAM_BOT_MODE":  "longpoll",
+				"WEBAPP_BASE_URL":    "https://example.com",
+			},
+			expected: &Config{
+				TelegramBotToken:     "bot123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11",
+				TelegramBotMode:      "longpoll",
+				WebAppBaseURL:        "https://example.com",
+				TelegramPollTimeout:  30,
+				TelegramAllowedUsers: nil,
 			},
 		},
 	}
@@ -320,7 +386,7 @@ func TestString(t *testing.T) {
 				ServicePort:        "8080",
 				TelegramPollTimeout: 0,
 			},
-			expected: "Config{Mode: webhook, Token: bot123***, WebApp: https://example.com, Port: 8080, PollTimeout: 0}",
+			expected: "Config{Mode: webhook, Token: bot123***, WebApp: https://example.com, Port: 8080, PollTimeout: 0, AllowedUsers: []}",
 		},
 		{
 			name: "longpoll mode",
@@ -330,7 +396,7 @@ func TestString(t *testing.T) {
 				WebAppBaseURL:       "https://example.com",
 				TelegramPollTimeout: 30,
 			},
-			expected: "Config{Mode: longpoll, Token: bot123***, WebApp: https://example.com, Port: , PollTimeout: 30}",
+			expected: "Config{Mode: longpoll, Token: bot123***, WebApp: https://example.com, Port: , PollTimeout: 30, AllowedUsers: []}",
 		},
 		{
 			name: "short token",
@@ -340,7 +406,7 @@ func TestString(t *testing.T) {
 				WebAppBaseURL:       "https://example.com",
 				TelegramPollTimeout: 30,
 			},
-			expected: "Config{Mode: longpoll, Token: ***, WebApp: https://example.com, Port: , PollTimeout: 30}",
+			expected: "Config{Mode: longpoll, Token: ***, WebApp: https://example.com, Port: , PollTimeout: 30, AllowedUsers: []}",
 		},
 	}
 
@@ -361,6 +427,8 @@ func clearEnv() {
 	os.Unsetenv("TELEGRAM_BOT_MODE")
 	os.Unsetenv("TELEGRAM_POLL_TIMEOUT")
 	os.Unsetenv("TELEGRAM_WEBHOOK_URL")
+	os.Unsetenv("TELEGRAM_SECRET_TOKEN")
+	os.Unsetenv("TELEGRAM_ALLOWED_USERS")
 	os.Unsetenv("WEBAPP_BASE_URL")
 	os.Unsetenv("SERVICE_PORT")
 }
@@ -373,10 +441,108 @@ func compareConfigs(a, b *Config) bool {
 		a.TelegramBotMode == b.TelegramBotMode &&
 		a.TelegramPollTimeout == b.TelegramPollTimeout &&
 		a.TelegramWebhookURL == b.TelegramWebhookURL &&
+		a.TelegramSecretToken == b.TelegramSecretToken &&
 		a.WebAppBaseURL == b.WebAppBaseURL &&
-		a.ServicePort == b.ServicePort
+		a.ServicePort == b.ServicePort &&
+		compareStringSlices(a.TelegramAllowedUsers, b.TelegramAllowedUsers)
+}
+
+func compareStringSlices(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i, v := range a {
+		if v != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && s[:len(substr)] == substr
+}
+
+func TestIsUserAllowed(t *testing.T) {
+	tests := []struct {
+		name           string
+		allowedUsers   []string
+		testUsername   string
+		expectedResult bool
+	}{
+		{
+			name:           "empty whitelist allows all users",
+			allowedUsers:   nil,
+			testUsername:   "anyuser",
+			expectedResult: true,
+		},
+		{
+			name:           "empty whitelist allows empty username",
+			allowedUsers:   nil,
+			testUsername:   "",
+			expectedResult: true,
+		},
+		{
+			name:           "single user in whitelist - allowed",
+			allowedUsers:   []string{"dpetrakov78"},
+			testUsername:   "dpetrakov78",
+			expectedResult: true,
+		},
+		{
+			name:           "single user in whitelist - not allowed",
+			allowedUsers:   []string{"dpetrakov78"},
+			testUsername:   "otheruser",
+			expectedResult: false,
+		},
+		{
+			name:           "multiple users in whitelist - first user allowed",
+			allowedUsers:   []string{"dpetrakov78", "Forly", "testuser"},
+			testUsername:   "dpetrakov78",
+			expectedResult: true,
+		},
+		{
+			name:           "multiple users in whitelist - middle user allowed",
+			allowedUsers:   []string{"dpetrakov78", "Forly", "testuser"},
+			testUsername:   "Forly",
+			expectedResult: true,
+		},
+		{
+			name:           "multiple users in whitelist - last user allowed",
+			allowedUsers:   []string{"dpetrakov78", "Forly", "testuser"},
+			testUsername:   "testuser",
+			expectedResult: true,
+		},
+		{
+			name:           "multiple users in whitelist - user not allowed",
+			allowedUsers:   []string{"dpetrakov78", "Forly", "testuser"},
+			testUsername:   "notinlist",
+			expectedResult: false,
+		},
+		{
+			name:           "case sensitive check",
+			allowedUsers:   []string{"TestUser"},
+			testUsername:   "testuser",
+			expectedResult: false,
+		},
+		{
+			name:           "empty username not in whitelist",
+			allowedUsers:   []string{"dpetrakov78", "Forly"},
+			testUsername:   "",
+			expectedResult: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := &Config{
+				TelegramAllowedUsers: tt.allowedUsers,
+			}
+			
+			result := config.IsUserAllowed(tt.testUsername)
+			if result != tt.expectedResult {
+				t.Errorf("IsUserAllowed(%q) with whitelist %v: got %v, want %v", 
+					tt.testUsername, tt.allowedUsers, result, tt.expectedResult)
+			}
+		})
+	}
 }

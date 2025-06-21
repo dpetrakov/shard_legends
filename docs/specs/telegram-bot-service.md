@@ -23,6 +23,8 @@ TELEGRAM_BOT_MODE=webhook_или_longpoll
 TELEGRAM_POLL_TIMEOUT=30  // только для longpoll режима
 WEBAPP_BASE_URL=webapp_url_here
 TELEGRAM_WEBHOOK_URL=webhook_url_here  // только для webhook режима  
+TELEGRAM_SECRET_TOKEN=secret_token_here  // только для webhook режима (опционально)
+TELEGRAM_ALLOWED_USERS=username1,username2  // список разрешенных username (опционально)
 SERVICE_PORT=8080  // только для webhook режима
 ```
 
@@ -30,15 +32,14 @@ SERVICE_PORT=8080  // только для webhook режима
 
 ### Core Features:
 1. **Update Processor** - обработка входящих Telegram обновлений (webhook/longpoll)
-2. **Echo Handler** - отправка обратно всех полученных сообщений
-3. **Basic Commands** - обработка команды /start
-4. **Mini App Launcher** - запуск веб-приложения через команды
+2. **User Access Control** - ограничение доступа к боту по списку разрешенных username
+3. **Echo Handler** - отправка обратно всех полученных сообщений
+4. **Basic Commands** - обработка команды /start
+5. **Mini App Launcher** - запуск веб-приложения через команды
 
 ### API Endpoints:
 - `POST /webhook` - Telegram webhook endpoint (только в webhook режиме)
 - `GET /health` - health check
-- `POST /set-webhook` - установка webhook (админская команда)
-- `DELETE /webhook` - удаление webhook для переключения в longpoll режим
 
 ## Telegram Commands
 
@@ -146,9 +147,15 @@ services/telegram-bot-service/
 ## Security
 
 ### Webhook validation:
-- Telegram secret token verification
-- Request signature validation
-- IP whitelist (опционально)
+- Telegram secret token verification через X-Telegram-Bot-Api-Secret-Token header
+- Request content validation
+- IP whitelist (опционально для дополнительной защиты)
+
+### User access control:
+- Username whitelist через TELEGRAM_ALLOWED_USERS переменную окружения
+- Если переменная не задана - доступ разрешен всем пользователям
+- Если переменная задана - доступ только указанным username (разделение запятыми)
+- Неавторизованные пользователи получают сообщение о недоступности бота
 
 ### Data protection:
 - No storage of sensitive user data

@@ -57,44 +57,93 @@ func TestNewBot(t *testing.T) {
 }
 
 func TestBot_HandleWebhookUpdate(t *testing.T) {
-	// Create a mock bot for testing webhook handling
-	cfg := &config.Config{
-		TelegramBotToken: "123456:test-token",
-		TelegramBotMode:  "webhook",
-		WebAppBaseURL:    "https://example.com",
-	}
-
-	// We can't create a real bot without a valid token, so we'll test the handler structure
-	// In a real scenario, this would require mocking the telegram API
-
 	tests := []struct {
 		name           string
+		config         *config.Config
 		method         string
 		body           string
+		headers        map[string]string
 		expectedStatus int
 	}{
 		{
-			name:           "invalid json",
+			name: "invalid json",
+			config: &config.Config{
+				TelegramBotToken: "123456:test-token",
+				TelegramBotMode:  "webhook",
+				WebAppBaseURL:    "https://example.com",
+			},
 			method:         "POST",
 			body:           "invalid json",
 			expectedStatus: http.StatusBadRequest,
 		},
 		{
-			name:           "valid json structure",
+			name: "valid json structure without secret token",
+			config: &config.Config{
+				TelegramBotToken: "123456:test-token",
+				TelegramBotMode:  "webhook",
+				WebAppBaseURL:    "https://example.com",
+			},
 			method:         "POST",
 			body:           `{"update_id": 123, "message": {"message_id": 1, "date": 1234567890, "chat": {"id": 123, "type": "private"}, "text": "test"}}`,
 			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "valid request with correct secret token",
+			config: &config.Config{
+				TelegramBotToken:    "123456:test-token",
+				TelegramBotMode:     "webhook",
+				WebAppBaseURL:       "https://example.com",
+				TelegramSecretToken: "secret123",
+			},
+			method: "POST",
+			body:   `{"update_id": 123, "message": {"message_id": 1, "date": 1234567890, "chat": {"id": 123, "type": "private"}, "text": "test"}}`,
+			headers: map[string]string{
+				"X-Telegram-Bot-Api-Secret-Token": "secret123",
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "request with incorrect secret token",
+			config: &config.Config{
+				TelegramBotToken:    "123456:test-token",
+				TelegramBotMode:     "webhook",
+				WebAppBaseURL:       "https://example.com",
+				TelegramSecretToken: "secret123",
+			},
+			method: "POST",
+			body:   `{"update_id": 123, "message": {"message_id": 1, "date": 1234567890, "chat": {"id": 123, "type": "private"}, "text": "test"}}`,
+			headers: map[string]string{
+				"X-Telegram-Bot-Api-Secret-Token": "wrong-secret",
+			},
+			expectedStatus: http.StatusUnauthorized,
+		},
+		{
+			name: "request with missing secret token when required",
+			config: &config.Config{
+				TelegramBotToken:    "123456:test-token",
+				TelegramBotMode:     "webhook",
+				WebAppBaseURL:       "https://example.com",
+				TelegramSecretToken: "secret123",
+			},
+			method:         "POST",
+			body:           `{"update_id": 123, "message": {"message_id": 1, "date": 1234567890, "chat": {"id": 123, "type": "private"}, "text": "test"}}`,
+			expectedStatus: http.StatusUnauthorized,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create a mock bot (this would normally require proper initialization)
 			bot := &Bot{
-				config: cfg,
+				config: tt.config,
 			}
 
 			req := httptest.NewRequest(tt.method, "/webhook", strings.NewReader(tt.body))
+			
+			// Add headers if provided
+			for key, value := range tt.headers {
+				req.Header.Set(key, value)
+			}
+			
 			w := httptest.NewRecorder()
 
 			bot.HandleWebhookUpdate(w, req)
@@ -144,17 +193,22 @@ func TestBot_StartWebhookMode(t *testing.T) {
 		TelegramWebhookURL:  "https://example.com/webhook",
 	}
 
-	bot := &Bot{
-		config: cfg,
+	// Test that webhook mode setup doesn't panic
+	// Note: We expect this to fail due to invalid token, but it shouldn't panic
+	bot, err := NewBot(cfg)
+	if err != nil {
+		// Expected - invalid token should fail during initialization
+		return
 	}
 
-	// Test that webhook mode setup doesn't panic
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
-	err := bot.Start(ctx)
-	// Expected to fail due to invalid token or cancelled context, but shouldn't panic
-	_ = err
+	err = bot.Start(ctx)
+	// Expected to fail due to cancelled context
+	if err == nil {
+		t.Error("Expected error due to cancelled context")
+	}
 }
 
 func TestBot_Stop(t *testing.T) {

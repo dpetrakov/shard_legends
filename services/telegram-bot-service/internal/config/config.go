@@ -13,6 +13,8 @@ type Config struct {
 	TelegramBotMode     string
 	TelegramPollTimeout int
 	TelegramWebhookURL  string
+	TelegramSecretToken string
+	TelegramAllowedUsers []string
 
 	// Web app configuration
 	WebAppBaseURL string
@@ -44,6 +46,16 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("WEBAPP_BASE_URL is required")
 	}
 
+	// Optional user access control
+	allowedUsersStr := os.Getenv("TELEGRAM_ALLOWED_USERS")
+	if allowedUsersStr != "" {
+		usernames := strings.Split(allowedUsersStr, ",")
+		for i, username := range usernames {
+			usernames[i] = strings.TrimSpace(username)
+		}
+		cfg.TelegramAllowedUsers = usernames
+	}
+	
 	// Mode-specific configuration
 	if cfg.TelegramBotMode == "webhook" {
 		cfg.TelegramWebhookURL = os.Getenv("TELEGRAM_WEBHOOK_URL")
@@ -55,6 +67,9 @@ func Load() (*Config, error) {
 		if cfg.ServicePort == "" {
 			cfg.ServicePort = "8080" // default port
 		}
+
+		// Optional secret token for webhook security
+		cfg.TelegramSecretToken = os.Getenv("TELEGRAM_SECRET_TOKEN")
 	} else {
 		// Long polling mode
 		pollTimeoutStr := os.Getenv("TELEGRAM_POLL_TIMEOUT")
@@ -102,6 +117,28 @@ func (c *Config) Validate() error {
 	return nil
 }
 
+// IsUserAllowed checks if a user is allowed to use the bot
+func (c *Config) IsUserAllowed(username string) bool {
+	// If no whitelist is configured, allow all users
+	if len(c.TelegramAllowedUsers) == 0 {
+		return true
+	}
+	
+	// If user has no username, deny access when whitelist is enabled
+	if username == "" {
+		return false
+	}
+	
+	// Check if username is in the whitelist
+	for _, allowedUser := range c.TelegramAllowedUsers {
+		if allowedUser == username {
+			return true
+		}
+	}
+	
+	return false
+}
+
 // String returns a string representation of the config (for logging, without sensitive data)
 func (c *Config) String() string {
 	tokenMasked := "***"
@@ -110,7 +147,7 @@ func (c *Config) String() string {
 	}
 
 	return fmt.Sprintf(
-		"Config{Mode: %s, Token: %s, WebApp: %s, Port: %s, PollTimeout: %d}",
-		c.TelegramBotMode, tokenMasked, c.WebAppBaseURL, c.ServicePort, c.TelegramPollTimeout,
+		"Config{Mode: %s, Token: %s, WebApp: %s, Port: %s, PollTimeout: %d, AllowedUsers: %v}",
+		c.TelegramBotMode, tokenMasked, c.WebAppBaseURL, c.ServicePort, c.TelegramPollTimeout, c.TelegramAllowedUsers,
 	)
 }
