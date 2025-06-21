@@ -38,6 +38,31 @@ services:
       retries: 3
       start_period: 10s
 
+  # Telegram Bot Service
+  telegram-bot-service:
+    build:
+      context: ../../services/telegram-bot-service
+      dockerfile: Dockerfile
+    container_name: slcw-telegram-bot-dev
+    ports:
+      - "127.0.0.1:9003:8080"  # Map to dev telegram bot port as per nginx config
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_BOT_MODE=${TELEGRAM_BOT_MODE:-longpoll}
+      - TELEGRAM_POLL_TIMEOUT=${TELEGRAM_POLL_TIMEOUT:-30}
+      - WEBAPP_BASE_URL=${WEBAPP_BASE_URL:-https://dev.slcw.dimlight.online}
+      - TELEGRAM_WEBHOOK_URL=${TELEGRAM_WEBHOOK_URL:-}
+      - SERVICE_PORT=${SERVICE_PORT:-8080}
+    networks:
+      - slcw-dev
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
 networks:
   slcw-dev:
     name: slcw-dev
