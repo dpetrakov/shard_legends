@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -34,6 +35,10 @@ func Load() (*Config, error) {
 	if cfg.TelegramBotToken == "" {
 		return nil, fmt.Errorf("TELEGRAM_BOT_TOKEN is required")
 	}
+	if cfg.TelegramBotToken == "DISABLED" {
+		log.Println("Bot is disabled (TELEGRAM_BOT_TOKEN=DISABLED), exiting gracefully...")
+		os.Exit(0) // Graceful exit, no restart
+	}
 
 	cfg.TelegramBotMode = strings.ToLower(os.Getenv("TELEGRAM_BOT_MODE"))
 	if cfg.TelegramBotMode == "" {
@@ -51,6 +56,10 @@ func Load() (*Config, error) {
 	cfg.MiniAppShortName = os.Getenv("MINI_APP_SHORT_NAME")
 	if cfg.MiniAppShortName == "" {
 		return nil, fmt.Errorf("MINI_APP_SHORT_NAME is required")
+	}
+	if cfg.MiniAppShortName == "DISABLED" {
+		log.Println("Bot is disabled (MINI_APP_SHORT_NAME=DISABLED), exiting gracefully...")
+		os.Exit(0) // Graceful exit, no restart
 	}
 
 	// Optional user access control

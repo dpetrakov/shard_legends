@@ -66,6 +66,36 @@ services:
       retries: 3
       start_period: 20s
 
+  # Telegram Bot Service - Forly (optional)
+  telegram-bot-service-forly:
+    build:
+      context: ../../services/telegram-bot-service
+      dockerfile: Dockerfile
+    container_name: slcw-telegram-bot-forly-dev
+    ports:
+      - "127.0.0.1:9004:8080"  # Map to forly telegram bot port
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN_FORLY:-DISABLED}
+      - TELEGRAM_BOT_MODE=${TELEGRAM_BOT_MODE_FORLY:-longpoll}
+      - TELEGRAM_POLL_TIMEOUT=${TELEGRAM_POLL_TIMEOUT_FORLY:-30}
+      - WEBAPP_BASE_URL=${WEBAPP_BASE_URL_FORLY:-https://dev-forly.slcw.dimlight.online}
+      - MINI_APP_SHORT_NAME=${MINI_APP_SHORT_NAME_FORLY:-DISABLED}
+      - TELEGRAM_WEBHOOK_URL=${TELEGRAM_WEBHOOK_URL_FORLY:-}
+      - TELEGRAM_SECRET_TOKEN=${TELEGRAM_SECRET_TOKEN_FORLY:-}
+      - TELEGRAM_ALLOWED_USERS=${TELEGRAM_ALLOWED_USERS_FORLY:-}
+      - SERVICE_PORT=8080
+    networks:
+      - slcw-dev
+    restart: on-failure:3
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    profiles:
+      - forly
+
 networks:
   slcw-dev:
     name: slcw-dev
