@@ -17,7 +17,7 @@ func (b *Bot) handleStartCommand(update tgbotapi.Update) {
 		"Откройте мини-приложение для начала игры!"
 
 	// Create inline keyboard with Mini App button
-	miniAppURL := fmt.Sprintf("https://t.me/%s/%s", "SLCWDevBot", b.config.MiniAppShortName)
+	miniAppURL := fmt.Sprintf("https://t.me/%s/%s", b.config.BotUsername, b.config.MiniAppShortName)
 
 	// Create URL button that opens the mini app directly
 	miniAppButton := tgbotapi.InlineKeyboardButton{

@@ -19,6 +19,7 @@ type Config struct {
 	// Web app configuration
 	WebAppBaseURL string
 	MiniAppShortName string
+	BotUsername string
 
 	// Service configuration
 	ServicePort string

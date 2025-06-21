@@ -26,6 +26,9 @@ func NewBot(cfg *config.Config) (*Bot, error) {
 
 	log.Printf("Authorized on account %s", api.Self.UserName)
 
+	// Store bot username in config for use in commands
+	cfg.BotUsername = api.Self.UserName
+
 	return &Bot{
 		api:    api,
 		config: cfg,
