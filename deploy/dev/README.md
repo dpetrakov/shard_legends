@@ -1,46 +1,138 @@
-# SLCW Frontend - Development Environment
+# Development Environment Setup
 
-Этот каталог содержит конфигурацию Docker для запуска фронтенда в dev окружении.
+This directory contains the Docker Compose configuration for the development environment of Shard Legends: Clan Wars.
 
-## Быстрый старт
+## Services
 
-1. Скопируйте `.env.example` в `.env` и заполните переменные окружения:
+### Infrastructure Services
+
+#### PostgreSQL 17
+- **Container**: `slcw-postgres-dev`
+- **Image**: `postgres:17-alpine`
+- **Database**: `shard_legends_dev`
+- **User**: `slcw_user`
+- **Network**: Internal only (no external ports)
+- **Schemas**: `auth`, `game`, `clan`
+
+#### Redis 8.0.2
+- **Container**: `slcw-redis-dev`
+- **Image**: `redis:8.0.2-alpine`
+- **Network**: Internal only (no external ports)
+- **Persistence**: RDB + AOF enabled for JWT token reliability
+- **Memory**: 256MB limit with TTL-based eviction policy
+
+### Application Services
+
+#### API Gateway
+- **Container**: `slcw-api-gateway-dev`
+- **Port**: `127.0.0.1:9000`
+- **Role**: Routes requests to microservices
+
+#### Frontend
+- **Container**: `slcw-frontend-dev`
+- **Port**: `127.0.0.1:8092`
+- **Framework**: Next.js
+
+#### Microservices
+- **Ping Service**: Test microservice
+- **Telegram Bot Service**: Main bot service
+- **Telegram Bot Service (Forly)**: Optional secondary bot
+
+## Quick Start
+
+1. Copy environment file:
    ```bash
    cp .env.example .env
    ```
 
-2. Запустите фронтенд:
+2. Start infrastructure services:
    ```bash
-   ./start.sh
+   docker-compose up -d postgres redis
    ```
 
-3. Доступ к приложению:
-   - Напрямую: http://localhost:8092
-   - Через nginx: https://dev.slcw.dimlight.online
+3. Start all services:
+   ```bash
+   docker-compose up -d
+   ```
 
-## Доступные скрипты
+4. Access:
+   - Frontend: http://localhost:8092
+   - API Gateway: http://localhost:9000
+   - Domain: https://dev.slcw.dimlight.online
 
-- `./start.sh` - запуск контейнеров
-- `./stop.sh` - остановка контейнеров
-- `./logs.sh` - просмотр логов
+## Database Connection
 
-## Структура
+### PostgreSQL
+```bash
+# Connect to PostgreSQL
+docker exec -it slcw-postgres-dev psql -U slcw_user -d shard_legends_dev
 
-- `frontend.Dockerfile` - Dockerfile для сборки фронтенда
-- `docker-compose.yml` - конфигурация Docker Compose
-- `.env.example` - пример файла с переменными окружения
+# Environment variables
+POSTGRES_DB=shard_legends_dev
+POSTGRES_USER=slcw_user
+POSTGRES_PASSWORD=dev_password_2024
+```
 
-## Особенности dev окружения
+### Redis
+```bash
+# Connect to Redis
+docker exec -it slcw-redis-dev redis-cli
 
-- Hot reload включен через volume монтирование
-- Порт 8092 (соответствует nginx конфигурации для dev)
-- API endpoint: http://localhost:8082/api
-- Автоматический рестарт при падении
-- Health check для мониторинга состояния
+# Test connection
+docker exec slcw-redis-dev redis-cli ping
+```
 
-## Интеграция с nginx
+## Management Commands
 
-Конфигурация соответствует `deploy/nginx/slcw.conf`:
-- Frontend dev: порт 8092
-- API dev: порт 8082
-- Домен: dev.slcw.dimlight.online
+### Infrastructure Only
+```bash
+# Start PostgreSQL and Redis only
+docker-compose up -d postgres redis
+
+# Check status
+docker-compose ps postgres redis
+```
+
+### All Services
+```bash
+# Start all services
+docker-compose up -d
+
+# Check logs
+docker-compose logs -f [service-name]
+
+# Stop services
+docker-compose down
+```
+
+### Health Checks
+All services include health checks:
+- PostgreSQL: `pg_isready` check
+- Redis: `redis-cli ping` check
+- Other services: HTTP endpoint checks
+
+## Persistence
+
+### PostgreSQL
+- Data persisted in named volume: `slcw-postgres-dev`
+- Initialization scripts in `./postgres/init/`
+
+### Redis
+- Data persisted in named volume: `slcw-redis-dev`
+- Configuration: `./redis/redis.conf`
+- RDB snapshots: Every 900s/1 key, 300s/10 keys, 60s/10000 keys
+- AOF enabled with `everysec` sync for JWT token reliability
+
+## Network
+
+All services run on the internal network `slcw-dev`. Only the API Gateway and Frontend expose external ports for development access.
+
+## Environment Variables
+
+Configuration is managed through `.env` file. Key variables:
+
+- `POSTGRES_DB`: Database name (default: shard_legends_dev)
+- `POSTGRES_USER`: Database user (default: slcw_user)  
+- `POSTGRES_PASSWORD`: Database password
+- `TELEGRAM_BOT_TOKEN`: Telegram bot token
+- `WEBAPP_BASE_URL`: Base URL for web app

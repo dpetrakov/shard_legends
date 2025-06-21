@@ -1,0 +1,48 @@
+// Схема базы данных Shard Legends: Clan Wars
+// Микросервисная архитектура с отдельными схемами для каждого сервиса
+
+Project ShardLegendsClanWars {
+  database_type: 'PostgreSQL'
+  Note: '''
+    Система управления базой данных для игры Shard Legends: Clan Wars.
+    Используется микросервисная архитектура с отдельными схемами для каждого сервиса.
+    PostgreSQL 17 с поддержкой UUID v4, JSONB и временных зон.
+  '''
+}
+
+// ============================================================================
+// AUTH SERVICE SCHEMA - Сервис авторизации
+// ============================================================================
+
+Table auth.users {
+  id uuid [primary key, default: `gen_random_uuid()`, note: 'Внутренний UUID пользователя для системы']
+  telegram_id bigint [unique, not null, note: 'Уникальный ID пользователя в Telegram']
+  username varchar(100) [null, note: 'Username пользователя в Telegram (может отсутствовать)']
+  first_name varchar(100) [not null, note: 'Имя пользователя в Telegram (обязательное поле)']
+  last_name varchar(100) [null, note: 'Фамилия пользователя в Telegram (может отсутствовать)']
+  language_code varchar(10) [null, note: 'Код языка пользователя (en, ru, es и т.д.)']
+  is_premium boolean [default: false, note: 'Статус Telegram Premium пользователя']
+  photo_url text [null, note: 'URL фото профиля пользователя в Telegram']
+  created_at timestamptz [default: `now()`, note: 'Время создания записи пользователя']
+  updated_at timestamptz [default: `now()`, note: 'Время последнего обновления записи']
+  last_login_at timestamptz [null, note: 'Время последней авторизации пользователя']
+  is_active boolean [default: true, note: 'Активность пользователя (для мягкого удаления)']
+  
+  // Индексы для производительности
+  indexes {
+    telegram_id [name: 'idx_users_telegram_id', note: 'Быстрый поиск по Telegram ID при авторизации']
+    username [name: 'idx_users_username', note: 'Поиск пользователей по username']
+    created_at [name: 'idx_users_created_at', note: 'Аналитика по регистрациям пользователей']
+    is_active [name: 'idx_users_active', note: 'Быстрый доступ к активным пользователям']
+  }
+  
+  Note: '''
+    Таблица пользователей для сервиса авторизации.
+    Содержит базовую информацию из Telegram Web App для аутентификации.
+    Связана с JWT токенами через Redis для управления сессиями.
+    
+    Constraints:
+    - telegram_id > 0 (положительное число)
+    - first_name не пустой (length(trim(first_name)) > 0)
+  '''
+}

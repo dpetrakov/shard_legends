@@ -1,0 +1,400 @@
+openapi: 3.0.3
+info:
+  title: Shard Legends Auth Service API
+  description: |
+    Микросервис авторизации и аутентификации для игры Shard Legends: Clan Wars.
+    
+    Обеспечивает авторизацию пользователей через Telegram Web App, 
+    генерацию JWT токенов и управление сессиями.
+    
+    **Основные возможности:**
+    - Валидация данных Telegram Web App через HMAC-SHA256
+    - Автоматическая регистрация новых пользователей
+    - Генерация JWT токенов с RSA подписью (24 часа)
+    - Управление активными/отозванными токенами в Redis
+    - Rate limiting для защиты от злоупотреблений
+  version: 1.0.0
+  contact:
+    name: Shard Legends Development Team
+  license:
+    name: MIT
+
+servers:
+  - url: https://dev.slcw.dimlight.online/api
+    description: Development server
+  - url: https://stage.slcw.dimlight.online/api
+    description: Staging server  
+  - url: https://slcw.dimlight.online/api
+    description: Production server
+
+tags:
+  - name: Authentication
+    description: Операции аутентификации и авторизации
+  - name: Health
+    description: Проверка состояния сервиса
+
+paths:
+  /auth:
+    post:
+      tags:
+        - Authentication
+      summary: Аутентификация пользователя через Telegram Web App
+      description: |
+        Основной эндпоинт для авторизации пользователей Telegram Mini App.
+        
+        **Алгоритм работы:**
+        1. Валидация Telegram Web App данных через HMAC-SHA256
+        2. Проверка актуальности auth_date (не старше 24 часов)
+        3. Поиск пользователя в БД или автоматическая регистрация
+        4. Отзыв всех существующих токенов пользователя
+        5. Генерация нового JWT токена (24 часа)
+        
+        **Rate Limiting:** 10 запросов в минуту на IP адрес
+      operationId: authenticateUser
+      parameters:
+        - name: X-Telegram-Init-Data
+          in: header
+          required: true
+          description: |
+            URL-encoded строка с данными инициализации от Telegram Web App.
+            
+            Содержит поля: user, auth_date, hash, query_id (опционально), 
+            start_param (опционально), chat (опционально).
+            
+            Пример: `user=%7B%22id%22%3A123456789%2C%22first_name%22%3A%22John%22%7D&auth_date=1672531200&hash=abc123...`
+          schema:
+            type: string
+            example: "user=%7B%22id%22%3A123456789%2C%22first_name%22%3A%22John%22%2C%22username%22%3A%22john_doe%22%7D&auth_date=1672531200&hash=a1b2c3d4e5f6..."
+      responses:
+        '200':
+          description: Успешная авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+              examples:
+                existing_user:
+                  summary: Существующий пользователь
+                  value:
+                    success: true
+                    token: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzaGFyZC1sZWdlbmRzLWF1dGgiLCJzdWIiOiI1NTVhYWEtYmJiYi1jY2NjLWRkZGQtZWVlZWVlZWVlZWVlIiwidGVsZWdyYW1faWQiOjEyMzQ1Njc4OSwiaWF0IjoxNzAzMjQzNDAwLCJleHAiOjE3MDMzMjk4MDAsImp0aSI6IjEyMzQ1Ni03ODkwLWFiY2QtZWZnaC0xMjM0NTY3ODkwIn0..."
+                    expires_at: "2024-12-22T10:30:00Z"
+                    user:
+                      id: "555aaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+                      telegram_id: 123456789
+                      username: "john_doe"
+                      first_name: "John"
+                      last_name: "Doe"
+                      language_code: "en"
+                      is_premium: true
+                      is_new_user: false
+                new_user:
+                  summary: Новый пользователь (автоматическая регистрация)
+                  value:
+                    success: true
+                    token: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    expires_at: "2024-12-22T15:45:00Z"
+                    user:
+                      id: "666fff-gggg-hhhh-iiii-jjjjjjjjjjjj"
+                      telegram_id: 987654321
+                      username: null
+                      first_name: "Maria"
+                      last_name: null
+                      language_code: "ru"
+                      is_premium: false
+                      is_new_user: true
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missing_header:
+                  summary: Отсутствует обязательный заголовок
+                  value:
+                    success: false
+                    error: "missing_init_data"
+                    message: "X-Telegram-Init-Data header is required"
+                invalid_format:
+                  summary: Некорректный формат данных
+                  value:
+                    success: false
+                    error: "invalid_init_data_format"
+                    message: "Unable to parse initData"
+                expired_auth_date:
+                  summary: Просроченные данные авторизации
+                  value:
+                    success: false
+                    error: "expired_auth_date"
+                    message: "auth_date is older than 24 hours"
+        '401':
+          description: Ошибка авторизации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid_signature:
+                  summary: Невалидная подпись Telegram
+                  value:
+                    success: false
+                    error: "invalid_telegram_signature"
+                    message: "HMAC-SHA256 signature verification failed"
+                invalid_user_data:
+                  summary: Некорректные данные пользователя
+                  value:
+                    success: false
+                    error: "invalid_user_data"
+                    message: "User object is missing required fields"
+        '429':
+          description: Превышен лимит запросов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error: "rate_limit_exceeded"
+                message: "Too many requests. Limit: 10 requests per minute"
+          headers:
+            Retry-After:
+              description: Количество секунд до следующего разрешенного запроса
+              schema:
+                type: integer
+                example: 60
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                database_error:
+                  summary: Ошибка базы данных
+                  value:
+                    success: false
+                    error: "internal_server_error"
+                    message: "Database connection failed"
+                redis_error:
+                  summary: Ошибка Redis
+                  value:
+                    success: false
+                    error: "internal_server_error"
+                    message: "Token storage unavailable"
+
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Проверка состояния сервиса
+      description: |
+        Эндпоинт для мониторинга состояния auth-service и его зависимостей.
+        
+        Проверяет доступность:
+        - Подключения к PostgreSQL
+        - Подключения к Redis
+        - Загрузки RSA ключей для JWT
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Сервис работает корректно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: "healthy"
+                timestamp: "2024-12-21T10:30:00Z"
+                version: "1.0.0"
+                dependencies:
+                  postgresql: "healthy"
+                  redis: "healthy"
+                  jwt_keys: "loaded"
+        '503':
+          description: Сервис недоступен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: "unhealthy"
+                timestamp: "2024-12-21T10:30:00Z"
+                version: "1.0.0"
+                dependencies:
+                  postgresql: "unhealthy"
+                  redis: "healthy" 
+                  jwt_keys: "loaded"
+
+components:
+  schemas:
+    AuthResponse:
+      type: object
+      required:
+        - success
+        - token
+        - expires_at
+        - user
+      properties:
+        success:
+          type: boolean
+          description: Статус успешности операции
+          example: true
+        token:
+          type: string
+          description: JWT токен для авторизации (RS256, 24 часа)
+          example: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzaGFyZC1sZWdlbmRzLWF1dGgiLCJzdWIiOiI1NTVhYWEtYmJiYi1jY2NjLWRkZGQtZWVlZWVlZWVlZWVlIiwidGVsZWdyYW1faWQiOjEyMzQ1Njc4OSwiaWF0IjoxNzAzMjQzNDAwLCJleHAiOjE3MDMzMjk4MDAsImp0aSI6IjEyMzQ1Ni03ODkwLWFiY2QtZWZnaC0xMjM0NTY3ODkwIn0..."
+        expires_at:
+          type: string
+          format: date-time
+          description: Время истечения токена (ISO 8601)
+          example: "2024-12-22T10:30:00Z"
+        user:
+          $ref: '#/components/schemas/User'
+
+    User:
+      type: object
+      required:
+        - id
+        - telegram_id
+        - first_name
+        - is_new_user
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Внутренний UUID пользователя в системе
+          example: "555aaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+        telegram_id:
+          type: integer
+          format: int64
+          description: Уникальный ID пользователя в Telegram
+          example: 123456789
+        username:
+          type: string
+          nullable: true
+          description: Username в Telegram (может отсутствовать)
+          example: "john_doe"
+        first_name:
+          type: string
+          description: Имя пользователя в Telegram
+          example: "John"
+        last_name:
+          type: string
+          nullable: true
+          description: Фамилия пользователя в Telegram (может отсутствовать)
+          example: "Doe"
+        language_code:
+          type: string
+          nullable: true
+          description: Код языка пользователя (ISO 639-1)
+          example: "en"
+        is_premium:
+          type: boolean
+          description: Статус Telegram Premium пользователя
+          example: true
+        photo_url:
+          type: string
+          nullable: true
+          description: URL фото профиля пользователя
+          example: "https://t.me/i/userpic/320/abc123.jpg"
+        is_new_user:
+          type: boolean
+          description: True, если пользователь был зарегистрирован в ходе этого запроса
+          example: false
+
+    ErrorResponse:
+      type: object
+      required:
+        - success
+        - error
+        - message
+      properties:
+        success:
+          type: boolean
+          description: Статус операции (всегда false для ошибок)
+          example: false
+        error:
+          type: string
+          description: Код ошибки для программной обработки
+          enum:
+            - missing_init_data
+            - invalid_init_data_format
+            - expired_auth_date
+            - invalid_telegram_signature
+            - invalid_user_data
+            - rate_limit_exceeded
+            - internal_server_error
+          example: "invalid_telegram_signature"
+        message:
+          type: string
+          description: Человекочитаемое описание ошибки
+          example: "HMAC-SHA256 signature verification failed"
+        details:
+          type: object
+          description: Дополнительные детали ошибки (опционально)
+          additionalProperties: true
+
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - timestamp
+      properties:
+        status:
+          type: string
+          description: Общий статус сервиса
+          enum:
+            - healthy
+            - unhealthy
+          example: "healthy"
+        timestamp:
+          type: string
+          format: date-time
+          description: Время проверки состояния (ISO 8601)
+          example: "2024-12-21T10:30:00Z"
+        version:
+          type: string
+          description: Версия сервиса
+          example: "1.0.0"
+        dependencies:
+          type: object
+          description: Состояние зависимостей сервиса
+          properties:
+            postgresql:
+              type: string
+              enum:
+                - healthy
+                - unhealthy
+              example: "healthy"
+            redis:
+              type: string
+              enum:
+                - healthy
+                - unhealthy
+              example: "healthy"
+            jwt_keys:
+              type: string
+              enum:
+                - loaded
+                - missing
+              example: "loaded"
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT токен, полученный от эндпоинта /auth.
+        
+        Формат заголовка: `Authorization: Bearer <token>`
+        
+        **Примечание:** Данная схема безопасности используется другими сервисами
+        для валидации токенов, выданных auth-service.
+
+security: []
+
+externalDocs:
+  description: Подробная техническая спецификация Auth Service
+  url: ./auth-service.md

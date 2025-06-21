@@ -24,7 +24,19 @@ docker compose up -d
 docker compose --profile forly up -d
 ```
 
-Генерация токена для TG
+# Генерация токена для TG
 ```bash
 openssl rand -hex 32
+```
+
+# Управление миграциями
+```bash
+  # Применение миграций
+  docker-compose --profile migrations run --rm migrate up
+
+  # Откат миграций  
+  docker-compose --profile migrations run --rm migrate down 1
+
+  # Проверка версии
+  docker-compose --profile migrations run --rm migrate version
 ```

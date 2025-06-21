@@ -85,6 +85,23 @@ services:
       retries: 3
       start_period: 20s
 
+  # Database Migrations - All Services
+  migrate:
+    build: ../../migrations
+    container_name: slcw-migrate-dev
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-slcw_user}:${POSTGRES_PASSWORD:-dev_password_2024}@postgres:5432/${POSTGRES_DB:-shard_legends_dev}?sslmode=disable
+    volumes:
+      - ../../migrations:/migrations
+    networks:
+      - slcw-dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - migrations
+    # Команда по умолчанию "up" из Dockerfile
+
   # Telegram Bot Service - Forly (optional)
   telegram-bot-service-forly:
     build:
@@ -113,6 +130,54 @@ services:
       start_period: 20s
     profiles:
       - forly
+
+  # PostgreSQL 17 - Primary database
+  postgres:
+    image: postgres:17-alpine
+    container_name: slcw-postgres-dev
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-shard_legends_dev}
+      - POSTGRES_USER=${POSTGRES_USER:-slcw_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-dev_password_2024}
+      - POSTGRES_HOST_AUTH_METHOD=md5
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - slcw-dev
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-slcw_user} -d ${POSTGRES_DB:-shard_legends_dev}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    # No external ports - only internal network access
+
+  # Redis 8.0.2 - Session store and cache
+  redis:
+    image: redis:8.0.2-alpine
+    container_name: slcw-redis-dev
+    volumes:
+      - redis_data:/data
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    networks:
+      - slcw-dev
+    restart: unless-stopped
+    command: redis-server /usr/local/etc/redis/redis.conf
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    # No external ports - only internal network access
+
+volumes:
+  postgres_data:
+    name: slcw-postgres-dev
+  redis_data:
+    name: slcw-redis-dev
 
 networks:
   slcw-dev:
