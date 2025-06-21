@@ -72,7 +72,7 @@ func main() {
 
 	// Initialize handlers
 	healthHandler := handlers.NewHealthHandler(logger)
-	authHandler := handlers.NewAuthHandler(logger, telegramValidator)
+	authHandler := handlers.NewAuthHandler(logger, telegramValidator, jwtService)
 
 	// Register routes
 	router.GET("/health", healthHandler.Health)

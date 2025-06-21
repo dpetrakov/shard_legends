@@ -3,6 +3,7 @@ package handlers
 import (
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/shard-legends/auth-service/internal/services"
@@ -12,13 +13,15 @@ import (
 type AuthHandler struct {
 	logger            *slog.Logger
 	telegramValidator *services.TelegramValidator
+	jwtService        *services.JWTService
 }
 
 // NewAuthHandler creates a new auth handler
-func NewAuthHandler(logger *slog.Logger, telegramValidator *services.TelegramValidator) *AuthHandler {
+func NewAuthHandler(logger *slog.Logger, telegramValidator *services.TelegramValidator, jwtService *services.JWTService) *AuthHandler {
 	return &AuthHandler{
 		logger:            logger,
 		telegramValidator: telegramValidator,
+		jwtService:        jwtService,
 	}
 }
 
@@ -78,25 +81,38 @@ func (h *AuthHandler) Auth(c *gin.Context) {
 		"username", telegramData.User.Username,
 		"first_name", telegramData.User.FirstName)
 
-	// For now, return a mock successful response
-	// In future implementations, this will:
+	// Generate JWT token
+	token, err := h.jwtService.GenerateToken(telegramData.User.ID)
+	if err != nil {
+		h.logger.Error("Failed to generate JWT token", "error", err, "telegram_id", telegramData.User.ID)
+		c.JSON(http.StatusInternalServerError, AuthResponse{
+			Success: false,
+			Error:   "token_generation_failed",
+			Message: "Failed to generate authentication token",
+		})
+		return
+	}
+
+	// Calculate expiration time (24 hours from now)
+	expiresAt := time.Now().Add(24 * time.Hour)
+
+	// TODO: In future implementations, this will:
 	// 1. Check if user exists in database
 	// 2. Create user if new
-	// 3. Generate JWT token
-	// 4. Store token in Redis
+	// 3. Store token in Redis for session management
 	userResponse := &UserResponse{
-		ID:         "mock-uuid-user-id",
+		ID:         "mock-uuid-user-id", // TODO: Generate real UUID when DB is connected
 		TelegramID: telegramData.User.ID,
 		Username:   telegramData.User.Username,
 		FirstName:  telegramData.User.FirstName,
 		LastName:   telegramData.User.LastName,
-		IsNewUser:  true, // Mock value
+		IsNewUser:  true, // TODO: Check database for existing user
 	}
 
 	response := AuthResponse{
 		Success:   true,
-		Token:     "mock-jwt-token-will-be-implemented-in-d3",
-		ExpiresAt: "2024-12-22T10:30:00Z",
+		Token:     token,
+		ExpiresAt: expiresAt.Format(time.RFC3339),
 		User:      userResponse,
 	}
 
