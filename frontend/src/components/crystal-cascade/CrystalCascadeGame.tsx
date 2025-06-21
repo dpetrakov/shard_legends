@@ -13,7 +13,7 @@ import { useChests } from '@/contexts/ChestContext';
 import Image from 'next/image';
 import { BOARD_COLS, BOARD_ROWS } from '@/components/crystal-cascade/crystal-definitions';
 import { Button } from '@/components/ui/button';
-import { RefreshCcw } from 'lucide-react'; // Import RefreshCcw icon
+import { RefreshCcw } from 'lucide-react';
 
 interface ComboStyle {
   background: string;
@@ -44,9 +44,9 @@ const REWARD_REQUIREMENT_STORAGE_KEY = 'crystalCascadeRewardRequirement';
 const MAX_REWARD_COMBO_THRESHOLD = 15; // Max combo requirement for reward
 
 const chestVisualData: Record<ChestType, { name: string; hint: string; imageUrl?: string }> = {
-  small: { name: "Малый", hint: "small treasure chest", imageUrl: "https://placehold.co/150x200/deb887/000000.png?text=Малый+Сундук" },
-  medium: { name: "Средний", hint: "medium treasure chest", imageUrl: "https://placehold.co/150x200/cd7f32/FFFFFF.png?text=Средний+Сундук" },
-  large: { name: "Большой", hint: "large treasure chest", imageUrl: "https://placehold.co/150x200/ffd700/000000.png?text=Большой+Сундук" }
+  small: { name: "Малый", hint: "small treasure chest", imageUrl: "https://placehold.co/150x200/deb887/000000.png" },
+  medium: { name: "Средний", hint: "medium treasure chest", imageUrl: "https://placehold.co/150x200/cd7f32/FFFFFF.png" },
+  large: { name: "Большой", hint: "large treasure chest", imageUrl: "https://placehold.co/150x200/ffd700/000000.png" }
 };
 
 const determineChestReward = (): ChestType => {
@@ -140,7 +140,7 @@ const CrystalCascadeGame: React.FC = () => {
       onUpdate: (latestValue) => setDisplayScore(Math.round(latestValue)),
     });
     return () => controls.stop();
-  }, [score, displayScore]); 
+  }, [score]); 
 
   const handleScoreUpdate = useCallback((scoreIncrement: number) => {
     if (scoreIncrement === -1) { 
@@ -234,7 +234,7 @@ const CrystalCascadeGame: React.FC = () => {
     awardChest(chestWon); 
     
     const chestData = chestVisualData[chestWon];
-    setRevealedFlippedCardImageUrl(chestData.imageUrl || `https://placehold.co/150x200.png?text=${encodeURIComponent(chestData.name)}`);
+    setRevealedFlippedCardImageUrl(chestData.imageUrl || `https://placehold.co/150x200.png`);
 
     const showDuration = 2500; 
     const animationDuration = 600; 
@@ -401,7 +401,7 @@ const CrystalCascadeGame: React.FC = () => {
                       >
                         <div className="relative w-full h-full">
                            <Image
-                            src="/images/card-back.png"
+                            src="/images/card-elements/card-back.png"
                             alt={`Карта ${index + 1}`}
                             layout="fill"
                             objectFit="contain"
@@ -440,3 +440,4 @@ export default CrystalCascadeGame;
     
 
     
+
