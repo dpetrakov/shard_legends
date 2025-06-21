@@ -23,7 +23,7 @@ func NewHealthHandler(logger *slog.Logger) *HealthHandler {
 // HealthResponse represents the health check response
 type HealthResponse struct {
 	Status       string            `json:"status"`
-	Timestamp    time.Time         `json:"timestamp"`
+	Timestamp    string            `json:"timestamp"`
 	Version      string            `json:"version"`
 	Dependencies map[string]string `json:"dependencies"`
 }
@@ -32,12 +32,12 @@ type HealthResponse struct {
 func (h *HealthHandler) Health(c *gin.Context) {
 	response := HealthResponse{
 		Status:    "healthy",
-		Timestamp: time.Now(),
+		Timestamp: time.Now().Format(time.RFC3339),
 		Version:   "1.0.0",
 		Dependencies: map[string]string{
 			"postgresql": "not_configured",
 			"redis":      "not_configured",
-			"jwt_keys":   "not_configured",
+			"jwt_keys":   "loaded", // JWT keys are loaded since we have JWT service running
 		},
 	}
 

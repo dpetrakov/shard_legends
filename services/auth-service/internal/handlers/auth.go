@@ -37,12 +37,15 @@ type AuthResponse struct {
 
 // UserResponse represents user data in auth response
 type UserResponse struct {
-	ID         string `json:"id"`
-	TelegramID int64  `json:"telegram_id"`
-	Username   string `json:"username,omitempty"`
-	FirstName  string `json:"first_name"`
-	LastName   string `json:"last_name,omitempty"`
-	IsNewUser  bool   `json:"is_new_user"`
+	ID           string `json:"id"`
+	TelegramID   int64  `json:"telegram_id"`
+	Username     string `json:"username,omitempty"`
+	FirstName    string `json:"first_name"`
+	LastName     string `json:"last_name,omitempty"`
+	LanguageCode string `json:"language_code,omitempty"`
+	IsPremium    bool   `json:"is_premium"`
+	PhotoURL     string `json:"photo_url,omitempty"`
+	IsNewUser    bool   `json:"is_new_user"`
 }
 
 // Auth handles POST /auth requests
@@ -53,7 +56,7 @@ func (h *AuthHandler) Auth(c *gin.Context) {
 		h.logger.Error("Missing X-Telegram-Init-Data header")
 		c.JSON(http.StatusBadRequest, AuthResponse{
 			Success: false,
-			Error:   "missing_telegram_data",
+			Error:   "missing_init_data",
 			Message: "X-Telegram-Init-Data header is required",
 		})
 		return
@@ -70,7 +73,7 @@ func (h *AuthHandler) Auth(c *gin.Context) {
 		h.logger.Error("Telegram data validation failed", "error", err)
 		c.JSON(http.StatusUnauthorized, AuthResponse{
 			Success: false,
-			Error:   "invalid_telegram_data",
+			Error:   "invalid_telegram_signature",
 			Message: "Telegram authentication failed",
 		})
 		return
@@ -87,7 +90,7 @@ func (h *AuthHandler) Auth(c *gin.Context) {
 		h.logger.Error("Failed to generate JWT token", "error", err, "telegram_id", telegramData.User.ID)
 		c.JSON(http.StatusInternalServerError, AuthResponse{
 			Success: false,
-			Error:   "token_generation_failed",
+			Error:   "internal_server_error",
 			Message: "Failed to generate authentication token",
 		})
 		return
@@ -101,12 +104,15 @@ func (h *AuthHandler) Auth(c *gin.Context) {
 	// 2. Create user if new
 	// 3. Store token in Redis for session management
 	userResponse := &UserResponse{
-		ID:         "mock-uuid-user-id", // TODO: Generate real UUID when DB is connected
-		TelegramID: telegramData.User.ID,
-		Username:   telegramData.User.Username,
-		FirstName:  telegramData.User.FirstName,
-		LastName:   telegramData.User.LastName,
-		IsNewUser:  true, // TODO: Check database for existing user
+		ID:           "mock-uuid-user-id", // TODO: Generate real UUID when DB is connected
+		TelegramID:   telegramData.User.ID,
+		Username:     telegramData.User.Username,
+		FirstName:    telegramData.User.FirstName,
+		LastName:     telegramData.User.LastName,
+		LanguageCode: telegramData.User.LanguageCode,
+		IsPremium:    telegramData.User.IsPremium,
+		PhotoURL:     telegramData.User.PhotoURL,
+		IsNewUser:    true, // TODO: Check database for existing user
 	}
 
 	response := AuthResponse{

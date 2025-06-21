@@ -32,6 +32,8 @@ tags:
     description: Операции аутентификации и авторизации
   - name: Health
     description: Проверка состояния сервиса
+  - name: Keys
+    description: Экспорт публичных ключей для других сервисов
 
 paths:
   /auth:
@@ -226,6 +228,85 @@ paths:
                   redis: "healthy" 
                   jwt_keys: "loaded"
 
+  /jwks:
+    get:
+      tags:
+        - Keys
+      summary: Получение публичного ключа в формате JWKS
+      description: |
+        Эндпоинт для получения публичного RSA ключа в стандартном формате JWKS 
+        (JSON Web Key Set) для валидации JWT токенов в других микросервисах.
+        
+        **Использование:**
+        - Другие сервисы могут использовать этот ключ для локальной валидации JWT токенов
+        - Стандартный формат JWKS совместим с большинством JWT библиотек
+        - Ключ автоматически обновляется при перегенерации RSA ключей
+      operationId: getJWKS
+      responses:
+        '200':
+          description: Публичный ключ в формате JWKS
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JWKSResponse'
+              example:
+                keys:
+                  - kty: "RSA"
+                    use: "sig"
+                    alg: "RS256"
+                    kid: "30820122300d0609"
+                    pem: "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...\n-----END PUBLIC KEY-----\n"
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error: "internal_server_error"
+                message: "Failed to retrieve public key"
+
+  /public-key.pem:
+    get:
+      tags:
+        - Keys
+      summary: Получение публичного ключа в формате PEM
+      description: |
+        Простой эндпоинт для получения публичного RSA ключа в формате PEM 
+        для валидации JWT токенов в других микросервисах.
+        
+        **Использование:**
+        - Удобен для простой интеграции в сервисы без JWKS поддержки
+        - Прямой PEM формат для загрузки в RSA библиотеки
+        - Тот же ключ, что и в /jwks, но в более простом формате
+      operationId: getPublicKeyPEM
+      responses:
+        '200':
+          description: Публичный ключ в формате PEM
+          content:
+            text/plain:
+              schema:
+                type: string
+                description: RSA публичный ключ в формате PEM
+              example: |
+                -----BEGIN PUBLIC KEY-----
+                MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA+Z8sOyi18JGKNPFgoQsu
+                h9C5taw369yy2S4OfnKd9SdCwwHhZbU6Cx/j+9My8+34hcxbv6kkU7VS4C4BXIKu
+                m/hG119Ay5hsSQ9FES1nWE4Hrwe4a00ocO+kY04fyIGrnNh4uSsq5GdwVFT+dfpp
+                EaM1CSCP2Xak6SVmQVw1f4DdCHKNwH3xVmhT8qX3ijhL3FIF3T3PYbP5G9PpTj5Y
+                uT00vFQc+nds/E7k9eVzjrgSNawMWKMJa76rbBKiCaq5GPeOi00eMyDrCd3v+jYY
+                iQ50xGviFVYeKzLxJXxX/QBOkD7kzBchB3BEXDsQxK4hmqX20hu8g4vrvOGEGWRS
+                fwIDAQAB
+                -----END PUBLIC KEY-----
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: "Internal server error"
+
 components:
   schemas:
     AuthResponse:
@@ -379,6 +460,59 @@ components:
                 - loaded
                 - missing
               example: "loaded"
+
+    JWKSResponse:
+      type: object
+      required:
+        - keys
+      properties:
+        keys:
+          type: array
+          description: Массив JSON Web Keys
+          items:
+            $ref: '#/components/schemas/JWK'
+          example:
+            - kty: "RSA"
+              use: "sig"
+              alg: "RS256"
+              kid: "30820122300d0609"
+              pem: "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...\n-----END PUBLIC KEY-----\n"
+
+    JWK:
+      type: object
+      required:
+        - kty
+        - use
+        - alg
+        - kid
+        - pem
+      properties:
+        kty:
+          type: string
+          description: Тип ключа
+          enum:
+            - RSA
+          example: "RSA"
+        use:
+          type: string
+          description: Назначение ключа
+          enum:
+            - sig
+          example: "sig"
+        alg:
+          type: string
+          description: Алгоритм подписи
+          enum:
+            - RS256
+          example: "RS256"
+        kid:
+          type: string
+          description: Уникальный идентификатор ключа (fingerprint)
+          example: "30820122300d0609"
+        pem:
+          type: string
+          description: Публичный ключ в формате PEM
+          example: "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...\n-----END PUBLIC KEY-----\n"
 
   securitySchemes:
     BearerAuth:
