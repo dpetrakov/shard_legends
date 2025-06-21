@@ -19,6 +19,7 @@ services:
     depends_on:
       - ping-service
       - telegram-bot-service
+      - auth-service
 
   # Frontend service
   frontend:
@@ -84,6 +85,40 @@ services:
       timeout: 10s
       retries: 3
       start_period: 20s
+
+  # Auth Service - Authentication and Authorization
+  auth-service:
+    build:
+      context: ../../services/auth-service
+      dockerfile: Dockerfile
+    container_name: slcw-auth-service-dev
+    # No external ports - accessed via API Gateway
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-slcw_user}:${POSTGRES_PASSWORD:-dev_password_2024}@postgres:5432/${POSTGRES_DB:-shard_legends_dev}?sslmode=disable
+      - REDIS_URL=redis://redis:6379/0
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - AUTH_SERVICE_HOST=0.0.0.0
+      - AUTH_SERVICE_PORT=8080
+      - DATABASE_MAX_CONNECTIONS=10
+      - REDIS_MAX_CONNECTIONS=10
+      - JWT_ISSUER=shard-legends-auth
+      - JWT_EXPIRY_HOURS=24
+      - RATE_LIMIT_REQUESTS=10
+      - RATE_LIMIT_WINDOW=60s
+    networks:
+      - slcw-dev
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   # Database Migrations - All Services
   migrate:

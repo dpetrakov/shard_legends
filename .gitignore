@@ -39,3 +39,5 @@ Thumbs.db
 .local/
 
 services/telegram-bot-service/telegram-bot-service
+services/auth-service/bin/auth-service
+services/auth-service/bin/

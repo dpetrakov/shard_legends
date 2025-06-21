@@ -2,6 +2,7 @@
 "use client";
 
 import { useState } from "react";
+import "@/types/telegram";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -38,7 +39,7 @@ export default function ProfilePage() {
 
   const handlePingServer = async () => {
     setIsPinging(true);
-    setPingModalMessage("Pinging server...");
+    setPingModalMessage("Testing auth service...");
     setIsPingModalOpen(true);
     const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
@@ -49,13 +50,41 @@ export default function ProfilePage() {
     }
 
     try {
-      const response = await fetch(`${apiUrl}/api/ping`);
+      // Get Telegram Web App data
+      let initData = '';
+      if (typeof window !== 'undefined' && window.Telegram?.WebApp?.initData) {
+        initData = window.Telegram.WebApp.initData;
+        setPingModalMessage("Telegram данные найдены, отправляем на сервер...");
+      } else {
+        setPingModalMessage("Предупреждение: Telegram Web App данные не найдены. Отправляем тестовый запрос...");
+      }
+
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+
+      // Add Telegram data header if available
+      if (initData) {
+        headers['X-Telegram-Init-Data'] = initData;
+      }
+
+      const response = await fetch(`${apiUrl}/api/auth`, {
+        method: 'POST',
+        headers: headers,
+      });
+
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`HTTP error! status: ${response.status}, message: ${errorText || 'Unknown server error'}`);
       }
-      const data = await response.text();
-      setPingModalMessage(`Ответ сервера: ${data}`);
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setPingModalMessage(`✅ Авторизация успешна!\n\nПользователь: ${data.user.first_name} ${data.user.last_name || ''}\nTelegram ID: ${data.user.telegram_id}\nUsername: ${data.user.username || 'не указан'}\nНовый пользователь: ${data.user.is_new_user ? 'Да' : 'Нет'}\n\nТокен получен: ${data.token.substring(0, 20)}...`);
+      } else {
+        setPingModalMessage(`❌ Ошибка авторизации:\n${data.message || data.error}`);
+      }
     } catch (error) {
       if (error instanceof Error) {
         setPingModalMessage(`Ошибка: ${error.message}`);
@@ -85,19 +114,19 @@ export default function ProfilePage() {
         </CardContent>
       </Card>
 
-      {/* Backend Test Section */}
+      {/* Auth Test Section */}
       <Card className="w-full max-w-md backdrop-blur-md shadow-xl">
         <CardHeader>
-          <CardTitle className="text-2xl font-headline text-center text-primary">Тест Бэкенда</CardTitle>
+          <CardTitle className="text-2xl font-headline text-center text-primary">Тест Авторизации</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col items-center">
           <Button onClick={handlePingServer} variant="outline" className="border-accent text-accent hover:bg-accent/10 hover:text-accent-foreground" disabled={isPinging}>
             {isPinging ? (
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />
             ) : (
-              <Wifi className="mr-2 h-5 w-5" />
+              <User className="mr-2 h-5 w-5" />
             )}
-            Ping Сервера
+            Тест Auth Service
           </Button>
         </CardContent>
       </Card>
@@ -199,7 +228,7 @@ export default function ProfilePage() {
       }}>
         <AlertDialogContent className="bg-card/90 backdrop-blur-md">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-primary">Результат Ping</AlertDialogTitle>
+            <AlertDialogTitle className="text-primary">Результат Авторизации</AlertDialogTitle>
             <AlertDialogDescription className="text-card-foreground whitespace-pre-wrap">
               {pingModalMessage}
             </AlertDialogDescription>
