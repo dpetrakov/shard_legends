@@ -16,27 +16,41 @@ func (b *Bot) handleStartCommand(update tgbotapi.Update) {
 	// Extract command arguments for deep linking
 	args := strings.TrimSpace(strings.TrimPrefix(update.Message.Text, "/start"))
 	
-	var webappURL string
 	var messageText string
+	var startParam string
 
 	if args == "game" || args == " game" {
 		// Deep link: /start game
-		webappURL = fmt.Sprintf("%s?start=game", b.config.WebAppBaseURL)
+		startParam = "game"
 		messageText = "🎮 Добро пожаловать в Shard Legends: Clan Wars!\n\n" +
 			"Готовы начать эпическое приключение? Нажмите кнопку ниже, чтобы запустить игру!"
 	} else {
 		// Regular /start command
-		webappURL = b.config.WebAppBaseURL
 		messageText = "🌟 Добро пожаловать в Shard Legends: Clan Wars!\n\n" +
 			"Присоединяйтесь к увлекательному миру стратегических битв и кланов. " +
-			"Откройте веб-приложение для начала игры!"
+			"Откройте мини-приложение для начала игры!"
 	}
 
-	// Create inline keyboard with URL button (WebApp functionality)
-	keyboard := tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonURL("🚀 Открыть игру", webappURL),
-		),
+	// Create inline keyboard with Web App button for Telegram Mini App
+	var keyboard tgbotapi.InlineKeyboardMarkup
+	var webAppURL string
+	
+	if startParam != "" {
+		// Use Web App with start parameter
+		webAppURL = fmt.Sprintf("%s?start=%s", b.config.WebAppBaseURL, startParam)
+	} else {
+		// Use Web App without parameters
+		webAppURL = b.config.WebAppBaseURL
+	}
+
+	// Create WebApp button - use URL button as fallback if WebApp not supported
+	webAppButton := tgbotapi.InlineKeyboardButton{
+		Text: "🚀 Открыть игру",
+		URL:  &webAppURL,
+	}
+
+	keyboard = tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(webAppButton),
 	)
 
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, messageText)

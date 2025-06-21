@@ -18,6 +18,7 @@ type Config struct {
 
 	// Web app configuration
 	WebAppBaseURL string
+	MiniAppShortName string
 
 	// Service configuration
 	ServicePort string
@@ -44,6 +45,11 @@ func Load() (*Config, error) {
 	cfg.WebAppBaseURL = os.Getenv("WEBAPP_BASE_URL")
 	if cfg.WebAppBaseURL == "" {
 		return nil, fmt.Errorf("WEBAPP_BASE_URL is required")
+	}
+
+	cfg.MiniAppShortName = os.Getenv("MINI_APP_SHORT_NAME")
+	if cfg.MiniAppShortName == "" {
+		return nil, fmt.Errorf("MINI_APP_SHORT_NAME is required")
 	}
 
 	// Optional user access control
@@ -147,7 +153,7 @@ func (c *Config) String() string {
 	}
 
 	return fmt.Sprintf(
-		"Config{Mode: %s, Token: %s, WebApp: %s, Port: %s, PollTimeout: %d, AllowedUsers: %v}",
-		c.TelegramBotMode, tokenMasked, c.WebAppBaseURL, c.ServicePort, c.TelegramPollTimeout, c.TelegramAllowedUsers,
+		"Config{Mode: %s, Token: %s, WebApp: %s, MiniApp: %s, Port: %s, PollTimeout: %d, AllowedUsers: %v}",
+		c.TelegramBotMode, tokenMasked, c.WebAppBaseURL, c.MiniAppShortName, c.ServicePort, c.TelegramPollTimeout, c.TelegramAllowedUsers,
 	)
 }
