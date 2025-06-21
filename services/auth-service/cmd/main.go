@@ -14,6 +14,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/shard-legends/auth-service/internal/config"
 	"github.com/shard-legends/auth-service/internal/handlers"
+	"github.com/shard-legends/auth-service/internal/middleware"
 	"github.com/shard-legends/auth-service/internal/services"
 	"github.com/shard-legends/auth-service/pkg/utils"
 )
@@ -54,6 +55,20 @@ func main() {
 
 	// Initialize services
 	telegramValidator := services.NewTelegramValidator(cfg.TelegramBotToken, logger)
+	
+	// Initialize JWT service
+	keyPaths := services.KeyPaths{
+		PrivateKeyPath: cfg.JWTPrivateKeyPath,
+		PublicKeyPath:  cfg.JWTPublicKeyPath,
+	}
+	jwtService, err := services.NewJWTService(keyPaths, cfg.JWTIssuer, cfg.JWTExpiryHours, logger)
+	if err != nil {
+		logger.Error("Failed to initialize JWT service", "error", err)
+		os.Exit(1)
+	}
+
+	// Initialize middleware
+	jwtPublicKeyMiddleware := middleware.NewJWTPublicKeyMiddleware(jwtService)
 
 	// Initialize handlers
 	healthHandler := handlers.NewHealthHandler(logger)
@@ -62,6 +77,10 @@ func main() {
 	// Register routes
 	router.GET("/health", healthHandler.Health)
 	router.POST("/auth", authHandler.Auth)
+	
+	// JWT public key endpoints for other services
+	router.GET("/jwks", jwtPublicKeyMiddleware.PublicKeyHandler())
+	router.GET("/public-key.pem", jwtPublicKeyMiddleware.PublicKeyPEMHandler())
 
 	// Create HTTP server
 	server := &http.Server{
