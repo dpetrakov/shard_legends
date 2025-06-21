@@ -52,11 +52,19 @@ export default function ProfilePage() {
     try {
       // Get Telegram Web App data
       let initData = '';
+      
+      // Отладочная информация
+      console.log("window.Telegram:", window.Telegram);
+      console.log("window.Telegram?.WebApp:", window.Telegram?.WebApp);
+      console.log("window.Telegram?.WebApp?.initData:", window.Telegram?.WebApp?.initData);
+      
       if (typeof window !== 'undefined' && window.Telegram?.WebApp?.initData) {
         initData = window.Telegram.WebApp.initData;
-        setPingModalMessage("Telegram данные найдены, отправляем на сервер...");
+        console.log("Telegram initData found:", initData);
+        setPingModalMessage(`Telegram данные найдены:\n${initData.substring(0, 100)}...\n\nОтправляем на сервер...`);
       } else {
-        setPingModalMessage("Предупреждение: Telegram Web App данные не найдены. Отправляем тестовый запрос...");
+        const debugInfo = `window.Telegram: ${!!window.Telegram}\nwindow.Telegram.WebApp: ${!!window.Telegram?.WebApp}\ninitData: ${!!window.Telegram?.WebApp?.initData}`;
+        setPingModalMessage(`Предупреждение: Telegram Web App данные не найдены.\n\nОтладка:\n${debugInfo}`);
       }
 
       const headers: HeadersInit = {
