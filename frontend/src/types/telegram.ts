@@ -21,6 +21,7 @@ declare global {
         };
         version: string;
         platform: string;
+        isExpanded: boolean;
         ready: () => void;
         expand: () => void;
         close: () => void;
