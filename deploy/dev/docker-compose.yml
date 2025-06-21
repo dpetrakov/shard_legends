@@ -1,4 +1,25 @@
 services:
+  # API Gateway - Internal microservices aggregator
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: slcw-api-gateway-dev
+    ports:
+      - "127.0.0.1:9000:8080"  # Single API endpoint for external nginx
+    networks:
+      - slcw-dev
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      - ping-service
+      - telegram-bot-service
+
   # Frontend service
   frontend:
     build:
@@ -26,8 +47,7 @@ services:
       context: ../../services/ping-service
       dockerfile: Dockerfile
     container_name: slcw-ping-service-dev
-    ports:
-      - "127.0.0.1:9001:8080"
+    # No external ports - accessed via API Gateway
     networks:
       - slcw-dev
     restart: unless-stopped
@@ -44,8 +64,7 @@ services:
       context: ../../services/telegram-bot-service
       dockerfile: Dockerfile
     container_name: slcw-telegram-bot-dev
-    ports:
-      - "127.0.0.1:9003:8080"  # Map to dev telegram bot port as per nginx config
+    # No external ports - accessed via API Gateway
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_BOT_MODE=${TELEGRAM_BOT_MODE:-longpoll}
@@ -72,8 +91,7 @@ services:
       context: ../../services/telegram-bot-service
       dockerfile: Dockerfile
     container_name: slcw-telegram-bot-forly-dev
-    ports:
-      - "127.0.0.1:9004:8080"  # Map to forly telegram bot port
+    # No external ports - accessed via API Gateway
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN_FORLY:-DISABLED}
       - TELEGRAM_BOT_MODE=${TELEGRAM_BOT_MODE_FORLY:-longpoll}
