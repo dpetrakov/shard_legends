@@ -103,8 +103,12 @@ services:
       - REDIS_MAX_CONNECTIONS=10
       - JWT_ISSUER=shard-legends-auth
       - JWT_EXPIRY_HOURS=24
+      - JWT_PRIVATE_KEY_PATH=/etc/auth/private_key.pem
+      - JWT_PUBLIC_KEY_PATH=/etc/auth/public_key.pem
       - RATE_LIMIT_REQUESTS=10
       - RATE_LIMIT_WINDOW=60s
+    volumes:
+      - auth_jwt_keys:/etc/auth
     networks:
       - slcw-dev
     restart: unless-stopped
@@ -213,6 +217,8 @@ volumes:
     name: slcw-postgres-dev
   redis_data:
     name: slcw-redis-dev
+  auth_jwt_keys:
+    name: slcw-auth-jwt-keys-dev
 
 networks:
   slcw-dev:

@@ -91,7 +91,7 @@ func TestParseInitData(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			data, err := validator.parseInitData(tt.initData)
-			
+
 			if (err != nil) != tt.wantErr {
 				t.Errorf("parseInitData() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -463,10 +463,10 @@ func TestValidateTelegramDataIntegration(t *testing.T) {
 
 	// Test with current timestamp
 	currentTime := time.Now().Unix()
-	
+
 	// Create test initData with valid signature
 	userData := `{"id":123456789,"first_name":"John","last_name":"Doe","username":"johndoe","language_code":"en","is_premium":true}`
-	
+
 	values := url.Values{}
 	values.Set("user", userData)
 	values.Set("auth_date", fmt.Sprintf("%d", currentTime))
@@ -493,7 +493,7 @@ func TestValidateTelegramDataIntegration(t *testing.T) {
 	valuesOld := url.Values{}
 	valuesOld.Set("user", userData)
 	valuesOld.Set("auth_date", fmt.Sprintf("%d", oldTime))
-	
+
 	var pairsOld []string
 	for key, valueSlice := range valuesOld {
 		if len(valueSlice) > 0 {
@@ -511,7 +511,7 @@ func TestValidateTelegramDataIntegration(t *testing.T) {
 	valuesBot := url.Values{}
 	valuesBot.Set("user", botUserData)
 	valuesBot.Set("auth_date", fmt.Sprintf("%d", currentTime))
-	
+
 	var pairsBot []string
 	for key, valueSlice := range valuesBot {
 		if len(valueSlice) > 0 {
@@ -578,7 +578,7 @@ func TestValidateTelegramDataIntegration(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			data, err := validator.ValidateTelegramData(tt.initData)
-			
+
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateTelegramData() error = %v, wantErr %v", err, tt.wantErr)
 				return

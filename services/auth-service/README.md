@@ -5,7 +5,9 @@ Authentication and authorization service for Shard Legends: Clan Wars. Provides 
 ## Features
 
 - Telegram Web App authentication
-- JWT token generation and validation
+- JWT token generation and validation with RSA-2048 signing
+- Automatic RSA key generation and management
+- Public key export for other microservices
 - Redis-based token storage and revocation
 - PostgreSQL user storage
 - Rate limiting
@@ -55,6 +57,34 @@ Health check endpoint that returns service status and dependencies.
     "jwt_keys": "not_configured"
   }
 }
+```
+
+### GET /jwks
+
+Returns JWT public key in JWKS (JSON Web Key Set) format for other services.
+
+**Response:**
+```json
+{
+  "keys": [{
+    "kty": "RSA",
+    "use": "sig",
+    "alg": "RS256", 
+    "kid": "key_fingerprint",
+    "pem": "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----"
+  }]
+}
+```
+
+### GET /public-key.pem
+
+Returns JWT public key in PEM format for simple integration.
+
+**Response:**
+```
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...
+-----END PUBLIC KEY-----
 ```
 
 ## Development
@@ -108,8 +138,11 @@ docker run -p 8080:8080 \
   -e DATABASE_URL="postgresql://user:pass@postgres:5432/shard_legends" \
   -e REDIS_URL="redis://redis:6379/0" \
   -e TELEGRAM_BOT_TOKEN="your_bot_token" \
+  -v auth_jwt_keys:/etc/auth \
   auth-service
 ```
+
+**Note:** The volume mount is crucial for persistent JWT keys across container restarts.
 
 ## Project Structure
 
@@ -121,10 +154,16 @@ services/auth-service/
 │   ├── config/
 │   │   └── config.go        # Configuration management
 │   ├── handlers/
-│   │   └── health.go        # HTTP handlers
-│   ├── middleware/          # HTTP middleware (future)
+│   │   ├── auth.go          # Authentication handlers
+│   │   └── health.go        # Health check handlers
+│   ├── middleware/
+│   │   └── jwt_public_key.go # JWT public key export middleware
 │   ├── models/              # Data models (future)
-│   ├── services/            # Business logic (future)
+│   ├── services/
+│   │   ├── jwt.go           # JWT token service
+│   │   ├── jwt_test.go      # JWT service tests
+│   │   ├── telegram.go      # Telegram validation service
+│   │   └── telegram_test.go # Telegram service tests
 │   └── storage/             # Data access layer (future)
 ├── pkg/
 │   └── utils/

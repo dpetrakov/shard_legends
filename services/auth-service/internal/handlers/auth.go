@@ -10,26 +10,26 @@ import (
 
 // AuthHandler handles authentication requests
 type AuthHandler struct {
-	logger             *slog.Logger
-	telegramValidator  *services.TelegramValidator
+	logger            *slog.Logger
+	telegramValidator *services.TelegramValidator
 }
 
 // NewAuthHandler creates a new auth handler
 func NewAuthHandler(logger *slog.Logger, telegramValidator *services.TelegramValidator) *AuthHandler {
 	return &AuthHandler{
-		logger:             logger,
-		telegramValidator:  telegramValidator,
+		logger:            logger,
+		telegramValidator: telegramValidator,
 	}
 }
 
 // AuthResponse represents the authentication response
 type AuthResponse struct {
-	Success   bool                   `json:"success"`
-	Token     string                 `json:"token,omitempty"`
-	ExpiresAt string                 `json:"expires_at,omitempty"`
-	User      *UserResponse          `json:"user,omitempty"`
-	Error     string                 `json:"error,omitempty"`
-	Message   string                 `json:"message,omitempty"`
+	Success   bool          `json:"success"`
+	Token     string        `json:"token,omitempty"`
+	ExpiresAt string        `json:"expires_at,omitempty"`
+	User      *UserResponse `json:"user,omitempty"`
+	Error     string        `json:"error,omitempty"`
+	Message   string        `json:"message,omitempty"`
 }
 
 // UserResponse represents user data in auth response
@@ -56,7 +56,7 @@ func (h *AuthHandler) Auth(c *gin.Context) {
 		return
 	}
 
-	h.logger.Info("Processing auth request", 
+	h.logger.Info("Processing auth request",
 		"method", c.Request.Method,
 		"headers", len(c.Request.Header),
 		"data_length", len(initData))
@@ -73,7 +73,7 @@ func (h *AuthHandler) Auth(c *gin.Context) {
 		return
 	}
 
-	h.logger.Info("Telegram data validation successful", 
+	h.logger.Info("Telegram data validation successful",
 		"user_id", telegramData.User.ID,
 		"username", telegramData.User.Username,
 		"first_name", telegramData.User.FirstName)
@@ -100,7 +100,7 @@ func (h *AuthHandler) Auth(c *gin.Context) {
 		User:      userResponse,
 	}
 
-	h.logger.Info("Authentication successful", 
+	h.logger.Info("Authentication successful",
 		"telegram_id", telegramData.User.ID,
 		"is_new_user", userResponse.IsNewUser)
 

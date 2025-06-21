@@ -28,12 +28,12 @@ type TelegramUser struct {
 
 // TelegramData represents parsed Telegram Web App initData
 type TelegramData struct {
-	User      *TelegramUser `json:"user"`
-	AuthDate  int64         `json:"auth_date"`
-	Hash      string        `json:"hash"`
-	QueryID   string        `json:"query_id,omitempty"`
-	StartParam string       `json:"start_param,omitempty"`
-	Signature string        `json:"signature,omitempty"`
+	User       *TelegramUser `json:"user"`
+	AuthDate   int64         `json:"auth_date"`
+	Hash       string        `json:"hash"`
+	QueryID    string        `json:"query_id,omitempty"`
+	StartParam string        `json:"start_param,omitempty"`
+	Signature  string        `json:"signature,omitempty"`
 }
 
 // TelegramValidator handles validation of Telegram Web App data
@@ -85,8 +85,8 @@ func (tv *TelegramValidator) ValidateTelegramData(initData string) (*TelegramDat
 		return nil, err
 	}
 
-	tv.logger.Info("Telegram data validation successful", 
-		"user_id", parsedData.User.ID, 
+	tv.logger.Info("Telegram data validation successful",
+		"user_id", parsedData.User.ID,
 		"username", parsedData.User.Username,
 		"first_name", parsedData.User.FirstName)
 
@@ -162,7 +162,7 @@ func (tv *TelegramValidator) validateRequiredFields(data *TelegramData) error {
 func (tv *TelegramValidator) validateAuthDate(authDate int64) error {
 	authTime := time.Unix(authDate, 0)
 	now := time.Now()
-	
+
 	// Check if auth_date is in the future (invalid)
 	if authTime.After(now) {
 		return fmt.Errorf("auth_date cannot be in the future")
@@ -210,8 +210,8 @@ func (tv *TelegramValidator) validateSignature(initData, receivedHash string) er
 
 	// Step 5: Compare hashes
 	if calculatedHash != receivedHash {
-		tv.logger.Error("HMAC signature mismatch", 
-			"calculated", calculatedHash, 
+		tv.logger.Error("HMAC signature mismatch",
+			"calculated", calculatedHash,
 			"received", receivedHash,
 			"data_check_string", dataCheckString)
 		return fmt.Errorf("invalid HMAC signature")

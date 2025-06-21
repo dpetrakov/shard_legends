@@ -34,6 +34,7 @@ This directory contains the Docker Compose configuration for the development env
 - **Framework**: Next.js
 
 #### Microservices
+- **Auth Service**: JWT authentication with RSA key management
 - **Ping Service**: Test microservice
 - **Telegram Bot Service**: Main bot service
 - **Telegram Bot Service (Forly)**: Optional secondary bot
@@ -122,6 +123,13 @@ All services include health checks:
 - Configuration: `./redis/redis.conf`
 - RDB snapshots: Every 900s/1 key, 300s/10 keys, 60s/10000 keys
 - AOF enabled with `everysec` sync for JWT token reliability
+
+### Auth Service JWT Keys
+- **Volume**: `slcw-auth-jwt-keys-dev`
+- **Mount**: `/etc/auth` in container
+- **Purpose**: Persistent RSA key storage for JWT signing
+- **Security**: 2048-bit RSA keys, auto-generated on first run
+- **Critical**: Without this volume, all JWT tokens become invalid on container restart
 
 ## Network
 

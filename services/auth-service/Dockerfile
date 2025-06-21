@@ -29,6 +29,10 @@ RUN apk --no-cache add ca-certificates
 RUN addgroup -g 1001 -S app && \
     adduser -u 1001 -S app -G app
 
+# Create directory for JWT keys
+RUN mkdir -p /etc/auth && \
+    chown app:app /etc/auth
+
 # Set working directory
 WORKDIR /app
 
