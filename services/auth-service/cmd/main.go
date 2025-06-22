@@ -16,6 +16,7 @@ import (
 	"github.com/shard-legends/auth-service/internal/handlers"
 	"github.com/shard-legends/auth-service/internal/middleware"
 	"github.com/shard-legends/auth-service/internal/services"
+	"github.com/shard-legends/auth-service/internal/storage"
 	"github.com/shard-legends/auth-service/pkg/utils"
 )
 
@@ -49,9 +50,14 @@ func main() {
 	// Create Gin router
 	router := gin.New()
 
-	// Add middleware
+	// Add global middleware
 	router.Use(gin.Recovery())
 	router.Use(requestLogger(logger))
+	router.Use(middleware.CORS()) // Add CORS support
+
+	// Create rate limiter for auth endpoint (10 requests per minute)
+	authRateLimiter := middleware.NewRateLimiter(10, logger)
+	defer authRateLimiter.Close()
 
 	// Initialize services
 	telegramValidator := services.NewTelegramValidator(cfg.TelegramBotTokens, logger)
@@ -67,16 +73,24 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Initialize PostgreSQL storage
+	userRepo, err := storage.NewPostgresStorage(cfg.DatabaseURL, cfg.DatabaseMaxConns, logger)
+	if err != nil {
+		logger.Error("Failed to initialize PostgreSQL storage", "error", err)
+		os.Exit(1)
+	}
+	defer userRepo.Close()
+
 	// Initialize middleware
 	jwtPublicKeyMiddleware := middleware.NewJWTPublicKeyMiddleware(jwtService)
 
 	// Initialize handlers
-	healthHandler := handlers.NewHealthHandler(logger)
-	authHandler := handlers.NewAuthHandler(logger, telegramValidator, jwtService)
+	healthHandler := handlers.NewHealthHandler(logger, userRepo)
+	authHandler := handlers.NewAuthHandler(logger, telegramValidator, jwtService, userRepo)
 
 	// Register routes
 	router.GET("/health", healthHandler.Health)
-	router.POST("/auth", authHandler.Auth)
+	router.POST("/auth", authRateLimiter.Limit(), authHandler.Auth) // Apply rate limiting to auth endpoint
 	
 	// JWT public key endpoints for other services
 	router.GET("/jwks", jwtPublicKeyMiddleware.PublicKeyHandler())

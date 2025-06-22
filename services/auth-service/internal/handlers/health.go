@@ -1,22 +1,26 @@
 package handlers
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/shard-legends/auth-service/internal/storage"
 )
 
 // HealthHandler handles health check requests
 type HealthHandler struct {
-	logger *slog.Logger
+	logger   *slog.Logger
+	userRepo storage.UserRepository
 }
 
 // NewHealthHandler creates a new health handler
-func NewHealthHandler(logger *slog.Logger) *HealthHandler {
+func NewHealthHandler(logger *slog.Logger, userRepo storage.UserRepository) *HealthHandler {
 	return &HealthHandler{
-		logger: logger,
+		logger:   logger,
+		userRepo: userRepo,
 	}
 }
 
@@ -30,18 +34,42 @@ type HealthResponse struct {
 
 // Health handles GET /health requests
 func (h *HealthHandler) Health(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Check database health
+	dbStatus := "healthy"
+	if err := h.userRepo.Health(ctx); err != nil {
+		h.logger.Error("Database health check failed", "error", err)
+		dbStatus = "unhealthy"
+	}
+
+	// Determine overall status
+	overallStatus := "healthy"
+	if dbStatus == "unhealthy" {
+		overallStatus = "unhealthy"
+	}
+
 	response := HealthResponse{
-		Status:    "healthy",
+		Status:    overallStatus,
 		Timestamp: time.Now().Format(time.RFC3339),
 		Version:   "1.0.0",
 		Dependencies: map[string]string{
-			"postgresql": "not_configured",
-			"redis":      "not_configured",
-			"jwt_keys":   "loaded", // JWT keys are loaded since we have JWT service running
+			"postgresql": dbStatus,
+			"redis":      "not_configured", // TODO: Add Redis health check when implemented
+			"jwt_keys":   "loaded",         // JWT keys are loaded since we have JWT service running
 		},
 	}
 
-	h.logger.Debug("Health check requested", "status", response.Status)
+	h.logger.Debug("Health check requested", 
+		"status", response.Status,
+		"postgresql", dbStatus)
 
-	c.JSON(http.StatusOK, response)
+	// Return appropriate HTTP status code
+	statusCode := http.StatusOK
+	if overallStatus == "unhealthy" {
+		statusCode = http.StatusServiceUnavailable
+	}
+
+	c.JSON(statusCode, response)
 }

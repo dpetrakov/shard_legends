@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
 // setupTestJWTService creates a JWT service for testing with temporary key files
@@ -125,26 +126,31 @@ func TestGenerateToken(t *testing.T) {
 
 	tests := []struct {
 		name       string
+		userID     uuid.UUID
 		telegramID int64
 		wantErr    bool
 	}{
 		{
 			name:       "valid telegram ID",
+			userID:     uuid.New(),
 			telegramID: 12345678,
 			wantErr:    false,
 		},
 		{
 			name:       "another valid telegram ID",
+			userID:     uuid.New(),
 			telegramID: 98765432,
 			wantErr:    false,
 		},
 		{
 			name:       "zero telegram ID",
+			userID:     uuid.New(),
 			telegramID: 0,
 			wantErr:    true, // Zero is invalid - token will be generated but validation will fail
 		},
 		{
 			name:       "negative telegram ID",
+			userID:     uuid.New(),
 			telegramID: -12345,
 			wantErr:    true, // Negative is invalid - token will be generated but validation will fail
 		},
@@ -152,7 +158,7 @@ func TestGenerateToken(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			token, err := service.GenerateToken(tt.telegramID)
+			token, err := service.GenerateToken(tt.userID, tt.telegramID)
 
 			// Token generation should always succeed
 			if err != nil {
@@ -218,8 +224,9 @@ func TestValidateToken(t *testing.T) {
 	service, _ := setupTestJWTService(t)
 
 	// Generate a valid token first
+	userID := uuid.New()
 	telegramID := int64(12345678)
-	validToken, err := service.GenerateToken(telegramID)
+	validToken, err := service.GenerateToken(userID, telegramID)
 	if err != nil {
 		t.Fatalf("Failed to generate test token: %v", err)
 	}
@@ -532,7 +539,7 @@ func TestTokenRoundTrip(t *testing.T) {
 	for _, telegramID := range telegramIDs {
 		t.Run(fmt.Sprintf("telegram_id_%d", telegramID), func(t *testing.T) {
 			// Generate token
-			token, err := service.GenerateToken(telegramID)
+			token, err := service.GenerateToken(uuid.New(), telegramID)
 			if err != nil {
 				t.Fatalf("Failed to generate token: %v", err)
 			}
@@ -575,11 +582,12 @@ func TestTokenRoundTrip(t *testing.T) {
 // Benchmark tests
 func BenchmarkGenerateToken(b *testing.B) {
 	service, _ := setupTestJWTService(&testing.T{})
+	userID := uuid.New()
 	telegramID := int64(12345678)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := service.GenerateToken(telegramID)
+		_, err := service.GenerateToken(userID, telegramID)
 		if err != nil {
 			b.Fatalf("Failed to generate token: %v", err)
 		}
@@ -588,10 +596,11 @@ func BenchmarkGenerateToken(b *testing.B) {
 
 func BenchmarkValidateToken(b *testing.B) {
 	service, _ := setupTestJWTService(&testing.T{})
+	userID := uuid.New()
 	telegramID := int64(12345678)
 
 	// Generate a token to validate
-	token, err := service.GenerateToken(telegramID)
+	token, err := service.GenerateToken(userID, telegramID)
 	if err != nil {
 		b.Fatalf("Failed to generate test token: %v", err)
 	}

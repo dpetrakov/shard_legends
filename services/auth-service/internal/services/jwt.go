@@ -248,8 +248,8 @@ func (j *JWTService) ensureKeyDirectory(keyPath string) error {
 	return nil
 }
 
-// GenerateToken generates a new JWT token for the given telegram user ID
-func (j *JWTService) GenerateToken(telegramID int64) (string, error) {
+// GenerateToken generates a new JWT token for the given user ID and telegram ID
+func (j *JWTService) GenerateToken(userID uuid.UUID, telegramID int64) (string, error) {
 	now := time.Now()
 	expirationTime := now.Add(time.Duration(j.expiryHours) * time.Hour)
 
@@ -259,7 +259,7 @@ func (j *JWTService) GenerateToken(telegramID int64) (string, error) {
 		JTI:        uuid.New().String(), // JWT ID for token uniqueness
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    j.issuer,                           // iss
-			Subject:   fmt.Sprintf("%d", telegramID),      // sub
+			Subject:   userID.String(),                    // sub - using UUID as per RFC 7519 standards
 			IssuedAt:  jwt.NewNumericDate(now),            // iat
 			ExpiresAt: jwt.NewNumericDate(expirationTime), // exp
 		},
@@ -271,11 +271,15 @@ func (j *JWTService) GenerateToken(telegramID int64) (string, error) {
 	// Sign token with private key
 	tokenString, err := token.SignedString(j.privateKey)
 	if err != nil {
-		j.logger.Error("Failed to sign JWT token", "error", err, "telegram_id", telegramID)
+		j.logger.Error("Failed to sign JWT token", 
+			"error", err, 
+			"user_id", userID.String(),
+			"telegram_id", telegramID)
 		return "", fmt.Errorf("failed to sign token: %w", err)
 	}
 
 	j.logger.Info("JWT token generated successfully",
+		"user_id", userID.String(),
 		"telegram_id", telegramID,
 		"jti", claims.JTI,
 		"expires_at", expirationTime)
@@ -337,10 +341,9 @@ func (j *JWTService) validateClaims(claims *JWTClaims) error {
 		return fmt.Errorf("missing JTI claim")
 	}
 
-	// Validate subject matches telegram_id
-	expectedSubject := fmt.Sprintf("%d", claims.TelegramID)
-	if claims.Subject != expectedSubject {
-		return fmt.Errorf("subject mismatch: expected %s, got %s", expectedSubject, claims.Subject)
+	// Validate subject is a valid UUID (as per RFC 7519 standards)
+	if _, err := uuid.Parse(claims.Subject); err != nil {
+		return fmt.Errorf("invalid subject UUID: %s", claims.Subject)
 	}
 
 	return nil

@@ -1,0 +1,375 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "SLCW Docker Containers",
+    "tags": ["slcw", "docker"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Container Status (based on CPU activity)",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "sum by (id) (rate(container_cpu_usage_seconds_total{id=~\"/docker/.*\", id!~\"/docker/(buildkit|buildx)\"}[1m]))",
+            "format": "table",
+            "instant": true,
+            "refId": "A"
+          },
+          {
+            "expr": "container_start_time_seconds{id=~\"/docker/.*\", id!~\"/docker/(buildkit|buildx)\"}",
+            "format": "table",
+            "instant": true,
+            "refId": "B"
+          }
+        ],
+        "transformations": [
+          {
+            "id": "merge",
+            "options": {}
+          },
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {
+                "Time": true,
+                "__name__": true,
+                "instance": true,
+                "job": true
+              },
+              "indexByName": {
+                "id": 0,
+                "Value #A": 1,
+                "Value #B": 2
+              },
+              "renameByName": {
+                "id": "Container ID",
+                "Value #A": "CPU Activity",
+                "Value #B": "Start Time"
+              }
+            }
+          },
+          {
+            "id": "calculateField",
+            "options": {
+              "alias": "Uptime",
+              "binary": {
+                "left": "Start Time",
+                "operator": "-",
+                "reducer": "lastNotNull",
+                "right": "1750463700"
+              },
+              "mode": "binary"
+            }
+          },
+          {
+            "id": "calculateField",
+            "options": {
+              "alias": "Status",
+              "binary": {
+                "left": "CPU Activity",
+                "reducer": "lastNotNull"
+              },
+              "mode": "reduceRow",
+              "reduce": {
+                "reducer": "lastNotNull"
+              }
+            }
+          },
+          {
+            "id": "calculateField",
+            "options": {
+              "alias": "Container Name",
+              "binary": {
+                "left": "Container ID",
+                "reducer": "lastNotNull"
+              },
+              "mode": "reduceRow",
+              "reduce": {
+                "reducer": "lastNotNull"
+              }
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "align": "left",
+              "displayMode": "color-background",
+              "filterable": true
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Container ID"
+              },
+              "properties": [
+                {
+                  "id": "custom.width",
+                  "value": 100
+                },
+                {
+                  "id": "mappings",
+                  "value": [
+                    {
+                      "options": {
+                        "pattern": "/docker/(.*)",
+                        "result": {
+                          "text": "$1"
+                        }
+                      },
+                      "type": "regex"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Container Name"
+              },
+              "properties": [
+                {
+                  "id": "mappings",
+                  "value": [
+                    {
+                      "options": {
+                        "pattern": "/docker/02dd.*",
+                        "result": {
+                          "text": "slcw-api-gateway-dev",
+                          "color": "blue"
+                        }
+                      },
+                      "type": "regex"
+                    },
+                    {
+                      "options": {
+                        "pattern": "/docker/2ecf.*",
+                        "result": {
+                          "text": "slcw-auth-service-dev",
+                          "color": "blue"
+                        }
+                      },
+                      "type": "regex"
+                    },
+                    {
+                      "options": {
+                        "pattern": "/docker/49ed.*",
+                        "result": {
+                          "text": "slcw-frontend-dev",
+                          "color": "blue"
+                        }
+                      },
+                      "type": "regex"
+                    },
+                    {
+                      "options": {
+                        "pattern": "/docker/4ee7.*",
+                        "result": {
+                          "text": "slcw-postgres-dev",
+                          "color": "blue"
+                        }
+                      },
+                      "type": "regex"
+                    },
+                    {
+                      "options": {
+                        "pattern": "/docker/56b6.*",
+                        "result": {
+                          "text": "slcw-telegram-bot-dev",
+                          "color": "blue"
+                        }
+                      },
+                      "type": "regex"
+                    },
+                    {
+                      "options": {
+                        "pattern": "/docker/70f2.*",
+                        "result": {
+                          "text": "slcw-loki",
+                          "color": "purple"
+                        }
+                      },
+                      "type": "regex"
+                    },
+                    {
+                      "options": {
+                        "pattern": "/docker/88ad.*",
+                        "result": {
+                          "text": "slcw-promtail",
+                          "color": "purple"
+                        }
+                      },
+                      "type": "regex"
+                    },
+                    {
+                      "options": {
+                        "pattern": "/docker/90b6.*",
+                        "result": {
+                          "text": "slcw-redis-dev",
+                          "color": "blue"
+                        }
+                      },
+                      "type": "regex"
+                    },
+                    {
+                      "options": {
+                        "pattern": "/docker/bac0.*",
+                        "result": {
+                          "text": "slcw-cadvisor",
+                          "color": "purple"
+                        }
+                      },
+                      "type": "regex"
+                    },
+                    {
+                      "options": {
+                        "pattern": "/docker/c062.*",
+                        "result": {
+                          "text": "slcw-prometheus",
+                          "color": "purple"
+                        }
+                      },
+                      "type": "regex"
+                    },
+                    {
+                      "options": {
+                        "pattern": "/docker/dc00.*",
+                        "result": {
+                          "text": "slcw-grafana",
+                          "color": "purple"
+                        }
+                      },
+                      "type": "regex"
+                    },
+                    {
+                      "options": {
+                        "pattern": "/docker/e5ed.*",
+                        "result": {
+                          "text": "slcw-ping-service-dev",
+                          "color": "blue"
+                        }
+                      },
+                      "type": "regex"
+                    }
+                  ]
+                },
+                {
+                  "id": "custom.width",
+                  "value": 200
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Status"
+              },
+              "properties": [
+                {
+                  "id": "mappings",
+                  "value": [
+                    {
+                      "options": {
+                        "from": 0,
+                        "to": 999,
+                        "result": {
+                          "text": "UP",
+                          "color": "green"
+                        }
+                      },
+                      "type": "range"
+                    }
+                  ]
+                },
+                {
+                  "id": "custom.width",
+                  "value": 80
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "CPU Activity"
+              },
+              "properties": [
+                {
+                  "id": "unit",
+                  "value": "percentunit"
+                },
+                {
+                  "id": "custom.width",
+                  "value": 100
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Uptime"
+              },
+              "properties": [
+                {
+                  "id": "unit",
+                  "value": "dtdurations"
+                },
+                {
+                  "id": "color",
+                  "value": {
+                    "mode": "thresholds"
+                  }
+                },
+                {
+                  "id": "thresholds",
+                  "value": {
+                    "steps": [
+                      {"color": "red", "value": 0},
+                      {"color": "yellow", "value": 300},
+                      {"color": "green", "value": 3600}
+                    ]
+                  }
+                },
+                {
+                  "id": "custom.width",
+                  "value": 120
+                }
+              ]
+            }
+          ]
+        },
+        "gridPos": {"h": 12, "w": 24, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Memory Usage by Container",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "container_memory_usage_bytes{id=~\"/docker/.*\", id!~\"/docker/(buildkit|buildx)\"} / 1024 / 1024",
+            "legendFormat": "{{id}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "megabytes",
+            "color": {
+              "mode": "palette-classic"
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 12}
+      }
+    ],
+    "time": {
+      "from": "now-5m",
+      "to": "now"
+    },
+    "refresh": "30s"
+  },
+  "overwrite": true
+}

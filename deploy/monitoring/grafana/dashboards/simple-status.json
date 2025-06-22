@@ -1,61 +1,244 @@
 {
   "dashboard": {
     "id": null,
-    "title": "SLCW Environment Status",
-    "tags": ["slcw", "status"],
+    "title": "SLCW Services Status",
+    "tags": ["slcw", "services"],
     "timezone": "browser",
     "panels": [
       {
         "id": 1,
-        "title": "Service Status",
-        "type": "stat",
+        "title": "DEV Environment Services",
+        "type": "table",
         "targets": [
           {
-            "expr": "up",
-            "legendFormat": "{{job}}",
+            "expr": "up{job=\"ping-service\"} or on() vector(0)",
+            "format": "table",
+            "instant": true,
             "refId": "A"
+          },
+          {
+            "expr": "up{job=\"cadvisor\"} or on() vector(0)",
+            "format": "table", 
+            "instant": true,
+            "refId": "B"
+          },
+          {
+            "expr": "up{job=\"prometheus\"} or on() vector(0)",
+            "format": "table",
+            "instant": true,
+            "refId": "C"
+          }
+        ],
+        "transformations": [
+          {
+            "id": "merge",
+            "options": {}
+          },
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {
+                "Time": true,
+                "__name__": true,
+                "instance": true
+              },
+              "indexByName": {
+                "job": 0,
+                "Value": 1
+              },
+              "renameByName": {
+                "job": "Service",
+                "Value": "Status"
+              }
+            }
           }
         ],
         "fieldConfig": {
           "defaults": {
-            "mappings": [
-              {
-                "options": {
-                  "0": {"text": "DOWN", "color": "red"},
-                  "1": {"text": "UP", "color": "green"}
+            "custom": {
+              "align": "left",
+              "displayMode": "color-background"
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Service"
+              },
+              "properties": [
+                {
+                  "id": "custom.width",
+                  "value": 200
                 },
-                "type": "value"
-              }
-            ],
+                {
+                  "id": "mappings",
+                  "value": [
+                    {
+                      "options": {
+                        "ping-service": {
+                          "text": "Ping Service (DEV)"
+                        },
+                        "cadvisor": {
+                          "text": "cAdvisor (MONITORING)"
+                        },
+                        "prometheus": {
+                          "text": "Prometheus (MONITORING)"
+                        }
+                      },
+                      "type": "value"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Status"
+              },
+              "properties": [
+                {
+                  "id": "mappings",
+                  "value": [
+                    {
+                      "options": {
+                        "0": {
+                          "text": "DOWN",
+                          "color": "red"
+                        },
+                        "1": {
+                          "text": "UP",
+                          "color": "green"
+                        }
+                      },
+                      "type": "value"
+                    }
+                  ]
+                },
+                {
+                  "id": "custom.width",
+                  "value": 100
+                }
+              ]
+            }
+          ]
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Docker Containers Count",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "count(container_memory_usage_bytes{id=~\"/docker/.*\", id!~\"/docker/(buildkit|buildx)\"})",
+            "legendFormat": "Total Containers",
+            "refId": "A"
+          },
+          {
+            "expr": "count(container_memory_usage_bytes{id=~\"/docker/.*slcw.*\"})",
+            "legendFormat": "SLCW Containers",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
             "color": {
               "mode": "thresholds"
             },
             "thresholds": {
               "steps": [
                 {"color": "red", "value": 0},
-                {"color": "green", "value": 1}
+                {"color": "yellow", "value": 5},
+                {"color": "green", "value": 10}
               ]
             }
           }
         },
-        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
       },
       {
-        "id": 2,
-        "title": "Ping Service Metrics",
-        "type": "graph",
+        "id": 3,
+        "title": "Known SLCW Containers (Manual List)",
+        "type": "table",
         "targets": [
           {
-            "expr": "ping_requests_total",
-            "legendFormat": "Total Pings",
+            "expr": "vector(1)",
+            "format": "table",
+            "instant": true,
             "refId": "A"
           }
         ],
-        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+        "transformations": [
+          {
+            "id": "calculateField",
+            "options": {
+              "alias": "Container",
+              "mode": "reduce",
+              "reduce": {
+                "reducer": "lastNotNull"
+              }
+            }
+          },
+          {
+            "id": "calculateField",
+            "options": {
+              "alias": "Environment",
+              "mode": "reduce",
+              "reduce": {
+                "reducer": "lastNotNull"
+              }
+            }
+          },
+          {
+            "id": "calculateField",
+            "options": {
+              "alias": "Status",
+              "mode": "reduce",
+              "reduce": {
+                "reducer": "lastNotNull"
+              }
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "align": "left",
+              "displayMode": "color-background"
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Container"
+              },
+              "properties": [
+                {
+                  "id": "mappings",
+                  "value": [
+                    {
+                      "options": {
+                        "pattern": ".*",
+                        "result": {
+                          "text": "slcw-ping-service-dev\\nslcw-api-gateway-dev\\nslcw-auth-service-dev\\nslcw-frontend-dev\\nslcw-postgres-dev\\nslcw-redis-dev\\nslcw-telegram-bot-dev\\nslcw-grafana\\nslcw-prometheus\\nslcw-loki\\nslcw-cadvisor\\nslcw-promtail"
+                        }
+                      },
+                      "type": "regex"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "gridPos": {"h": 12, "w": 24, "x": 0, "y": 8}
       }
     ],
     "time": {
-      "from": "now-1h",
+      "from": "now-5m",
       "to": "now"
     },
     "refresh": "30s"

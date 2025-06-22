@@ -1,0 +1,130 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: dockerlogs
+          __path__: /var/lib/docker/containers/*/*.log
+    
+    pipeline_stages:
+      # Extract container ID from filename
+      - regex:
+          expression: '/var/lib/docker/containers/(?P<container_id>[a-z0-9]+)/.*'
+      
+      # Parse Docker JSON logs
+      - json:
+          expressions:
+            output: log
+            stream: stream
+            attrs:
+      
+      # Extract container name from attrs
+      - json:
+          expressions:
+            container_name: 
+          source: attrs.tag
+      
+      # Filter only auth-service logs
+      - match:
+          selector: '{container_name="slcw-auth-service"}'
+          stages:
+            # Parse slog structured JSON logs
+            - json:
+                expressions:
+                  time: time
+                  level: level
+                  msg: msg
+                  # JWT related fields
+                  user_id: user_id
+                  telegram_id: telegram_id
+                  jti: jti
+                  expires_at: expires_at
+                  # Error fields
+                  error: error
+                  # HTTP request fields
+                  method: method
+                  path: path
+                  status: status
+                  headers: headers
+                  data_length: data_length
+                  # Telegram auth fields
+                  username: username
+                  first_name: first_name
+                  # Database fields
+                  max_conns: max_conns
+                  # Token validation
+                  token_index: token_index
+                  data_check_string: data_check_string
+                  calculated: calculated
+                  received: received
+                  auth_date: auth_date
+                  issuer: issuer
+                  expiry_hours: expiry_hours
+                  private_key_path: private_key_path
+                  public_key_path: public_key_path
+                source: output
+            
+            # Use extracted timestamp
+            - timestamp:
+                source: time
+                format: '2006-01-02T15:04:05.999Z07:00'
+                fallback_formats:
+                  - '2006-01-02T15:04:05Z07:00'
+                  - '2006-01-02T15:04:05.999999999Z07:00'
+            
+            # Set labels for better filtering
+            - labels:
+                level:
+                service: 'auth-service'
+            
+            # Add operation type label based on message
+            - regex:
+                expression: '(?P<operation>JWT|Telegram|PostgreSQL|database|User created|User updated|HMAC)'
+                source: msg
+            
+            - labels:
+                operation:
+            
+            # Enhance log output with structured data
+            - template:
+                source: output_log
+                template: |
+                  {{ .msg }}
+                  {{- if .user_id }} user_id={{ .user_id }}{{ end }}
+                  {{- if .telegram_id }} telegram_id={{ .telegram_id }}{{ end }}
+                  {{- if .error }} error={{ .error }}{{ end }}
+                  {{- if .username }} username={{ .username }}{{ end }}
+                  {{- if .method }} {{ .method }} {{ .path }}{{ end }}
+                  {{- if .status }} status={{ .status }}{{ end }}
+            
+            # Output the enhanced message
+            - output:
+                source: output_log
+
+  # Additional job for system logs
+  - job_name: syslog
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: syslog
+          __path__: /var/log/syslog
+    
+    pipeline_stages:
+      - regex:
+          expression: '^(?P<timestamp>\w+ \d+ \d+:\d+:\d+) (?P<hostname>\S+) (?P<program>\S+): (?P<message>.*)$'
+      
+      - labels:
+          hostname:
+          program:

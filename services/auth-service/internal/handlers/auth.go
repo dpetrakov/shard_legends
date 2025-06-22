@@ -1,12 +1,15 @@
 package handlers
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/shard-legends/auth-service/internal/models"
 	"github.com/shard-legends/auth-service/internal/services"
+	"github.com/shard-legends/auth-service/internal/storage"
 )
 
 // AuthHandler handles authentication requests
@@ -14,14 +17,16 @@ type AuthHandler struct {
 	logger            *slog.Logger
 	telegramValidator *services.TelegramValidator
 	jwtService        *services.JWTService
+	userRepo          storage.UserRepository
 }
 
 // NewAuthHandler creates a new auth handler
-func NewAuthHandler(logger *slog.Logger, telegramValidator *services.TelegramValidator, jwtService *services.JWTService) *AuthHandler {
+func NewAuthHandler(logger *slog.Logger, telegramValidator *services.TelegramValidator, jwtService *services.JWTService, userRepo storage.UserRepository) *AuthHandler {
 	return &AuthHandler{
 		logger:            logger,
 		telegramValidator: telegramValidator,
 		jwtService:        jwtService,
+		userRepo:          userRepo,
 	}
 }
 
@@ -84,8 +89,27 @@ func (h *AuthHandler) Auth(c *gin.Context) {
 		"username", telegramData.User.Username,
 		"first_name", telegramData.User.FirstName)
 
+	// Get or create user in database
+	ctx := context.Background()
+	user, err := h.getOrCreateUser(ctx, *telegramData.User)
+	if err != nil {
+		h.logger.Error("Failed to get or create user", "error", err, "telegram_id", telegramData.User.ID)
+		c.JSON(http.StatusInternalServerError, AuthResponse{
+			Success: false,
+			Error:   "internal_server_error",
+			Message: "Failed to process user data",
+		})
+		return
+	}
+
+	// Update last login timestamp
+	if err := h.userRepo.UpdateLastLogin(ctx, user.ID); err != nil {
+		h.logger.Warn("Failed to update last login", "error", err, "user_id", user.ID.String())
+		// Don't fail the request for this non-critical error
+	}
+	
 	// Generate JWT token
-	token, err := h.jwtService.GenerateToken(telegramData.User.ID)
+	token, err := h.jwtService.GenerateToken(user.ID, telegramData.User.ID)
 	if err != nil {
 		h.logger.Error("Failed to generate JWT token", "error", err, "telegram_id", telegramData.User.ID)
 		c.JSON(http.StatusInternalServerError, AuthResponse{
@@ -99,20 +123,17 @@ func (h *AuthHandler) Auth(c *gin.Context) {
 	// Calculate expiration time (24 hours from now)
 	expiresAt := time.Now().Add(24 * time.Hour)
 
-	// TODO: In future implementations, this will:
-	// 1. Check if user exists in database
-	// 2. Create user if new
-	// 3. Store token in Redis for session management
+	// Create user response
 	userResponse := &UserResponse{
-		ID:           "mock-uuid-user-id", // TODO: Generate real UUID when DB is connected
-		TelegramID:   telegramData.User.ID,
-		Username:     telegramData.User.Username,
-		FirstName:    telegramData.User.FirstName,
-		LastName:     telegramData.User.LastName,
-		LanguageCode: telegramData.User.LanguageCode,
-		IsPremium:    telegramData.User.IsPremium,
-		PhotoURL:     telegramData.User.PhotoURL,
-		IsNewUser:    true, // TODO: Check database for existing user
+		ID:           user.ID.String(),
+		TelegramID:   user.TelegramID,
+		Username:     stringPtrToString(user.Username),
+		FirstName:    user.FirstName,
+		LastName:     stringPtrToString(user.LastName),
+		LanguageCode: stringPtrToString(user.LanguageCode),
+		IsPremium:    user.IsPremium,
+		PhotoURL:     stringPtrToString(user.PhotoURL),
+		IsNewUser:    user.CreatedAt.After(time.Now().Add(-time.Minute)), // Consider new if created within last minute
 	}
 
 	response := AuthResponse{
@@ -123,8 +144,84 @@ func (h *AuthHandler) Auth(c *gin.Context) {
 	}
 
 	h.logger.Info("Authentication successful",
+		"user_id", user.ID.String(),
 		"telegram_id", telegramData.User.ID,
 		"is_new_user", userResponse.IsNewUser)
 
 	c.JSON(http.StatusOK, response)
+}
+
+// getOrCreateUser gets an existing user by telegram_id or creates a new one
+func (h *AuthHandler) getOrCreateUser(ctx context.Context, telegramUser services.TelegramUser) (*models.User, error) {
+	// Try to get existing user by telegram_id
+	existingUser, err := h.userRepo.GetUserByTelegramID(ctx, telegramUser.ID)
+	if err == nil {
+		// User exists, update their information if needed
+		h.logger.Info("Existing user found", 
+			"user_id", existingUser.ID.String(),
+			"telegram_id", telegramUser.ID)
+		
+		// Update user information with latest Telegram data
+		updateReq := &models.UpdateUserRequest{
+			Username:     stringToStringPtr(telegramUser.Username),
+			FirstName:    &telegramUser.FirstName,
+			LastName:     stringToStringPtr(telegramUser.LastName),
+			LanguageCode: stringToStringPtr(telegramUser.LanguageCode),
+			IsPremium:    &telegramUser.IsPremium,
+			PhotoURL:     stringToStringPtr(telegramUser.PhotoURL),
+		}
+		
+		updatedUser, err := h.userRepo.UpdateUser(ctx, existingUser.ID, updateReq)
+		if err != nil {
+			h.logger.Warn("Failed to update existing user", "error", err, "user_id", existingUser.ID.String())
+			// Return the existing user even if update failed
+			return existingUser, nil
+		}
+		
+		return updatedUser, nil
+	}
+	
+	// Check if error is "user not found", otherwise it's a real error
+	if err != storage.ErrUserNotFound {
+		return nil, err
+	}
+	
+	// User doesn't exist, create new one
+	h.logger.Info("Creating new user", "telegram_id", telegramUser.ID)
+	
+	createReq := &models.CreateUserRequest{
+		TelegramID:   telegramUser.ID,
+		Username:     stringToStringPtr(telegramUser.Username),
+		FirstName:    telegramUser.FirstName,
+		LastName:     stringToStringPtr(telegramUser.LastName),
+		LanguageCode: stringToStringPtr(telegramUser.LanguageCode),
+		IsPremium:    telegramUser.IsPremium,
+		PhotoURL:     stringToStringPtr(telegramUser.PhotoURL),
+	}
+	
+	newUser, err := h.userRepo.CreateUser(ctx, createReq)
+	if err != nil {
+		return nil, err
+	}
+	
+	h.logger.Info("New user created successfully",
+		"user_id", newUser.ID.String(),
+		"telegram_id", newUser.TelegramID)
+	
+	return newUser, nil
+}
+
+// Helper functions for string pointer conversions
+func stringPtrToString(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+func stringToStringPtr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }

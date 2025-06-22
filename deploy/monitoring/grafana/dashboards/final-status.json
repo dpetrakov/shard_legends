@@ -1,0 +1,143 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "SLCW Status Dashboard",
+    "tags": ["slcw"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "DEV Environment",
+        "type": "text",
+        "gridPos": {"h": 2, "w": 12, "x": 0, "y": 0},
+        "options": {
+          "content": "## DEV Environment\n\n**Expected containers:**\n- slcw-ping-service-dev\n- slcw-api-gateway-dev  \n- slcw-auth-service-dev\n- slcw-frontend-dev\n- slcw-postgres-dev\n- slcw-redis-dev\n- slcw-telegram-bot-dev",
+          "mode": "markdown"
+        }
+      },
+      {
+        "id": 2,
+        "title": "MONITORING Environment", 
+        "type": "text",
+        "gridPos": {"h": 2, "w": 12, "x": 12, "y": 0},
+        "options": {
+          "content": "## MONITORING Environment\n\n**Expected containers:**\n- slcw-grafana\n- slcw-prometheus\n- slcw-loki\n- slcw-cadvisor\n- slcw-promtail",
+          "mode": "markdown"
+        }
+      },
+      {
+        "id": 3,
+        "title": "Service Health Status",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "up{job=\"ping-service\"}",
+            "legendFormat": "Ping Service",
+            "refId": "A"
+          },
+          {
+            "expr": "up{job=\"cadvisor\"}",
+            "legendFormat": "cAdvisor",
+            "refId": "B"
+          },
+          {
+            "expr": "up{job=\"prometheus\"}",
+            "legendFormat": "Prometheus",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "green", "value": 1}
+              ]
+            },
+            "mappings": [
+              {
+                "options": {
+                  "0": {"text": "DOWN"},
+                  "1": {"text": "UP"}
+                },
+                "type": "value"
+              }
+            ]
+          }
+        },
+        "gridPos": {"h": 6, "w": 24, "x": 0, "y": 2}
+      },
+      {
+        "id": 4,
+        "title": "Container Summary",
+        "type": "stat", 
+        "targets": [
+          {
+            "expr": "count(container_memory_usage_bytes{id=~\"/docker/.*\", id!~\"/docker/(buildkit|buildx)\"})",
+            "legendFormat": "Running Containers",
+            "refId": "A"
+          },
+          {
+            "expr": "count(up{job=~\".*\"} == 1)",
+            "legendFormat": "Services UP",
+            "refId": "B"
+          },
+          {
+            "expr": "count(up{job=~\".*\"} == 0)",
+            "legendFormat": "Services DOWN",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 1},
+                {"color": "green", "value": 5}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 4, "w": 24, "x": 0, "y": 8}
+      },
+      {
+        "id": 5,
+        "title": "Ping Service Activity",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "ping_requests_total",
+            "legendFormat": "Total Ping Requests",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(http_requests_total{job=\"ping-service\"}[5m])",
+            "legendFormat": "HTTP Requests/sec",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 12}
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s"
+  },
+  "overwrite": true
+}
