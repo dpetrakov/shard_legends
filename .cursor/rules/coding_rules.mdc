@@ -52,6 +52,34 @@ shard_legends/
 3. Мониторьте использование памяти в больших потоках
 4. Устанавливайте таймауты для внешних вызовов
 
+## Health Check эндпоинты
+
+1. **Обязательное требование**: Каждый микросервис ДОЛЖЕН иметь `GET /health` эндпоинт
+2. **Единый формат ответа** для всех сервисов:
+   ```json
+   {
+     "status": "healthy",
+     "timestamp": "2024-12-22T10:30:00Z",
+     "service": "service-name",
+     "version": "1.0.0",
+     "uptime": "2h30m15s",
+     "dependencies": {
+       "postgresql": "healthy",
+       "redis": "healthy"
+     }
+   }
+   ```
+3. **HTTP статус**: 200 для healthy, 503 для unhealthy
+4. **Content-Type**: всегда `application/json`
+5. **Формат timestamp**: ISO 8601 (RFC3339)
+6. **Docker HEALTHCHECK**: обязательно в каждом Dockerfile:
+   ```dockerfile
+   HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+       CMD wget -q -O - http://127.0.0.1:8080/health || exit 1
+   ```
+7. **Использовать 127.0.0.1 вместо localhost** в health check командах
+8. **Не логировать health check запросы** в production (или использовать отдельный уровень)
+
 ## Git workflow
 
 1. Никогда не коммитьте напрямую в main

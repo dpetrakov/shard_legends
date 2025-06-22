@@ -1,91 +1,91 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
-	"net/url"
-	"os"
+	"time"
 )
 
 type Response struct {
 	Message string `json:"message"`
 }
 
+type HealthResponse struct {
+	Status    string            `json:"status"`
+	Timestamp string            `json:"timestamp"`
+	Version   string            `json:"version"`
+	Service   string            `json:"service"`
+	Uptime    string            `json:"uptime,omitempty"`
+	Details   map[string]string `json:"details,omitempty"`
+}
+
+var startTime = time.Now()
+
 func pingHandler(w http.ResponseWriter, r *http.Request) {
-	// Get auth-service URL from environment or use default
-	authServiceURL := os.Getenv("AUTH_SERVICE_URL")
-	if authServiceURL == "" {
-		authServiceURL = "http://auth-service:8080" // Default for Docker
+	// Only accept POST requests
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
 	}
 
-	// Create URL for auth endpoint
-	targetURL, err := url.Parse(authServiceURL + "/auth")
-	if err != nil {
-		log.Printf("Error parsing auth service URL: %v", err)
+	// Return simple pong message
+	response := Response{
+		Message: "pong",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Error encoding response: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
+}
 
-	// Create new request to auth-service - always use POST for auth endpoint
-	proxyReq, err := http.NewRequest(http.MethodPost, targetURL.String(), r.Body)
-	if err != nil {
-		log.Printf("Error creating proxy request: %v", err)
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	// Only accept GET requests
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Calculate uptime
+	uptime := time.Since(startTime).Round(time.Second).String()
+
+	response := HealthResponse{
+		Status:    "healthy",
+		Timestamp: time.Now().Format(time.RFC3339),
+		Version:   "1.0.0",
+		Service:   "ping-service",
+		Uptime:    uptime,
+		Details: map[string]string{
+			"description": "Simple ping service for testing",
+			"environment": "development",
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Error encoding health response: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-
-	// Copy all headers from original request
-	for key, values := range r.Header {
-		for _, value := range values {
-			proxyReq.Header.Add(key, value)
-		}
-	}
-
-	// Copy query parameters
-	proxyReq.URL.RawQuery = r.URL.RawQuery
-
-	// Add some debug headers to identify the proxy
-	proxyReq.Header.Set("X-Proxied-By", "ping-service")
-	proxyReq.Header.Set("X-Original-Path", r.URL.Path)
-
-	log.Printf("Proxying %s %s to %s", r.Method, r.URL.Path, targetURL.String())
-	log.Printf("Headers: %v", r.Header)
-
-	// Make request to auth-service
-	client := &http.Client{}
-	resp, err := client.Do(proxyReq)
-	if err != nil {
-		log.Printf("Error calling auth service: %v", err)
-		http.Error(w, "Auth service unavailable", http.StatusServiceUnavailable)
-		return
-	}
-	defer resp.Body.Close()
-
-	// Copy response headers
-	for key, values := range resp.Header {
-		for _, value := range values {
-			w.Header().Add(key, value)
-		}
-	}
-
-	// Set status code
-	w.WriteHeader(resp.StatusCode)
-
-	// Copy response body
-	_, err = io.Copy(w, resp.Body)
-	if err != nil {
-		log.Printf("Error copying response body: %v", err)
-	}
-
-	log.Printf("Proxied response: %d", resp.StatusCode)
 }
 
 func main() {
 	http.HandleFunc("/ping", pingHandler)
+	http.HandleFunc("/health", healthHandler)
 
 	port := "8080"
-	fmt.Printf("Server starting on port %s\n", port)
+	fmt.Printf("Ping service starting on port %s\n", port)
+	fmt.Printf("Endpoints:\n")
+	fmt.Printf("  POST /ping   - Returns pong message\n")
+	fmt.Printf("  GET  /health - Health check endpoint\n")
+	
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
