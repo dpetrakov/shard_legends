@@ -91,7 +91,7 @@ func (h *AuthHandler) Auth(c *gin.Context) {
 
 	// Get or create user in database
 	ctx := context.Background()
-	user, err := h.getOrCreateUser(ctx, *telegramData.User)
+	user, isNewUser, err := h.getOrCreateUser(ctx, *telegramData.User)
 	if err != nil {
 		h.logger.Error("Failed to get or create user", "error", err, "telegram_id", telegramData.User.ID)
 		c.JSON(http.StatusInternalServerError, AuthResponse{
@@ -133,7 +133,7 @@ func (h *AuthHandler) Auth(c *gin.Context) {
 		LanguageCode: stringPtrToString(user.LanguageCode),
 		IsPremium:    user.IsPremium,
 		PhotoURL:     stringPtrToString(user.PhotoURL),
-		IsNewUser:    user.CreatedAt.After(time.Now().Add(-time.Minute)), // Consider new if created within last minute
+		IsNewUser:    isNewUser,
 	}
 
 	response := AuthResponse{
@@ -146,13 +146,13 @@ func (h *AuthHandler) Auth(c *gin.Context) {
 	h.logger.Info("Authentication successful",
 		"user_id", user.ID.String(),
 		"telegram_id", telegramData.User.ID,
-		"is_new_user", userResponse.IsNewUser)
+		"is_new_user", isNewUser)
 
 	c.JSON(http.StatusOK, response)
 }
 
 // getOrCreateUser gets an existing user by telegram_id or creates a new one
-func (h *AuthHandler) getOrCreateUser(ctx context.Context, telegramUser services.TelegramUser) (*models.User, error) {
+func (h *AuthHandler) getOrCreateUser(ctx context.Context, telegramUser services.TelegramUser) (*models.User, bool, error) {
 	// Try to get existing user by telegram_id
 	existingUser, err := h.userRepo.GetUserByTelegramID(ctx, telegramUser.ID)
 	if err == nil {
@@ -175,15 +175,15 @@ func (h *AuthHandler) getOrCreateUser(ctx context.Context, telegramUser services
 		if err != nil {
 			h.logger.Warn("Failed to update existing user", "error", err, "user_id", existingUser.ID.String())
 			// Return the existing user even if update failed
-			return existingUser, nil
+			return existingUser, false, nil
 		}
 		
-		return updatedUser, nil
+		return updatedUser, false, nil
 	}
 	
 	// Check if error is "user not found", otherwise it's a real error
 	if err != storage.ErrUserNotFound {
-		return nil, err
+		return nil, false, err
 	}
 	
 	// User doesn't exist, create new one
@@ -201,14 +201,14 @@ func (h *AuthHandler) getOrCreateUser(ctx context.Context, telegramUser services
 	
 	newUser, err := h.userRepo.CreateUser(ctx, createReq)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	
 	h.logger.Info("New user created successfully",
 		"user_id", newUser.ID.String(),
 		"telegram_id", newUser.TelegramID)
 	
-	return newUser, nil
+	return newUser, true, nil
 }
 
 // Helper functions for string pointer conversions
