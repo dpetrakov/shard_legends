@@ -1,0 +1,243 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "SLCW Containers Overview",
+    "tags": ["slcw", "containers"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "All Containers Status",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "container_last_seen{name=~\"slcw-.*\"}",
+            "format": "table",
+            "instant": true,
+            "refId": "A"
+          },
+          {
+            "expr": "time() - container_start_time_seconds{name=~\"slcw-.*\"}",
+            "format": "table", 
+            "instant": true,
+            "refId": "B"
+          }
+        ],
+        "transformations": [
+          {
+            "id": "merge",
+            "options": {}
+          },
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {
+                "Time": true,
+                "__name__": true,
+                "id": true,
+                "image": true,
+                "instance": true,
+                "job": true,
+                "Value #A": true
+              },
+              "indexByName": {
+                "name": 0,
+                "Value #B": 1
+              },
+              "renameByName": {
+                "name": "Container",
+                "Value #B": "Uptime"
+              }
+            }
+          },
+          {
+            "id": "calculateField",
+            "options": {
+              "alias": "Environment",
+              "mode": "reduce",
+              "reduce": {
+                "field": "Container",
+                "reducer": "lastNotNull"
+              }
+            }
+          },
+          {
+            "id": "calculateField", 
+            "options": {
+              "alias": "Status",
+              "mode": "reduce",
+              "reduce": {
+                "field": "Uptime",
+                "reducer": "lastNotNull"
+              }
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "align": "left",
+              "displayMode": "color-background",
+              "filterable": true
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Container"
+              },
+              "properties": [
+                {
+                  "id": "custom.width",
+                  "value": 200
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Environment"
+              },
+              "properties": [
+                {
+                  "id": "mappings",
+                  "value": [
+                    {
+                      "options": {
+                        "pattern": ".*-dev$",
+                        "result": {
+                          "text": "DEV",
+                          "color": "blue"
+                        }
+                      },
+                      "type": "regex"
+                    },
+                    {
+                      "options": {
+                        "pattern": "slcw-(loki|grafana|prometheus|cadvisor|promtail)$",
+                        "result": {
+                          "text": "MONITORING", 
+                          "color": "purple"
+                        }
+                      },
+                      "type": "regex"
+                    }
+                  ]
+                },
+                {
+                  "id": "custom.width",
+                  "value": 120
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Status"
+              },
+              "properties": [
+                {
+                  "id": "mappings",
+                  "value": [
+                    {
+                      "options": {
+                        "from": 0,
+                        "to": 999999,
+                        "result": {
+                          "text": "UP",
+                          "color": "green"
+                        }
+                      },
+                      "type": "range"
+                    }
+                  ]
+                },
+                {
+                  "id": "custom.width",
+                  "value": 80
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Uptime"
+              },
+              "properties": [
+                {
+                  "id": "unit",
+                  "value": "dtdurations"
+                },
+                {
+                  "id": "color",
+                  "value": {
+                    "mode": "thresholds"
+                  }
+                },
+                {
+                  "id": "thresholds",
+                  "value": {
+                    "steps": [
+                      {"color": "red", "value": 0},
+                      {"color": "yellow", "value": 300},
+                      {"color": "green", "value": 3600}
+                    ]
+                  }
+                },
+                {
+                  "id": "custom.width",
+                  "value": 120
+                }
+              ]
+            }
+          ]
+        },
+        "gridPos": {"h": 15, "w": 24, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Service Health Summary",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "count(up{job=~\".*-service|prometheus|cadvisor\"} == 1)",
+            "legendFormat": "Services UP",
+            "refId": "A"
+          },
+          {
+            "expr": "count(up{job=~\".*-service|prometheus|cadvisor\"} == 0)",
+            "legendFormat": "Services DOWN", 
+            "refId": "B"
+          },
+          {
+            "expr": "count(container_last_seen{name=~\"slcw-.*\"})",
+            "legendFormat": "Total Containers",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 1},
+                {"color": "green", "value": 3}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 6, "w": 24, "x": 0, "y": 15}
+      }
+    ],
+    "time": {
+      "from": "now-5m",
+      "to": "now"
+    },
+    "refresh": "30s"
+  },
+  "overwrite": true
+}

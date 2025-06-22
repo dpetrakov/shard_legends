@@ -1,0 +1,289 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "SLCW Containers Status",
+    "tags": ["slcw", "containers", "status"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "DEV Environment Containers",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "container_last_seen{name=~\"slcw-.*-dev\"}",
+            "format": "table",
+            "instant": true,
+            "refId": "A"
+          }
+        ],
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {
+                "Time": true,
+                "__name__": true,
+                "id": true,
+                "image": true,
+                "instance": true,
+                "job": true
+              },
+              "indexByName": {},
+              "renameByName": {
+                "name": "Container",
+                "Value": "Last Seen"
+              }
+            }
+          },
+          {
+            "id": "calculateField",
+            "options": {
+              "alias": "Status",
+              "binary": {
+                "left": "Last Seen",
+                "reducer": "lastNotNull",
+                "right": "10"
+              },
+              "mode": "binary",
+              "reduce": {
+                "reducer": "lastNotNull"
+              }
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "align": "left",
+              "displayMode": "color-background"
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Container"
+              },
+              "properties": [
+                {
+                  "id": "custom.width",
+                  "value": 250
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName", 
+                "options": "Status"
+              },
+              "properties": [
+                {
+                  "id": "mappings",
+                  "value": [
+                    {
+                      "options": {
+                        "pattern": ".*",
+                        "result": {
+                          "text": "UP",
+                          "color": "green"
+                        }
+                      },
+                      "type": "regex"
+                    }
+                  ]
+                },
+                {
+                  "id": "custom.width",
+                  "value": 80
+                }
+              ]
+            }
+          ]
+        },
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "MONITORING Environment Containers",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "container_last_seen{name=~\"slcw-.*\", name!~\"slcw-.*-dev\"}",
+            "format": "table",
+            "instant": true,
+            "refId": "A"
+          }
+        ],
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {
+                "Time": true,
+                "__name__": true,
+                "id": true,
+                "image": true,
+                "instance": true,
+                "job": true
+              },
+              "indexByName": {},
+              "renameByName": {
+                "name": "Container",
+                "Value": "Last Seen"
+              }
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "align": "left",
+              "displayMode": "color-background"
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Container"
+              },
+              "properties": [
+                {
+                  "id": "custom.width",
+                  "value": 250
+                }
+              ]
+            }
+          ]
+        },
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8}
+      },
+      {
+        "id": 3,
+        "title": "Container Uptime (All Environments)",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "time() - container_start_time_seconds{name=~\"slcw-.*\"}",
+            "format": "table",
+            "instant": true,
+            "refId": "A"
+          }
+        ],
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {
+                "Time": true,
+                "__name__": true,
+                "id": true,
+                "image": true,
+                "instance": true,
+                "job": true
+              },
+              "indexByName": {},
+              "renameByName": {
+                "name": "Container",
+                "Value": "Uptime (seconds)"
+              }
+            }
+          },
+          {
+            "id": "calculateField",
+            "options": {
+              "alias": "Environment",
+              "binary": {
+                "left": "Container",
+                "reducer": "lastNotNull"
+              },
+              "mode": "reduceRow",
+              "reduce": {
+                "reducer": "lastNotNull"
+              }
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "align": "left",
+              "displayMode": "color-background"
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Uptime (seconds)"
+              },
+              "properties": [
+                {
+                  "id": "unit",
+                  "value": "dtdurations"
+                },
+                {
+                  "id": "color",
+                  "value": {
+                    "mode": "thresholds"
+                  }
+                },
+                {
+                  "id": "thresholds",
+                  "value": {
+                    "steps": [
+                      {"color": "red", "value": 0},
+                      {"color": "yellow", "value": 300},
+                      {"color": "green", "value": 3600}
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Environment"
+              },
+              "properties": [
+                {
+                  "id": "mappings",
+                  "value": [
+                    {
+                      "options": {
+                        "pattern": ".*-dev",
+                        "result": {
+                          "text": "DEV",
+                          "color": "blue"
+                        }
+                      },
+                      "type": "regex"
+                    },
+                    {
+                      "options": {
+                        "pattern": "slcw-(loki|grafana|prometheus|cadvisor|promtail)",
+                        "result": {
+                          "text": "MONITORING",
+                          "color": "purple"
+                        }
+                      },
+                      "type": "regex"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16}
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s"
+  },
+  "overwrite": true
+}

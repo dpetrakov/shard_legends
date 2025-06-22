@@ -48,6 +48,15 @@ groups:
 
   - name: application_alerts
     rules:
+      - alert: PingServiceDown
+        expr: up{job="ping-service"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Ping Service is down"
+          description: "Ping Service has been unreachable for more than 2 minutes"
+
       - alert: AuthServiceDown
         expr: up{job="auth-service"} == 0
         for: 2m
@@ -65,6 +74,15 @@ groups:
         annotations:
           summary: "Telegram Bot Service is down"
           description: "Telegram Bot Service has been unreachable for more than 2 minutes"
+
+      - alert: APIGatewayDown
+        expr: up{job="api-gateway"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API Gateway is down"
+          description: "API Gateway has been unreachable for more than 2 minutes"
 
       - alert: HighLoginFailureRate
         expr: rate(business_events_total{event="user_login",status="failed"}[5m]) > 0.1
