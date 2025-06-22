@@ -31,7 +31,7 @@ func setupTestDB(t *testing.T) *TestPostgresStorage {
 		Level: slog.LevelError, // Reduce noise in tests
 	}))
 
-	storage, err := NewPostgresStorage(databaseURL, 5, logger)
+	storage, err := NewPostgresStorage(databaseURL, 5, logger, nil) // Pass nil for metrics in tests
 	if err != nil {
 		t.Fatalf("Failed to create test storage: %v", err)
 	}
@@ -116,7 +116,7 @@ func TestNewPostgresStorage(t *testing.T) {
 				Level: slog.LevelError,
 			}))
 
-			storage, err := NewPostgresStorage(tt.databaseURL, tt.maxConns, logger)
+			storage, err := NewPostgresStorage(tt.databaseURL, tt.maxConns, logger, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NewPostgresStorage() error = %v, wantErr %v", err, tt.wantErr)
 				return

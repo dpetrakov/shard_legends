@@ -10,6 +10,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/shard-legends/auth-service/internal/metrics"
 )
 
 // TokenStorage defines the interface for token management
@@ -61,8 +63,9 @@ type TokenInfo struct {
 
 // RedisTokenStorage implements TokenStorage interface using Redis
 type RedisTokenStorage struct {
-	client *redis.Client
-	logger *slog.Logger
+	client  *redis.Client
+	logger  *slog.Logger
+	metrics *metrics.Metrics
 }
 
 // Redis key prefixes
@@ -78,7 +81,7 @@ const (
 )
 
 // NewRedisTokenStorage creates a new Redis token storage instance
-func NewRedisTokenStorage(redisURL string, maxConns int, logger *slog.Logger) (*RedisTokenStorage, error) {
+func NewRedisTokenStorage(redisURL string, maxConns int, logger *slog.Logger, metrics *metrics.Metrics) (*RedisTokenStorage, error) {
 	// Parse Redis URL
 	opts, err := redis.ParseURL(redisURL)
 	if err != nil {
@@ -107,14 +110,48 @@ func NewRedisTokenStorage(redisURL string, maxConns int, logger *slog.Logger) (*
 		slog.String("max_conns", fmt.Sprintf("%d", maxConns)),
 	)
 
-	return &RedisTokenStorage{
-		client: client,
-		logger: logger,
-	}, nil
+	storage := &RedisTokenStorage{
+		client:  client,
+		logger:  logger,
+		metrics: metrics,
+	}
+
+	// Update connection pool metrics
+	if metrics != nil {
+		storage.updatePoolMetrics()
+	}
+
+	return storage, nil
+}
+
+// updatePoolMetrics updates Redis connection pool metrics
+func (r *RedisTokenStorage) updatePoolMetrics() {
+	if r.metrics == nil {
+		return
+	}
+
+	stats := r.client.PoolStats()
+	r.metrics.UpdateRedisPoolStats(
+		float64(stats.TotalConns-stats.IdleConns),
+		float64(stats.IdleConns),
+	)
+}
+
+// recordOperation records a Redis operation in metrics
+func (r *RedisTokenStorage) recordOperation(operation, status string, duration time.Duration) {
+	if r.metrics != nil {
+		r.metrics.RecordRedisOperation(operation, status, duration)
+		r.updatePoolMetrics()
+	}
 }
 
 // StoreActiveToken stores an active JWT token with TTL
 func (r *RedisTokenStorage) StoreActiveToken(ctx context.Context, jti string, userID uuid.UUID, telegramID int64, expiresAt time.Time) error {
+	start := time.Now()
+	var status string
+	defer func() {
+		r.recordOperation("set", status, time.Since(start))
+	}()
 	tokenInfo := &TokenInfo{
 		JTI:        jti,
 		UserID:     userID,
@@ -150,6 +187,7 @@ func (r *RedisTokenStorage) StoreActiveToken(ctx context.Context, jti string, us
 
 	// Execute pipeline
 	if _, err := pipe.Exec(ctx); err != nil {
+		status = "error"
 		r.logger.Error("Failed to store active token",
 			slog.String("error", err.Error()),
 			slog.String("jti", jti),
@@ -157,6 +195,7 @@ func (r *RedisTokenStorage) StoreActiveToken(ctx context.Context, jti string, us
 		return fmt.Errorf("failed to store active token: %w", err)
 	}
 
+	status = "success"
 	r.logger.Info("Active token stored successfully",
 		slog.String("jti", jti),
 		slog.String("user_id", userID.String()),
@@ -268,8 +307,17 @@ func (r *RedisTokenStorage) GetTokenInfo(ctx context.Context, jti string) (*Toke
 
 // CleanupExpiredTokens removes expired tokens from storage
 func (r *RedisTokenStorage) CleanupExpiredTokens(ctx context.Context) (int64, error) {
+	start := time.Now()
 	now := time.Now()
 	cleanedCount := int64(0)
+	usersProcessed := int64(0)
+	
+	defer func() {
+		duration := time.Since(start)
+		if r.metrics != nil {
+			r.metrics.RecordTokenCleanup(duration, float64(cleanedCount), float64(usersProcessed))
+		}
+	}()
 
 	// Find expired token keys using scan
 	var cursor uint64

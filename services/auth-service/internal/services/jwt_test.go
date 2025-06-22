@@ -166,19 +166,19 @@ func TestGenerateToken(t *testing.T) {
 				return
 			}
 
-			if token == "" {
+			if token.Token == "" {
 				t.Error("Expected non-empty token")
 				return
 			}
 
 			// Verify token format (should have 3 parts separated by dots)
-			parts := strings.Split(token, ".")
+			parts := strings.Split(token.Token, ".")
 			if len(parts) != 3 {
 				t.Errorf("Expected 3 token parts, got %d", len(parts))
 			}
 
 			// Verify we can parse the token
-			claims, err := service.ValidateToken(token)
+			claims, err := service.ValidateToken(token.Token)
 
 			if tt.wantErr {
 				// For invalid telegram IDs, validation should fail
@@ -255,7 +255,7 @@ func TestValidateToken(t *testing.T) {
 	}{
 		{
 			name:    "valid token",
-			token:   validToken,
+			token:   validToken.Token,
 			wantErr: false,
 		},
 		{
@@ -275,7 +275,7 @@ func TestValidateToken(t *testing.T) {
 		},
 		{
 			name:    "token with invalid signature",
-			token:   validToken[:len(validToken)-10] + "tamperedxx",
+			token:   validToken.Token[:len(validToken.Token)-10] + "tamperedxx",
 			wantErr: true,
 		},
 	}
@@ -302,7 +302,7 @@ func TestValidateToken(t *testing.T) {
 			}
 
 			// Verify claims for valid tokens
-			if tt.token == validToken {
+			if tt.token == validToken.Token {
 				if claims.TelegramID != telegramID {
 					t.Errorf("Expected telegram_id %d, got %d", telegramID, claims.TelegramID)
 				}
@@ -545,7 +545,7 @@ func TestTokenRoundTrip(t *testing.T) {
 			}
 
 			// Validate token
-			claims, err := service.ValidateToken(token)
+			claims, err := service.ValidateToken(token.Token)
 			if err != nil {
 				t.Fatalf("Failed to validate token: %v", err)
 			}
@@ -607,7 +607,7 @@ func BenchmarkValidateToken(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := service.ValidateToken(token)
+		_, err := service.ValidateToken(token.Token)
 		if err != nil {
 			b.Fatalf("Failed to validate token: %v", err)
 		}

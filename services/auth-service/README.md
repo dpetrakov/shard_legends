@@ -13,6 +13,7 @@ Authentication and authorization service for Shard Legends: Clan Wars. Provides 
 - Rate limiting
 - Health checks
 - Graceful shutdown
+- Prometheus metrics for monitoring and observability
 
 ## Configuration
 
@@ -85,6 +86,129 @@ Returns JWT public key in PEM format for simple integration.
 -----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...
 -----END PUBLIC KEY-----
+```
+
+### GET /metrics
+
+Prometheus metrics endpoint for monitoring and observability.
+
+**Response:** Prometheus format metrics including HTTP requests, authentication metrics, JWT metrics, Redis/PostgreSQL operations, and system health indicators.
+
+## Prometheus Metrics
+
+The auth-service exposes comprehensive metrics for monitoring via the `/metrics` endpoint. All metrics use the `auth_service` namespace.
+
+### HTTP Metrics
+- `auth_service_http_requests_total` - Total HTTP requests (labels: method, endpoint, status_code)
+- `auth_service_http_request_duration_seconds` - HTTP request duration histogram (labels: method, endpoint)
+- `auth_service_http_requests_in_flight` - Current number of HTTP requests being processed
+
+### Authentication Metrics
+- `auth_service_auth_requests_total` - Total authentication requests (labels: status, reason)
+- `auth_service_auth_request_duration_seconds` - Authentication request processing time (labels: status)
+- `auth_service_auth_telegram_validation_duration_seconds` - Telegram signature validation time
+- `auth_service_auth_new_users_total` - Total new user registrations
+- `auth_service_auth_rate_limit_hits_total` - Rate limit violations (labels: ip)
+
+### JWT Metrics
+- `auth_service_jwt_tokens_generated_total` - Total JWT tokens generated
+- `auth_service_jwt_tokens_validated_total` - Total JWT tokens validated (labels: status)
+- `auth_service_jwt_key_generation_duration_seconds` - RSA key generation time
+- `auth_service_jwt_active_tokens_count` - Current number of active tokens
+- `auth_service_jwt_tokens_per_user` - Distribution of tokens per user
+
+### Redis Metrics
+- `auth_service_redis_operations_total` - Total Redis operations (labels: operation, status)
+- `auth_service_redis_operation_duration_seconds` - Redis operation duration (labels: operation)
+- `auth_service_redis_connection_pool_active` - Active Redis connections
+- `auth_service_redis_connection_pool_idle` - Idle Redis connections
+- `auth_service_redis_token_cleanup_duration_seconds` - Token cleanup operation duration
+- `auth_service_redis_expired_tokens_cleaned_total` - Total expired tokens cleaned
+- `auth_service_redis_cleanup_processed_users_total` - Total users processed during cleanup
+
+### PostgreSQL Metrics
+- `auth_service_postgres_operations_total` - Total PostgreSQL operations (labels: operation, table, status)
+- `auth_service_postgres_operation_duration_seconds` - PostgreSQL operation duration (labels: operation, table)
+- `auth_service_postgres_connection_pool_active` - Active PostgreSQL connections
+- `auth_service_postgres_connection_pool_idle` - Idle PostgreSQL connections
+- `auth_service_postgres_connection_pool_max` - Maximum PostgreSQL connections
+
+### System Health Metrics
+- `auth_service_service_up` - Service availability (1 = up, 0 = down)
+- `auth_service_service_start_time_seconds` - Service start time as unix timestamp
+- `auth_service_dependencies_healthy` - Dependency health status (labels: dependency)
+- `auth_service_memory_usage_bytes` - Memory usage in bytes
+- `auth_service_goroutines_count` - Number of active goroutines
+
+### Admin Metrics
+- `auth_service_admin_operations_total` - Total admin operations (labels: operation, status)
+- `auth_service_admin_token_revocations_total` - Token revocations (labels: method)
+- `auth_service_admin_cleanup_operations_total` - Manual cleanup operations
+
+### Example Prometheus Queries
+
+**Request Rate:**
+```promql
+rate(auth_service_http_requests_total[5m])
+```
+
+**Authentication Success Rate:**
+```promql
+rate(auth_service_auth_requests_total{status="success"}[5m]) / rate(auth_service_auth_requests_total[5m])
+```
+
+**P95 Response Time:**
+```promql
+histogram_quantile(0.95, rate(auth_service_http_request_duration_seconds_bucket[5m]))
+```
+
+**Active Token Count:**
+```promql
+auth_service_jwt_active_tokens_count
+```
+
+**Redis Connection Pool Usage:**
+```promql
+auth_service_redis_connection_pool_active / (auth_service_redis_connection_pool_active + auth_service_redis_connection_pool_idle)
+```
+
+### Recommended Alerting Rules
+
+```yaml
+groups:
+- name: auth-service
+  rules:
+  - alert: AuthServiceDown
+    expr: auth_service_service_up == 0
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Auth service is down"
+
+  - alert: HighAuthFailureRate
+    expr: rate(auth_service_auth_requests_total{status="failed"}[5m]) > 0.1
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High authentication failure rate"
+
+  - alert: HighResponseTime
+    expr: histogram_quantile(0.95, rate(auth_service_http_request_duration_seconds_bucket[5m])) > 1
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High response time"
+
+  - alert: DependencyUnhealthy
+    expr: auth_service_dependencies_healthy == 0
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "{{ $labels.dependency }} dependency is unhealthy"
 ```
 
 ## Development

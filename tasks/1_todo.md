@@ -5,305 +5,108 @@
 ## Высокий приоритет
 <!-- Критически важные задачи, блокирующие другие -->
 
-## A-1: Анализ Telegram Web App API для Auth Service
-**Роль:** Аналитик
-**Приоритет:** Высокий  
-**Статус:** [x] Выполнено
-
-**Описание:** 
-Исследовать Telegram Web App API для понимания структуры данных авторизации, доступных заголовков и методов валидации. Определить полный набор атрибутов для регистрации пользователей. Обновить основную спецификацию всей полученной информацией.
-
-**Критерии готовности:**
-- [x] Исследованы все доступные поля в `initData` и заголовки `X-Telegram-*`
-- [x] Изучен алгоритм валидации подписи Telegram HMAC-SHA256
-- [x] Определен полный набор атрибутов для регистрации пользователей
-- [x] Собраны примеры реальных данных Telegram Web App для разных типов пользователей
-- [x] Определены edge cases (пользователь без username, без имени, новый/старый аккаунт и т.д.)
-- [x] Обновлен раздел "Регистрация новых пользователей" в `docs/specs/auth-service.md`
-- [x] Обновлен раздел "Валидация Telegram данных" в `docs/specs/auth-service.md` с примерами
-
-**Ссылки:**
-- Основная спецификация: `docs/specs/auth-service.md`
-- Telegram Web App документация: https://core.telegram.org/bots/webapps
-
-**Зависимости:** Нет
-**Оценка:** 2-3 дня
-
----
-
-## A-2: Создание OpenAPI спецификации для Auth Service
-**Роль:** Аналитик
-**Приоритет:** Высокий
-**Статус:** [x] Выполнено
-
-**Описание:**
-Создать полную OpenAPI 3.0 спецификацию для Auth Service с описанием всех эндпоинтов, моделей данных и ошибок. Добавить ссылку на OpenAPI файл в основную спецификацию.
-
-**Критерии готовности:**
-- [x] Создана OpenAPI 3.0 спецификация в `docs/specs/auth-service-openapi.yml`
-- [x] Описаны все эндпоинты: `POST /auth`, `GET /health`
-- [x] Определены модели: `AuthResponse`, `User`, `ErrorResponse`, `HealthResponse`
-- [x] Описаны все возможные коды ошибок (400, 401, 429, 500)
-- [x] Указаны примеры запросов и ответов для разных сценариев
-- [x] Документированы обязательные заголовки `X-Telegram-Init-Data`
-- [x] Спецификация соответствует стандарту OpenAPI 3.0.3
-- [x] Обновлен раздел "API Эндпоинты" в `docs/specs/auth-service.md` со ссылкой на OpenAPI файл
-
-**Ссылки:**
-- Основная спецификация: `docs/specs/auth-service.md`
-- OpenAPI Swagger Editor: https://editor.swagger.io/
-
-**Зависимости:** A-1
-**Оценка:** 1-2 дня
-
----
-
-## D-1: Создание базовой структуры Auth Service
-**Роль:** Разработчик
-**Приоритет:** Высокий
-**Статус:** [x] Выполнено
-
-**Описание:**
-Создать базовую структуру Golang микросервиса с конфигурацией, логированием и основными пакетами.
-
-**Критерии готовности:**
-- [x] Создана структура проекта в `services/auth-service/` согласно спецификации
-- [x] Настроен `go.mod` с необходимыми зависимостями
-- [x] Реализована конфигурация через переменные окружения
-- [x] Настроено structured logging на английском языке
-- [x] Создан основной `main.go` с graceful shutdown
-- [x] Добавлен базовый `GET /health` эндпоинт
-- [x] Проект компилируется без ошибок и проходит линтинг
-
-**Зависимости:** A-1, A-2
-**Оценка:** 2-3 дня
-
----
-
-## I-0: Добавление PostgreSQL и Redis на dev стенд
-**Роль:** Инфраструктура
-**Приоритет:** Высокий
-**Статус:** [x] Ожидает приемки
-
-**Описание:**
-Добавить PostgreSQL и Redis контейнеры в dev окружение для поддержки auth-service и будущих микросервисов. Использовать свежие версии для получения новых возможностей и улучшений производительности.
-
-**Преимущества PostgreSQL 17:**
-- Улучшенная производительность JSON операций
-- Новые функции для работы с UUID v7
-- Оптимизированный планировщик запросов
-- Улучшенная поддержка партиционирования
-
-**Преимущества Redis 8.0.2:**
-- Значительно улучшенная производительность
-- Новые возможности Redis Modules
-- Оптимизированное управление памятью
-- Улучшенная репликация и кластеризация
-
-**Требования к настройке Redis для auth-service:**
-
-**Персистентность данных - КРИТИЧЕСКИ ВАЖНА:**
-- **RDB snapshots**: для быстрого восстановления после перезагрузки
-- **AOF (Append Only File)**: для максимальной надежности токенов
-- **AOF Rewrite**: автоматическая оптимизация для предотвращения роста размера
-- **Конфигурация**: RDB каждые 60 секунд + AOF с `appendfsync everysec` + auto-rewrite
-
-**Обоснование необходимости персистентности:**
-1. **JWT токены** - при потере Redis все пользователи будут разлогинены
-2. **Отозванные токены** - без персистентности отозванные токены станут валидными
-3. **Пользовательские сессии** - критично для UX, потеря приведет к массовому логауту
-4. **Безопасность** - потеря данных об отозванных токенах = уязвимость
-
-**Конфигурация производительности:**
-- Максимальная память: ограничить для предотвращения OOM
-- Eviction policy: `allkeys-lru` для кеша игровых данных (не токенов)
-- AOF rewrite: автоматическая при росте на 50-100% для контроля размера файла
-- Оптимизация для SSD storage
-- Настройка connection pool limits
-
-**Управление размером AOF:**
-- AOF автоматически переписывается при росте файла
-- TTL токены удаляются из AOF при rewrite операциях
-- Ожидаемый размер AOF: 32-128MB для 10K пользователей
-- Мониторинг размера через Redis INFO commands
-
-**Критерии готовности:**
-- [x] Добавлен PostgreSQL 17 контейнер в `deploy/dev/docker-compose.yml`
-- [x] Добавлен Redis 8.0.2 контейнер в `deploy/dev/docker-compose.yml`
-- [x] Настроены volumes для персистентности данных PostgreSQL
-- [x] Настроены volumes для персистентности Redis (RDB + AOF)
-- [x] Настроена конфигурация Redis: RDB snapshots + AOF persistence с auto-rewrite
-- [x] Настроены параметры AOF rewrite для предотвращения неконтролируемого роста
-- [x] Настроены переменные окружения в `.env` файле
-- [x] Добавлены health checks для PostgreSQL и Redis
-- [x] Контейнеры доступны только внутри сети `slcw-dev` (без внешних портов)
-- [x] Проверена работоспособность: `docker-compose up -d postgres redis`
-- [x] Создана тестовая база данных `shard_legends_dev`
-- [x] Протестирована персистентность Redis после перезапуска контейнера
-- [x] Добавлена документация подключения и конфигурации в README
-
-**Ссылки:**
-- Текущая конфигурация: `deploy/dev/docker-compose.yml`
-- Стратегия развертывания: `docs/architecture/deployment-strategy.md`
-
-**Зависимости:** Нет (независимая инфраструктурная задача)
-**Оценка:** 1 день
-
----
-
-## I-3: Создание database.dbml схемы и миграций auth-service
-**Роль:** Инфраструктура
-**Приоритет:** Высокий
-**Статус:** [x] Ожидает приемки
-
-**Описание:**
-Создать полную DBML схему базы данных в `docs/architecture/database.dbml` на основе спецификации auth-service и создать SQL миграции для auth-service в соответствии с архитектурной документацией.
-
-**Критерии готовности:**
-- [x] Создана DBML схема в `docs/architecture/database.dbml` с таблицей `users`
-- [x] Определены все поля таблицы `users` согласно спецификации auth-service
-- [x] Добавлены индексы для производительности (telegram_id, username, created_at, is_active)
-- [x] Добавлены constraints для валидации данных
-- [x] Добавлены комментарии к таблице и полям на русском языке
-- [x] Создана простая структура миграций в `migrations/` (без подпапок)
-- [x] Создана миграция UP `migrations/001_create_users_table.up.sql`
-- [x] Создана миграция DOWN `migrations/001_create_users_table.down.sql`
-- [x] SQL миграция соответствует DBML схеме
-- [x] Создан Docker контейнер для миграций с golang-migrate
-- [x] Добавлен сервис migrate в docker-compose.yml
-- [x] Протестирована миграция на dev PostgreSQL контейнере
-- [x] Протестирован откат миграции (down)
-- [x] Проверена целостность данных после применения миграции
-- [x] Устранено дублирование между PostgreSQL init и миграциями
-- [x] Обновлена документация по миграциям в `migrations/README.md`
-
-**Структура таблицы users (из спецификации):**
-```sql
-CREATE TABLE users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    telegram_id BIGINT UNIQUE NOT NULL,
-    username VARCHAR(100),
-    first_name VARCHAR(100) NOT NULL,
-    last_name VARCHAR(100),
-    language_code VARCHAR(10),
-    is_premium BOOLEAN DEFAULT FALSE,
-    photo_url TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    last_login_at TIMESTAMP WITH TIME ZONE,
-    is_active BOOLEAN DEFAULT TRUE
-);
-```
-
-**Ссылки:**
-- Спецификация auth-service: `docs/specs/auth-service.md`
-- Архитектура БД: `docs/architecture/database.dbml`
-- Стратегия миграций: `docs/architecture/migration-strategy.md`
-
-**Зависимости:** I-0 (PostgreSQL должен быть доступен)
-**Оценка:** 1 день
-
-
 ## Средний приоритет  
 <!-- Важные задачи для текущего спринта/итерации -->
 
-## D-2: Реализация валидации Telegram данных
+## M-1: Добавление Prometheus метрик в Auth Service
 **Роль:** Разработчик
 **Приоритет:** Средний
-**Статус:** [x] Выполнено
+**Статус:** [ ] Готов к выполнению
 
 **Описание:**
-Реализовать валидацию данных Telegram Web App согласно официальному алгоритму проверки подписи.
+Интегрировать Prometheus метрики в auth-service для мониторинга производительности, безопасности и состояния системы. Реализовать comprehensive набор метрик для всех критических операций и создать основу для alerting системы.
 
 **Критерии готовности:**
-- [x] Создан пакет `internal/services/telegram.go` с валидацией
-- [x] Реализована функция `ValidateTelegramData()` с проверкой HMAC-SHA256
-- [x] Валидируется срок действия `X-Telegram-Auth-Date` (не старше 24 часов)
-- [x] Обрабатываются все edge cases (отсутствующие поля, невалидные данные)
-- [x] Добавлены unit тесты с покрытием ≥90% (достигнуто 93.9%)
-- [x] Добавлено логирование всех операций валидации
 
-**Зависимости:** D-1П
+**Базовые HTTP метрики:**
+- [ ] Добавлена зависимость на `github.com/prometheus/client_golang` в go.mod
+- [ ] Создан middleware для сбора HTTP метрик (request duration, status codes, request count)
+- [ ] Реализован endpoint `GET /metrics` для экспорта метрик в Prometheus формате
+- [ ] Настроены labels для метрик: method, endpoint, status_code
+
+**Метрики аутентификации:**
+- [ ] `auth_requests_total` - счетчик всех запросов аутентификации с labels: status (success/failed), reason (valid/invalid_signature/expired/rate_limited)
+- [ ] `auth_request_duration_seconds` - гистограмма времени обработки запросов аутентификации
+- [ ] `auth_telegram_validation_duration_seconds` - время валидации Telegram подписи
+- [ ] `auth_new_users_total` - счетчик регистраций новых пользователей
+- [ ] `auth_rate_limit_hits_total` - количество заблокированных запросов по rate limiting с label: ip
+
+**Метрики JWT токенов:**
+- [ ] `jwt_tokens_generated_total` - счетчик созданных JWT токенов
+- [ ] `jwt_tokens_validated_total` - счетчик валидированных токенов с labels: status (valid/invalid/expired)
+- [ ] `jwt_key_generation_duration_seconds` - время генерации RSA ключей
+- [ ] `jwt_active_tokens_count` - gauge активных токенов в системе
+- [ ] `jwt_tokens_per_user_histogram` - распределение количества токенов на пользователя
+
+**Метрики Redis операций:**
+- [ ] `redis_operations_total` - счетчик операций с Redis с labels: operation (get/set/del/exists), status (success/error)
+- [ ] `redis_operation_duration_seconds` - время выполнения операций с Redis
+- [ ] `redis_connection_pool_active` - активные соединения в pool
+- [ ] `redis_connection_pool_idle` - idle соединения в pool
+- [ ] `redis_token_cleanup_duration_seconds` - время выполнения cleanup операций
+- [ ] `redis_expired_tokens_cleaned_total` - количество удаленных просроченных токенов
+- [ ] `redis_cleanup_processed_users_total` - количество пользователей обработанных при cleanup
+
+**Метрики PostgreSQL:**
+- [ ] `postgres_operations_total` - счетчик операций с БД с labels: operation (select/insert/update/delete), table, status
+- [ ] `postgres_operation_duration_seconds` - время выполнения SQL запросов
+- [ ] `postgres_connection_pool_active` - активные соединения к БД
+- [ ] `postgres_connection_pool_idle` - idle соединения к БД
+- [ ] `postgres_connection_pool_max` - максимальное количество соединений
+
+**Метрики здоровья системы:**
+- [ ] `auth_service_up` - gauge доступности сервиса (1 = up, 0 = down)
+- [ ] `auth_service_start_time_seconds` - время запуска сервиса (unix timestamp)
+- [ ] `auth_dependencies_healthy` - gauge здоровья зависимостей с labels: dependency (postgres/redis/jwt_keys)
+- [ ] `auth_memory_usage_bytes` - использование памяти сервисом
+- [ ] `auth_goroutines_count` - количество активных goroutines
+
+**Метрики админских операций:**
+- [ ] `admin_operations_total` - счетчик админских операций с labels: operation (get_stats/revoke_token/cleanup), status
+- [ ] `admin_token_revocations_total` - счетчик отозванных токенов с labels: method (single/user_all/manual)
+- [ ] `admin_cleanup_operations_total` - счетчик ручных cleanup операций
+
+**Интеграция и конфигурация:**
+- [ ] Создан пакет `internal/metrics/` с инициализацией всех метрик
+- [ ] Интегрированы метрики во все handlers (auth, health, admin)
+- [ ] Интегрированы метрики в storage слои (postgres, redis)
+- [ ] Интегрированы метрики в services (jwt, telegram)
+- [ ] Добавлена конфигурация метрик через переменные окружения
+- [ ] Настроен namespace для метрик: `auth_service_`
+
+**Тестирование и документация:**
+- [ ] Unit тесты для metrics middleware с проверкой корректности labels
+- [ ] Integration тесты проверяющие сбор метрик в реальных сценариях
+- [ ] Тесты проверки формата метрик соответствующего Prometheus стандартам
+- [ ] Документация всех метрик в README с описанием назначения
+- [ ] Примеры Prometheus queries для типичных мониторинговых задач
+- [ ] Рекомендации по alerting rules для критических метрик
+
+**Production готовность:**
+- [ ] Endpoint `/metrics` защищен от публичного доступа (только для Prometheus)
+- [ ] Метрики не влияют на производительность основных операций (async сбор где возможно)
+- [ ] Обработка ошибок сбора метрик не влияет на бизнес логику
+- [ ] Настроена ротация и cleanup старых метрик для предотвращения memory leaks
+- [ ] Добавлено логирование ошибок инициализации metrics системы
+
+**Интеграция с мониторингом:**
+- [ ] Создана конфигурация Prometheus для scraping auth-service метрик
+- [ ] Обновлен docker-compose.yml для экспозиции metrics endpoint
+- [ ] Подготовлены базовые Grafana дашборды для визуализации метрик
+- [ ] Документированы рекомендуемые alert правила для production
+
+**Ссылки:**
+- Prometheus Go client: https://github.com/prometheus/client_golang
+- Метрики в спецификации: `docs/specs/auth-service.md` (раздел "Метрики")
+- Мониторинг стратегия: `docs/architecture/logging-monitoring-strategy.md`
+
+**Зависимости:** Auth Service должен быть полностью реализован и протестирован
 **Оценка:** 2-3 дня
 
 ---
 
-
-
----
-
-## D-5: Реализация работы с Redis
-**Роль:** Разработчик
-**Приоритет:** Средний
-**Статус:** [x] Выполнено
-
-**Описание:**
-Реализовать работу с Redis для управления активными и отозванными JWT токенами.
-
-**Критерии готовности:**
-- [ ] Создан пакет `internal/storage/redis.go` с подключением
-- [ ] Реализован интерфейс `TokenStorage` для управления токенами
-- [ ] Функции для сохранения, отзыва и проверки токенов
-- [ ] Connection pooling с настраиваемыми параметрами
-- [ ] Автоматическая очистка просроченных токенов
-- [ ] Unit тесты с покрытием ≥80%
-- [ ] Мониторинг подключения через health check
-
-**Зависимости:** D-1, D-3, I-0
-**Оценка:** 2 дня
-
----
-
-
-
-
 ## Низкий приоритет
 <!-- Задачи для будущих итераций -->
-
-## T-1: Unit тесты с покрытием ≥80%
-**Роль:** Тестировщик
-**Приоритет:** Низкий
-**Статус:** [ ] Готов к выполнению
-
-**Описание:**
-Создать comprehensive unit test suite для всего auth-service с покрытием кода не менее 80%.
-
-**Критерии готовности:**
-- [ ] Unit тесты для всех публичных функций во всех пакетах
-- [ ] Покрытие кода ≥80% проверено через `go test -cover ./...`
-- [ ] Мокирование всех внешних зависимостей
-- [ ] Тесты для всех edge cases и error scenarios
-- [ ] Benchmarks для критических функций
-- [ ] Настроен запуск тестов через `make test`
-- [ ] Интеграция с GitHub Actions
-- [ ] Генерация отчета о покрытии в HTML формате
-
-**Зависимости:** D-1, D-2, D-3, D-4, D-5, D-6
-**Оценка:** 3-4 дня
-
----
-
-## T-2: Integration тесты
-**Роль:** Тестировщик
-**Приоритет:** Низкий
-**Статус:** [ ] Готов к выполнению
-
-**Описание:**
-Создать integration тесты для проверки взаимодействия auth-service с PostgreSQL, Redis и внешними API.
-
-**Критерии готовности:**
-- [ ] Integration тесты в `tests/integration/` используют testcontainers
-- [ ] Тестирование полного цикла: Telegram auth → JWT generation → token validation
-- [ ] Тесты взаимодействия с реальными PostgreSQL и Redis контейнерами
-- [ ] E2E тесты HTTP API через API Gateway
-- [ ] Тестирование rate limiting функциональности
-- [ ] Нагрузочные тесты с множественными concurrent запросами
-- [ ] Все integration тесты проходят: `make integration-test`
-- [ ] Документация по запуску тестов в README
-
-**Зависимости:** T-1, I-1
-**Оценка:** 3-4 дня
-
 
 ---
 **Критерии перехода в TODO:**

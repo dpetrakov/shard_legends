@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/shard-legends/auth-service/internal/metrics"
 )
 
 // RateLimiter implements token bucket rate limiting per IP
@@ -17,6 +18,7 @@ type RateLimiter struct {
 	rate      time.Duration // Time between tokens
 	capacity  int           // Maximum tokens in bucket
 	cleanupTicker *time.Ticker
+	metrics   *metrics.Metrics
 }
 
 // TokenBucket represents a token bucket for rate limiting
@@ -27,13 +29,14 @@ type TokenBucket struct {
 }
 
 // NewRateLimiter creates a new rate limiter
-func NewRateLimiter(requestsPerMinute int, logger *slog.Logger) *RateLimiter {
+func NewRateLimiter(requestsPerMinute int, logger *slog.Logger, metrics *metrics.Metrics) *RateLimiter {
 	rl := &RateLimiter{
 		logger:   logger,
 		clients:  make(map[string]*TokenBucket),
 		rate:     time.Minute / time.Duration(requestsPerMinute),
 		capacity: requestsPerMinute,
 		cleanupTicker: time.NewTicker(5 * time.Minute), // Cleanup every 5 minutes
+		metrics:  metrics,
 	}
 
 	// Start cleanup goroutine
@@ -53,6 +56,11 @@ func (rl *RateLimiter) Limit() gin.HandlerFunc {
 				"ip", clientIP,
 				"path", c.Request.URL.Path,
 				"method", c.Request.Method)
+			
+			// Record rate limit hit in metrics
+			if rl.metrics != nil {
+				rl.metrics.RecordRateLimitHit(clientIP)
+			}
 			
 			c.JSON(http.StatusTooManyRequests, gin.H{
 				"success": false,

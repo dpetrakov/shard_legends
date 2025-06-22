@@ -34,6 +34,8 @@ tags:
     description: Проверка состояния сервиса
   - name: Keys
     description: Экспорт публичных ключей для других сервисов
+  - name: Admin
+    description: Админские операции управления токенами
 
 paths:
   /auth:
@@ -307,6 +309,145 @@ paths:
                 type: string
               example: "Internal server error"
 
+  /admin/tokens/stats:
+    get:
+      tags:
+        - Admin
+      summary: Статистика активных токенов
+      description: |
+        Получение статистики по активным токенам и информации о последней очистке.
+        
+        **Использование:** Мониторинг состояния токенов и производительности системы.
+      operationId: getTokenStats
+      responses:
+        '200':
+          description: Статистика токенов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenStatsResponse'
+              example:
+                active_tokens: 1247
+                unique_users: 892
+                cleanup_stats:
+                  last_cleanup: "2024-12-21T15:30:00Z"
+                  expired_tokens_cleaned: 156
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/tokens/user/{userId}:
+    get:
+      tags:
+        - Admin
+      summary: Получение активных токенов пользователя
+      description: Получение списка всех активных токенов для указанного пользователя
+      operationId: getUserTokens
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: UUID пользователя
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Список активных токенов пользователя
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserTokensResponse'
+        '404':
+          description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Admin
+      summary: Отзыв всех токенов пользователя
+      description: Отзывает все активные токены указанного пользователя
+      operationId: revokeUserTokens
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: UUID пользователя
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Токены успешно отозваны
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevokeTokensResponse'
+        '404':
+          description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/tokens/{jti}:
+    delete:
+      tags:
+        - Admin
+      summary: Отзыв конкретного токена
+      description: Отзывает токен по его JTI (JWT ID)
+      operationId: revokeToken
+      parameters:
+        - name: jti
+          in: path
+          required: true
+          description: JWT ID токена
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Токен успешно отозван
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevokeTokenResponse'
+        '404':
+          description: Токен не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/tokens/cleanup:
+    post:
+      tags:
+        - Admin
+      summary: Принудительная очистка просроченных токенов
+      description: |
+        Запускает принудительную очистку просроченных токенов из пользовательских индексов.
+        
+        **Примечание:** Обычно очистка происходит автоматически каждый час, 
+        но этот эндпоинт позволяет запустить ее вручную.
+      operationId: cleanupTokens
+      responses:
+        '200':
+          description: Очистка выполнена успешно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CleanupResponse'
+        '500':
+          description: Ошибка при выполнении очистки
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   schemas:
     AuthResponse:
@@ -513,6 +654,129 @@ components:
           type: string
           description: Публичный ключ в формате PEM
           example: "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...\n-----END PUBLIC KEY-----\n"
+
+    TokenStatsResponse:
+      type: object
+      required:
+        - active_tokens
+        - unique_users
+      properties:
+        active_tokens:
+          type: integer
+          description: Количество активных токенов в системе
+          example: 1247
+        unique_users:
+          type: integer
+          description: Количество уникальных пользователей с активными токенами
+          example: 892
+        cleanup_stats:
+          type: object
+          description: Статистика последней очистки токенов
+          properties:
+            last_cleanup:
+              type: string
+              format: date-time
+              description: Время последней автоматической очистки
+              example: "2024-12-21T15:30:00Z"
+            expired_tokens_cleaned:
+              type: integer
+              description: Количество удаленных просроченных токенов при последней очистке
+              example: 156
+
+    UserTokensResponse:
+      type: object
+      required:
+        - user_id
+        - active_tokens
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          description: UUID пользователя
+          example: "555aaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+        active_tokens:
+          type: array
+          description: Список активных токенов пользователя
+          items:
+            type: object
+            properties:
+              jti:
+                type: string
+                description: JWT ID токена
+                example: "12345-67890-abcdef"
+              issued_at:
+                type: string
+                format: date-time
+                description: Время выдачи токена
+                example: "2024-12-21T10:30:00Z"
+              expires_at:
+                type: string
+                format: date-time
+                description: Время истечения токена
+                example: "2024-12-22T10:30:00Z"
+
+    RevokeTokensResponse:
+      type: object
+      required:
+        - success
+        - revoked_tokens
+        - user_id
+      properties:
+        success:
+          type: boolean
+          description: Статус операции
+          example: true
+        revoked_tokens:
+          type: integer
+          description: Количество отозванных токенов
+          example: 3
+        user_id:
+          type: string
+          format: uuid
+          description: UUID пользователя
+          example: "555aaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+
+    RevokeTokenResponse:
+      type: object
+      required:
+        - success
+        - revoked_token
+      properties:
+        success:
+          type: boolean
+          description: Статус операции
+          example: true
+        revoked_token:
+          type: string
+          description: JTI отозванного токена
+          example: "12345-67890-abcdef"
+
+    CleanupResponse:
+      type: object
+      required:
+        - success
+        - cleanup_stats
+      properties:
+        success:
+          type: boolean
+          description: Статус операции
+          example: true
+        cleanup_stats:
+          type: object
+          description: Результаты очистки
+          properties:
+            processed_users:
+              type: integer
+              description: Количество обработанных пользователей
+              example: 234
+            expired_tokens_cleaned:
+              type: integer
+              description: Количество удаленных просроченных токенов
+              example: 89
+            duration_ms:
+              type: integer
+              description: Время выполнения очистки в миллисекундах
+              example: 1247
 
   securitySchemes:
     BearerAuth:

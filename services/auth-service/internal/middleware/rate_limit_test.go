@@ -9,15 +9,32 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/shard-legends/auth-service/internal/metrics"
 )
+
+// createTestRateLimitMetrics creates test metrics instance to avoid conflicts
+func createTestRateLimitMetrics() *metrics.Metrics {
+	return &metrics.Metrics{
+		AuthRateLimitHitsTotal: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: "test_rate_limit_auth_service",
+				Name:      "auth_rate_limit_hits_total",
+				Help:      "Total number of requests blocked by rate limiting",
+			},
+			[]string{"ip"},
+		),
+	}
+}
 
 func TestRateLimiter_Allow(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	testMetrics := createTestRateLimitMetrics()
 	
 	// Create rate limiter with 2 requests per minute for testing
-	rl := NewRateLimiter(2, logger)
+	rl := NewRateLimiter(2, logger, testMetrics)
 	defer rl.Close()
 	
 	// Test IP
@@ -43,9 +60,10 @@ func TestRateLimiter_Middleware_Success(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	testMetrics := createTestRateLimitMetrics()
 	
 	// Create rate limiter with 10 requests per minute
-	rl := NewRateLimiter(10, logger)
+	rl := NewRateLimiter(10, logger, testMetrics)
 	defer rl.Close()
 	
 	// Create test router
@@ -75,9 +93,10 @@ func TestRateLimiter_Middleware_RateLimited(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	testMetrics := createTestRateLimitMetrics()
 	
 	// Create rate limiter with 1 request per minute for testing
-	rl := NewRateLimiter(1, logger)
+	rl := NewRateLimiter(1, logger, testMetrics)
 	defer rl.Close()
 	
 	// Create test router
@@ -112,9 +131,10 @@ func TestRateLimiter_DifferentIPs(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	testMetrics := createTestRateLimitMetrics()
 	
 	// Create rate limiter with 1 request per minute
-	rl := NewRateLimiter(1, logger)
+	rl := NewRateLimiter(1, logger, testMetrics)
 	defer rl.Close()
 	
 	// Create test router

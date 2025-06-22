@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"log/slog"
-	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -25,7 +23,7 @@ func main() {
 	}
 
 	// Initialize Redis token storage
-	tokenStorage, err := storage.NewRedisTokenStorage(cfg.RedisURL, cfg.RedisMaxConns, logger)
+	tokenStorage, err := storage.NewRedisTokenStorage(cfg.RedisURL, cfg.RedisMaxConns, logger, nil)
 	if err != nil {
 		log.Fatalf("Failed to connect to Redis: %v", err)
 	}

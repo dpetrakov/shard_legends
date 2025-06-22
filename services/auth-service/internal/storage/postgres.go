@@ -12,13 +12,15 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/shard-legends/auth-service/internal/metrics"
 	"github.com/shard-legends/auth-service/internal/models"
 )
 
 // PostgresStorage implements UserRepository interface using PostgreSQL
 type PostgresStorage struct {
-	pool   *pgxpool.Pool
-	logger *slog.Logger
+	pool    *pgxpool.Pool
+	logger  *slog.Logger
+	metrics *metrics.Metrics
 }
 
 // UserRepository defines the interface for user data access
@@ -61,7 +63,7 @@ var ErrUserNotFound = errors.New("user not found")
 var ErrUserAlreadyExists = errors.New("user with this telegram_id already exists")
 
 // NewPostgresStorage creates a new PostgreSQL storage instance
-func NewPostgresStorage(databaseURL string, maxConns int, logger *slog.Logger) (*PostgresStorage, error) {
+func NewPostgresStorage(databaseURL string, maxConns int, logger *slog.Logger, metrics *metrics.Metrics) (*PostgresStorage, error) {
 	config, err := pgxpool.ParseConfig(databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse database URL: %w", err)
@@ -92,14 +94,50 @@ func NewPostgresStorage(databaseURL string, maxConns int, logger *slog.Logger) (
 		slog.String("max_conns", fmt.Sprintf("%d", maxConns)),
 	)
 
-	return &PostgresStorage{
-		pool:   pool,
-		logger: logger,
-	}, nil
+	storage := &PostgresStorage{
+		pool:    pool,
+		logger:  logger,
+		metrics: metrics,
+	}
+
+	// Update connection pool metrics
+	if metrics != nil {
+		storage.updatePoolMetrics()
+	}
+
+	return storage, nil
+}
+
+// updatePoolMetrics updates connection pool metrics
+func (p *PostgresStorage) updatePoolMetrics() {
+	if p.metrics == nil {
+		return
+	}
+
+	stats := p.pool.Stat()
+	p.metrics.UpdatePostgresPoolStats(
+		float64(stats.AcquiredConns()),
+		float64(stats.IdleConns()),
+		float64(stats.MaxConns()),
+	)
+}
+
+// recordOperation records a PostgreSQL operation in metrics
+func (p *PostgresStorage) recordOperation(operation, table, status string, duration time.Duration) {
+	if p.metrics != nil {
+		p.metrics.RecordPostgresOperation(operation, table, status, duration)
+		p.updatePoolMetrics()
+	}
 }
 
 // CreateUser creates a new user in the database
 func (p *PostgresStorage) CreateUser(ctx context.Context, req *models.CreateUserRequest) (*models.User, error) {
+	start := time.Now()
+	var status string
+	defer func() {
+		p.recordOperation("insert", "users", status, time.Since(start))
+	}()
+
 	user := req.ToUser()
 
 	query := `
@@ -120,6 +158,7 @@ func (p *PostgresStorage) CreateUser(ctx context.Context, req *models.CreateUser
 	)
 
 	if err != nil {
+		status = "error"
 		if err.Error() == `pq: duplicate key value violates unique constraint "users_telegram_id_key"` {
 			p.logger.Warn("Attempted to create user with existing Telegram ID",
 				slog.Int64("telegram_id", req.TelegramID),
@@ -133,6 +172,7 @@ func (p *PostgresStorage) CreateUser(ctx context.Context, req *models.CreateUser
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
+	status = "success"
 	p.logger.Info("User created successfully",
 		slog.String("user_id", createdUser.ID.String()),
 		slog.Int64("telegram_id", createdUser.TelegramID),
@@ -143,6 +183,12 @@ func (p *PostgresStorage) CreateUser(ctx context.Context, req *models.CreateUser
 
 // GetUserByID retrieves a user by their internal UUID
 func (p *PostgresStorage) GetUserByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
+	start := time.Now()
+	var status string
+	defer func() {
+		p.recordOperation("select", "users", status, time.Since(start))
+	}()
+
 	query := `
 		SELECT id, telegram_id, username, first_name, last_name, language_code, is_premium, photo_url,
 		       created_at, updated_at, last_login_at, is_active
@@ -160,8 +206,10 @@ func (p *PostgresStorage) GetUserByID(ctx context.Context, id uuid.UUID) (*model
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
+			status = "not_found"
 			return nil, ErrUserNotFound
 		}
+		status = "error"
 		p.logger.Error("Failed to get user by ID",
 			slog.String("error", err.Error()),
 			slog.String("user_id", id.String()),
@@ -169,11 +217,18 @@ func (p *PostgresStorage) GetUserByID(ctx context.Context, id uuid.UUID) (*model
 		return nil, fmt.Errorf("failed to get user by ID: %w", err)
 	}
 
+	status = "success"
 	return &user, nil
 }
 
 // GetUserByTelegramID retrieves a user by their Telegram ID
 func (p *PostgresStorage) GetUserByTelegramID(ctx context.Context, telegramID int64) (*models.User, error) {
+	start := time.Now()
+	var status string
+	defer func() {
+		p.recordOperation("select", "users", status, time.Since(start))
+	}()
+
 	query := `
 		SELECT id, telegram_id, username, first_name, last_name, language_code, is_premium, photo_url,
 		       created_at, updated_at, last_login_at, is_active
@@ -191,8 +246,10 @@ func (p *PostgresStorage) GetUserByTelegramID(ctx context.Context, telegramID in
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
+			status = "not_found"
 			return nil, ErrUserNotFound
 		}
+		status = "error"
 		p.logger.Error("Failed to get user by Telegram ID",
 			slog.String("error", err.Error()),
 			slog.Int64("telegram_id", telegramID),
@@ -200,6 +257,7 @@ func (p *PostgresStorage) GetUserByTelegramID(ctx context.Context, telegramID in
 		return nil, fmt.Errorf("failed to get user by Telegram ID: %w", err)
 	}
 
+	status = "success"
 	return &user, nil
 }
 
@@ -290,6 +348,12 @@ func (p *PostgresStorage) UpdateUser(ctx context.Context, id uuid.UUID, req *mod
 
 // UpdateLastLogin updates the last login timestamp for a user
 func (p *PostgresStorage) UpdateLastLogin(ctx context.Context, id uuid.UUID) error {
+	start := time.Now()
+	var status string
+	defer func() {
+		p.recordOperation("update", "users", status, time.Since(start))
+	}()
+
 	query := `
 		UPDATE auth.users
 		SET last_login_at = NOW()
@@ -297,6 +361,7 @@ func (p *PostgresStorage) UpdateLastLogin(ctx context.Context, id uuid.UUID) err
 
 	result, err := p.pool.Exec(ctx, query, id)
 	if err != nil {
+		status = "error"
 		p.logger.Error("Failed to update last login",
 			slog.String("error", err.Error()),
 			slog.String("user_id", id.String()),
@@ -305,9 +370,11 @@ func (p *PostgresStorage) UpdateLastLogin(ctx context.Context, id uuid.UUID) err
 	}
 
 	if result.RowsAffected() == 0 {
+		status = "not_found"
 		return ErrUserNotFound
 	}
 
+	status = "success"
 	return nil
 }
 

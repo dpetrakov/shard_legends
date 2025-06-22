@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/shard-legends/auth-service/internal/metrics"
 	"github.com/shard-legends/auth-service/internal/models"
 	"github.com/shard-legends/auth-service/internal/services"
 	"github.com/shard-legends/auth-service/internal/storage"
@@ -19,16 +20,18 @@ type AuthHandler struct {
 	jwtService        *services.JWTService
 	userRepo          storage.UserRepository
 	tokenStorage      storage.TokenStorage
+	metrics           *metrics.Metrics
 }
 
 // NewAuthHandler creates a new auth handler
-func NewAuthHandler(logger *slog.Logger, telegramValidator *services.TelegramValidator, jwtService *services.JWTService, userRepo storage.UserRepository, tokenStorage storage.TokenStorage) *AuthHandler {
+func NewAuthHandler(logger *slog.Logger, telegramValidator *services.TelegramValidator, jwtService *services.JWTService, userRepo storage.UserRepository, tokenStorage storage.TokenStorage, metrics *metrics.Metrics) *AuthHandler {
 	return &AuthHandler{
 		logger:            logger,
 		telegramValidator: telegramValidator,
 		jwtService:        jwtService,
 		userRepo:          userRepo,
 		tokenStorage:      tokenStorage,
+		metrics:           metrics,
 	}
 }
 
@@ -57,10 +60,13 @@ type UserResponse struct {
 
 // Auth handles POST /auth requests
 func (h *AuthHandler) Auth(c *gin.Context) {
+	start := time.Now()
+	
 	// Get X-Telegram-Init-Data header
 	initData := c.GetHeader("X-Telegram-Init-Data")
 	if initData == "" {
 		h.logger.Error("Missing X-Telegram-Init-Data header")
+		h.metrics.RecordAuthRequest("failed", "missing_init_data", time.Since(start))
 		c.JSON(http.StatusBadRequest, AuthResponse{
 			Success: false,
 			Error:   "missing_init_data",
@@ -75,9 +81,13 @@ func (h *AuthHandler) Auth(c *gin.Context) {
 		"data_length", len(initData))
 
 	// Validate Telegram data
+	telegramStart := time.Now()
 	telegramData, err := h.telegramValidator.ValidateTelegramData(initData)
+	h.metrics.RecordTelegramValidation(time.Since(telegramStart))
+	
 	if err != nil {
 		h.logger.Error("Telegram data validation failed", "error", err)
+		h.metrics.RecordAuthRequest("failed", "invalid_signature", time.Since(start))
 		c.JSON(http.StatusUnauthorized, AuthResponse{
 			Success: false,
 			Error:   "invalid_telegram_signature",
@@ -96,12 +106,18 @@ func (h *AuthHandler) Auth(c *gin.Context) {
 	user, isNewUser, err := h.getOrCreateUser(ctx, *telegramData.User)
 	if err != nil {
 		h.logger.Error("Failed to get or create user", "error", err, "telegram_id", telegramData.User.ID)
+		h.metrics.RecordAuthRequest("failed", "database_error", time.Since(start))
 		c.JSON(http.StatusInternalServerError, AuthResponse{
 			Success: false,
 			Error:   "internal_server_error",
 			Message: "Failed to process user data",
 		})
 		return
+	}
+	
+	// Record new user registration if applicable
+	if isNewUser {
+		h.metrics.RecordNewUser()
 	}
 
 	// Update last login timestamp
@@ -125,6 +141,7 @@ func (h *AuthHandler) Auth(c *gin.Context) {
 	tokenInfo, err := h.jwtService.GenerateToken(user.ID, telegramData.User.ID)
 	if err != nil {
 		h.logger.Error("Failed to generate JWT token", "error", err, "telegram_id", telegramData.User.ID)
+		h.metrics.RecordAuthRequest("failed", "jwt_generation_error", time.Since(start))
 		c.JSON(http.StatusInternalServerError, AuthResponse{
 			Success: false,
 			Error:   "internal_server_error",
@@ -132,6 +149,9 @@ func (h *AuthHandler) Auth(c *gin.Context) {
 		})
 		return
 	}
+	
+	// Record JWT generation
+	h.metrics.RecordJWTGenerated()
 
 	// Store new token in Redis
 	if h.tokenStorage != nil {
@@ -140,6 +160,15 @@ func (h *AuthHandler) Auth(c *gin.Context) {
 			// Don't fail the request - token is still valid even if not stored in Redis
 		} else {
 			h.logger.Info("New token stored successfully", "jti", tokenInfo.JTI, "user_id", user.ID.String())
+			
+			// Update active tokens count asynchronously
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				if activeCount, err := h.tokenStorage.GetActiveTokenCount(ctx); err == nil {
+					h.metrics.UpdateActiveTokensCount(float64(activeCount))
+				}
+			}()
 		}
 	}
 
@@ -168,6 +197,9 @@ func (h *AuthHandler) Auth(c *gin.Context) {
 		"telegram_id", telegramData.User.ID,
 		"is_new_user", isNewUser)
 
+	// Record successful authentication
+	h.metrics.RecordAuthRequest("success", "valid", time.Since(start))
+	
 	c.JSON(http.StatusOK, response)
 }
 

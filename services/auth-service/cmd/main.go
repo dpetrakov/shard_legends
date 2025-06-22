@@ -12,8 +12,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/shard-legends/auth-service/internal/config"
 	"github.com/shard-legends/auth-service/internal/handlers"
+	"github.com/shard-legends/auth-service/internal/metrics"
 	"github.com/shard-legends/auth-service/internal/middleware"
 	"github.com/shard-legends/auth-service/internal/services"
 	"github.com/shard-legends/auth-service/internal/storage"
@@ -44,6 +46,13 @@ func main() {
 
 	logger.Info("Configuration loaded", "config", cfg.String())
 
+	// Initialize metrics
+	metricsCollector := metrics.New()
+	metricsCollector.Initialize()
+	
+	// Defer shutdown of metrics
+	defer metricsCollector.Shutdown()
+
 	// Set Gin mode
 	gin.SetMode(gin.ReleaseMode)
 
@@ -54,9 +63,10 @@ func main() {
 	router.Use(gin.Recovery())
 	router.Use(requestLogger(logger))
 	router.Use(middleware.CORS()) // Add CORS support
+	router.Use(middleware.MetricsMiddleware(metricsCollector)) // Add metrics collection
 
 	// Create rate limiter for auth endpoint (10 requests per minute)
-	authRateLimiter := middleware.NewRateLimiter(10, logger)
+	authRateLimiter := middleware.NewRateLimiter(10, logger, metricsCollector)
 	defer authRateLimiter.Close()
 
 	// Initialize services
@@ -74,7 +84,7 @@ func main() {
 	}
 
 	// Initialize PostgreSQL storage
-	userRepo, err := storage.NewPostgresStorage(cfg.DatabaseURL, cfg.DatabaseMaxConns, logger)
+	userRepo, err := storage.NewPostgresStorage(cfg.DatabaseURL, cfg.DatabaseMaxConns, logger, metricsCollector)
 	if err != nil {
 		logger.Error("Failed to initialize PostgreSQL storage", "error", err)
 		os.Exit(1)
@@ -82,7 +92,7 @@ func main() {
 	defer userRepo.Close()
 
 	// Initialize Redis token storage
-	tokenStorage, err := storage.NewRedisTokenStorage(cfg.RedisURL, cfg.RedisMaxConns, logger)
+	tokenStorage, err := storage.NewRedisTokenStorage(cfg.RedisURL, cfg.RedisMaxConns, logger, metricsCollector)
 	if err != nil {
 		logger.Error("Failed to initialize Redis token storage", "error", err)
 		os.Exit(1)
@@ -94,12 +104,15 @@ func main() {
 
 	// Initialize handlers
 	healthHandler := handlers.NewHealthHandler(logger, userRepo, tokenStorage)
-	authHandler := handlers.NewAuthHandler(logger, telegramValidator, jwtService, userRepo, tokenStorage)
+	authHandler := handlers.NewAuthHandler(logger, telegramValidator, jwtService, userRepo, tokenStorage, metricsCollector)
 	adminHandler := handlers.NewAdminHandler(logger, tokenStorage)
 
 	// Register routes
 	router.GET("/health", healthHandler.Health)
 	router.POST("/auth", authRateLimiter.Limit(), authHandler.Auth) // Apply rate limiting to auth endpoint
+	
+	// Metrics endpoint for Prometheus scraping
+	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	
 	// JWT public key endpoints for other services
 	router.GET("/jwks", jwtPublicKeyMiddleware.PublicKeyHandler())
@@ -124,10 +137,20 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	// Start token cleanup goroutine
+	// Start token cleanup and metrics update goroutine
 	go func() {
 		ticker := time.NewTicker(time.Duration(cfg.TokenCleanupIntervalHours) * time.Hour)
+		metricsTicker := time.NewTicker(30 * time.Second) // Update metrics every 30 seconds
 		defer ticker.Stop()
+		defer metricsTicker.Stop()
+
+		// Update metrics on startup
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		activeCount, err := tokenStorage.GetActiveTokenCount(ctx)
+		cancel()
+		if err == nil {
+			metricsCollector.UpdateActiveTokensCount(float64(activeCount))
+		}
 
 		for {
 			select {
@@ -141,6 +164,32 @@ func main() {
 				} else {
 					logger.Info("Token cleanup completed", "cleaned_tokens", cleanedCount)
 				}
+
+				// Update active tokens count after cleanup
+				ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+				activeCount, err := tokenStorage.GetActiveTokenCount(ctx)
+				cancel()
+				if err == nil {
+					metricsCollector.UpdateActiveTokensCount(float64(activeCount))
+				}
+
+			case <-metricsTicker.C:
+				// Periodically update active tokens count and dependency health
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				
+				// Update active tokens count
+				activeCount, err := tokenStorage.GetActiveTokenCount(ctx)
+				if err == nil {
+					metricsCollector.UpdateActiveTokensCount(float64(activeCount))
+				}
+
+				// Update dependency health
+				postgresHealth := userRepo.Health(ctx) == nil
+				redisHealth := tokenStorage.Health(ctx) == nil
+				metricsCollector.UpdateDependencyHealth("postgres", postgresHealth)
+				metricsCollector.UpdateDependencyHealth("redis", redisHealth)
+
+				cancel()
 			}
 		}
 	}()

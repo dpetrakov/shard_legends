@@ -38,7 +38,7 @@ func setupTestRedis(t *testing.T) (*RedisTokenStorage, func()) {
 	}))
 
 	// Create Redis token storage
-	storage, err := NewRedisTokenStorage(redisURL, 5, logger)
+	storage, err := NewRedisTokenStorage(redisURL, 5, logger, nil) // Pass nil for metrics in tests
 	if err != nil {
 		t.Fatalf("Failed to create Redis storage: %v", err)
 	}
