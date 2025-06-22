@@ -40,4 +40,4 @@ Thumbs.db
 
 services/telegram-bot-service/telegram-bot-service
 services/auth-service/bin/auth-service
-services/auth-service/bin/
+services/auth-service/bin//deploy/monitoring/.env

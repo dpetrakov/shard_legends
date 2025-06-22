@@ -31,7 +31,7 @@ type Config struct {
 	JWTExpiryHours    int
 
 	// Telegram configuration
-	TelegramBotToken string
+	TelegramBotTokens []string
 
 	// Security configuration
 	RateLimitRequests int
@@ -134,9 +134,16 @@ func Load() (*Config, error) {
 	}
 
 	// Telegram configuration
-	cfg.TelegramBotToken = os.Getenv("TELEGRAM_BOT_TOKEN")
-	if cfg.TelegramBotToken == "" {
+	primaryToken := os.Getenv("TELEGRAM_BOT_TOKEN")
+	if primaryToken == "" {
 		return nil, fmt.Errorf("TELEGRAM_BOT_TOKEN is required")
+	}
+	cfg.TelegramBotTokens = []string{primaryToken}
+
+	// Add additional bot tokens if provided
+	secondaryToken := os.Getenv("TELEGRAM_BOT_TOKEN_SECONDARY")
+	if secondaryToken != "" {
+		cfg.TelegramBotTokens = append(cfg.TelegramBotTokens, secondaryToken)
 	}
 
 	// Security configuration
@@ -200,9 +207,11 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("REDIS_URL must start with redis://")
 	}
 
-	// Validate Telegram bot token format
-	if !strings.Contains(c.TelegramBotToken, ":") {
-		return fmt.Errorf("invalid TELEGRAM_BOT_TOKEN format")
+	// Validate Telegram bot tokens format
+	for i, token := range c.TelegramBotTokens {
+		if !strings.Contains(token, ":") {
+			return fmt.Errorf("invalid TELEGRAM_BOT_TOKEN format at index %d", i)
+		}
 	}
 
 	// Validate numeric ranges
@@ -235,14 +244,18 @@ func (c *Config) Validate() error {
 
 // String returns a string representation of the config (for logging, without sensitive data)
 func (c *Config) String() string {
-	tokenMasked := "***"
-	if len(c.TelegramBotToken) > 10 {
-		tokenMasked = c.TelegramBotToken[:6] + "***"
+	var maskedTokens []string
+	for _, token := range c.TelegramBotTokens {
+		tokenMasked := "***"
+		if len(token) > 10 {
+			tokenMasked = token[:6] + "***"
+		}
+		maskedTokens = append(maskedTokens, tokenMasked)
 	}
 
 	return fmt.Sprintf(
-		"Config{Host: %s, Port: %s, JWT: %s, Token: %s, DB: %s, Redis: %s}",
-		c.ServiceHost, c.ServicePort, c.JWTIssuer, tokenMasked,
+		"Config{Host: %s, Port: %s, JWT: %s, Tokens: %v, DB: %s, Redis: %s}",
+		c.ServiceHost, c.ServicePort, c.JWTIssuer, maskedTokens,
 		maskURL(c.DatabaseURL), maskURL(c.RedisURL),
 	)
 }

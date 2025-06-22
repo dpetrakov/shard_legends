@@ -38,15 +38,15 @@ type TelegramData struct {
 
 // TelegramValidator handles validation of Telegram Web App data
 type TelegramValidator struct {
-	botToken string
-	logger   *slog.Logger
+	botTokens []string
+	logger    *slog.Logger
 }
 
 // NewTelegramValidator creates a new Telegram data validator
-func NewTelegramValidator(botToken string, logger *slog.Logger) *TelegramValidator {
+func NewTelegramValidator(botTokens []string, logger *slog.Logger) *TelegramValidator {
 	return &TelegramValidator{
-		botToken: botToken,
-		logger:   logger,
+		botTokens: botTokens,
+		logger:    logger,
 	}
 }
 
@@ -73,8 +73,8 @@ func (tv *TelegramValidator) ValidateTelegramData(initData string) (*TelegramDat
 		return nil, err
 	}
 
-	// Validate HMAC signature
-	if err := tv.validateSignature(initData, parsedData.Hash); err != nil {
+	// Validate HMAC signature with any of the available bot tokens
+	if err := tv.validateSignatureWithMultipleTokens(initData, parsedData.Hash); err != nil {
 		tv.logger.Error("HMAC signature validation failed", "error", err)
 		return nil, err
 	}
@@ -220,10 +220,76 @@ func (tv *TelegramValidator) validateSignature(initData, receivedHash string) er
 	return nil
 }
 
-// generateSecretKey generates secret key from bot token
+// validateSignatureWithMultipleTokens validates HMAC-SHA256 signature with multiple bot tokens
+func (tv *TelegramValidator) validateSignatureWithMultipleTokens(initData, receivedHash string) error {
+	// Step 1: Parse initData and remove hash parameter
+	values, err := url.ParseQuery(initData)
+	if err != nil {
+		return fmt.Errorf("failed to parse initData for signature validation: %w", err)
+	}
+
+	// Remove hash from values
+	values.Del("hash")
+
+	// Step 2: Create data-check-string
+	var pairs []string
+	for key, valueSlice := range values {
+		if len(valueSlice) > 0 {
+			pairs = append(pairs, key+"="+valueSlice[0])
+		}
+	}
+
+	// Sort alphabetically
+	sort.Strings(pairs)
+
+	// Join with newlines
+	dataCheckString := strings.Join(pairs, "\n")
+
+	// Step 3: Try validation with each bot token
+	for i, botToken := range tv.botTokens {
+		secretKey := tv.generateSecretKeyForToken(botToken)
+		calculatedHash := tv.calculateHMAC(dataCheckString, secretKey)
+
+		if calculatedHash == receivedHash {
+			tv.logger.Info("HMAC signature validated successfully",
+				"token_index", i,
+				"data_check_string", dataCheckString)
+			return nil
+		}
+
+		tv.logger.Debug("HMAC signature mismatch for token",
+			"token_index", i,
+			"calculated", calculatedHash,
+			"received", receivedHash)
+	}
+
+	// If no token matched, log error with details from the first token attempt
+	if len(tv.botTokens) > 0 {
+		secretKey := tv.generateSecretKeyForToken(tv.botTokens[0])
+		calculatedHash := tv.calculateHMAC(dataCheckString, secretKey)
+		
+		tv.logger.Error("HMAC signature mismatch with all tokens",
+			"calculated_first", calculatedHash,
+			"received", receivedHash,
+			"data_check_string", dataCheckString,
+			"tokens_count", len(tv.botTokens))
+	}
+
+	return fmt.Errorf("invalid HMAC signature")
+}
+
+// generateSecretKey generates secret key from the first bot token (for backward compatibility)
 func (tv *TelegramValidator) generateSecretKey() []byte {
+	if len(tv.botTokens) == 0 {
+		return nil
+	}
+	return tv.generateSecretKeyForToken(tv.botTokens[0])
+}
+
+// generateSecretKeyForToken generates secret key from specific bot token
+func (tv *TelegramValidator) generateSecretKeyForToken(botToken string) []byte {
 	h := hmac.New(sha256.New, []byte("WebAppData"))
-	h.Write([]byte(tv.botToken))
+	h.Write([]byte(botToken))
 	return h.Sum(nil)
 }
 

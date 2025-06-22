@@ -1,0 +1,62 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: dockerlogs
+          __path__: /var/lib/docker/containers/*/*.log
+    
+    pipeline_stages:
+      # Extract container ID from filename
+      - regex:
+          expression: '/var/lib/docker/containers/(?P<container_id>[a-z0-9]+)/.*'
+      
+      # Parse Docker JSON logs
+      - json:
+          expressions:
+            output: log
+            stream: stream
+            attrs:
+      
+      # Extract container labels from attrs
+      - json:
+          expressions:
+            container_name: attrs.tag
+          source: attrs
+      
+      # Parse our application JSON logs
+      - json:
+          expressions:
+            timestamp: timestamp
+            level: level
+            service: service
+            trace_id: trace_id
+            message: message
+          source: output
+      
+      # Use extracted timestamp
+      - timestamp:
+          source: timestamp
+          format: RFC3339
+      
+      # Set log level
+      - labels:
+          level:
+          service:
+          trace_id:
+          container_name:
+      
+      # Output the message
+      - output:
+          source: message

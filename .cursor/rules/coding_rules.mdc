@@ -80,6 +80,55 @@ shard_legends/
 7. **Использовать 127.0.0.1 вместо localhost** в health check командах
 8. **Не логировать health check запросы** в production (или использовать отдельный уровень)
 
+## Логирование и мониторинг
+
+1. **Структурированное логирование**: Все сервисы ДОЛЖНЫ логировать в JSON формате:
+   ```json
+   {
+     "timestamp": "2024-12-22T10:30:45Z",
+     "level": "info",
+     "service": "service-name",
+     "trace_id": "abc123",
+     "message": "Event description",
+     "user_id": "123",
+     "duration_ms": 45
+   }
+   ```
+
+2. **Обязательные поля логов**:
+   - `timestamp` (ISO 8601)
+   - `level` (error|warn|info|debug)
+   - `service` (имя сервиса)
+   - `message` (описание события)
+   - `trace_id` (для distributed tracing)
+
+3. **Метрики Prometheus**: Каждый сервис ДОЛЖЕН экспортировать метрики на `GET /metrics`:
+   ```go
+   // Go пример
+   http.Handle("/metrics", promhttp.Handler())
+   ```
+
+4. **Обязательные метрики**:
+   - `http_requests_total{method,endpoint,status}`
+   - `http_request_duration_seconds{method,endpoint}`
+   - `business_events_total{event,status}`
+
+5. **Безопасность логирования**:
+   - НИКОГДА не логировать пароли, токены, ключи
+   - Обезличивать персональные данные: `"email": "jo***@example.com"`
+   - Использовать trace_id для связывания событий
+
+6. **Docker labels для логов**:
+   ```yaml
+   labels:
+     - "logging.service=service-name"
+     - "logging.environment=${ENVIRONMENT:-dev}"
+   ```
+
+7. **Подключение к мониторингу**:
+   - Все сервисы должны быть в сети `slcw-monitoring`
+   - Настроена ротация логов (max-size: 10m, max-file: 3)
+
 ## Git workflow
 
 1. Никогда не коммитьте напрямую в main

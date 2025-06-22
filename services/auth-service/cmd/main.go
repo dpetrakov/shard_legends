@@ -54,7 +54,7 @@ func main() {
 	router.Use(requestLogger(logger))
 
 	// Initialize services
-	telegramValidator := services.NewTelegramValidator(cfg.TelegramBotToken, logger)
+	telegramValidator := services.NewTelegramValidator(cfg.TelegramBotTokens, logger)
 	
 	// Initialize JWT service
 	keyPaths := services.KeyPaths{

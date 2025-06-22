@@ -9,7 +9,17 @@ services:
       - "127.0.0.1:9000:8080"  # Single API endpoint for external nginx
     networks:
       - slcw-dev
+      - slcw-monitoring
     restart: unless-stopped
+    labels:
+      - "logging.service=api-gateway"
+      - "logging.environment=dev"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "logging.service,logging.environment"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8080/health"]
       interval: 30s
@@ -34,7 +44,17 @@ services:
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-}
     networks:
       - slcw-dev
+      - slcw-monitoring
     restart: unless-stopped
+    labels:
+      - "logging.service=frontend"
+      - "logging.environment=dev"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "logging.service,logging.environment"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:9002"]
       interval: 30s
@@ -51,7 +71,17 @@ services:
     # No external ports - accessed via API Gateway
     networks:
       - slcw-dev
+      - slcw-monitoring
     restart: unless-stopped
+    labels:
+      - "logging.service=ping-service"
+      - "logging.environment=dev"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "logging.service,logging.environment"
     # Health check is defined in Dockerfile
 
   # Telegram Bot Service
@@ -73,7 +103,17 @@ services:
       - SERVICE_PORT=8080
     networks:
       - slcw-dev
+      - slcw-monitoring
     restart: unless-stopped
+    labels:
+      - "logging.service=telegram-bot-service"
+      - "logging.environment=dev"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "logging.service,logging.environment"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
       interval: 30s
@@ -92,6 +132,7 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-slcw_user}:${POSTGRES_PASSWORD:-dev_password_2024}@postgres:5432/${POSTGRES_DB:-shard_legends_dev}?sslmode=disable
       - REDIS_URL=redis://redis:6379/0
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_BOT_TOKEN_SECONDARY=${TELEGRAM_BOT_TOKEN_FORLY:-}
       - AUTH_SERVICE_HOST=0.0.0.0
       - AUTH_SERVICE_PORT=8080
       - DATABASE_MAX_CONNECTIONS=10
@@ -106,7 +147,17 @@ services:
       - auth_jwt_keys:/etc/auth
     networks:
       - slcw-dev
+      - slcw-monitoring
     restart: unless-stopped
+    labels:
+      - "logging.service=auth-service"
+      - "logging.environment=dev"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "logging.service,logging.environment"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
       interval: 30s
@@ -219,3 +270,6 @@ networks:
   slcw-dev:
     name: slcw-dev
     driver: bridge
+  slcw-monitoring:
+    external: true
+    name: slcw-monitoring

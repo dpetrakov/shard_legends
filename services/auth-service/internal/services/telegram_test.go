@@ -16,14 +16,23 @@ import (
 
 func TestNewTelegramValidator(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	validator := NewTelegramValidator("test_token", logger)
+	tokens := []string{"test_token", "test_token_2"}
+	validator := NewTelegramValidator(tokens, logger)
 
 	if validator == nil {
 		t.Fatal("Expected validator to be created")
 	}
 
-	if validator.botToken != "test_token" {
-		t.Errorf("Expected bot token 'test_token', got '%s'", validator.botToken)
+	if len(validator.botTokens) != 2 {
+		t.Errorf("Expected 2 bot tokens, got %d", len(validator.botTokens))
+	}
+
+	if validator.botTokens[0] != "test_token" {
+		t.Errorf("Expected first bot token 'test_token', got '%s'", validator.botTokens[0])
+	}
+
+	if validator.botTokens[1] != "test_token_2" {
+		t.Errorf("Expected second bot token 'test_token_2', got '%s'", validator.botTokens[1])
 	}
 
 	if validator.logger == nil {
@@ -33,7 +42,7 @@ func TestNewTelegramValidator(t *testing.T) {
 
 func TestParseInitData(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	validator := NewTelegramValidator("test_token", logger)
+	validator := NewTelegramValidator([]string{"test_token"}, logger)
 
 	tests := []struct {
 		name     string
@@ -108,7 +117,7 @@ func TestParseInitData(t *testing.T) {
 
 func TestValidateRequiredFields(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	validator := NewTelegramValidator("test_token", logger)
+	validator := NewTelegramValidator([]string{"test_token"}, logger)
 
 	tests := []struct {
 		name    string
@@ -162,7 +171,7 @@ func TestValidateRequiredFields(t *testing.T) {
 
 func TestValidateAuthDate(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	validator := NewTelegramValidator("test_token", logger)
+	validator := NewTelegramValidator([]string{"test_token"}, logger)
 
 	now := time.Now()
 	validTime := now.Add(-1 * time.Hour).Unix()
@@ -208,7 +217,7 @@ func TestValidateAuthDate(t *testing.T) {
 
 func TestValidateUserData(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	validator := NewTelegramValidator("test_token", logger)
+	validator := NewTelegramValidator([]string{"test_token"}, logger)
 
 	tests := []struct {
 		name    string
@@ -334,7 +343,7 @@ func TestValidateUserData(t *testing.T) {
 
 func TestGenerateSecretKey(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	validator := NewTelegramValidator("test_token", logger)
+	validator := NewTelegramValidator([]string{"test_token"}, logger)
 
 	secretKey := validator.generateSecretKey()
 
@@ -349,7 +358,7 @@ func TestGenerateSecretKey(t *testing.T) {
 	}
 
 	// Test that different tokens produce different keys
-	validator2 := NewTelegramValidator("different_token", logger)
+	validator2 := NewTelegramValidator([]string{"different_token"}, logger)
 	secretKey3 := validator2.generateSecretKey()
 	if hmac.Equal(secretKey, secretKey3) {
 		t.Error("Expected different secret keys for different tokens")
@@ -358,7 +367,7 @@ func TestGenerateSecretKey(t *testing.T) {
 
 func TestCalculateHMAC(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	validator := NewTelegramValidator("test_token", logger)
+	validator := NewTelegramValidator([]string{"test_token"}, logger)
 
 	data := "test_data"
 	key := []byte("test_key")
@@ -390,7 +399,7 @@ func TestCalculateHMAC(t *testing.T) {
 func TestValidateSignature(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	botToken := "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefgh"
-	validator := NewTelegramValidator(botToken, logger)
+	validator := NewTelegramValidator([]string{botToken}, logger)
 
 	// Create test data with valid signature
 	userData := `{"id":123456789,"first_name":"John","last_name":"Doe","username":"johndoe","language_code":"en"}`
@@ -459,7 +468,7 @@ func TestValidateSignature(t *testing.T) {
 func TestValidateTelegramDataIntegration(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	botToken := "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefgh"
-	validator := NewTelegramValidator(botToken, logger)
+	validator := NewTelegramValidator([]string{botToken}, logger)
 
 	// Test with current timestamp
 	currentTime := time.Now().Unix()

@@ -1,0 +1,76 @@
+groups:
+  - name: basic_alerts
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "Service {{ $labels.job }} has been down for more than 5 minutes."
+
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate in {{ $labels.service }}"
+          description: "Error rate is {{ $value }} errors per second in {{ $labels.service }}"
+
+      - alert: HighMemoryUsage
+        expr: (container_memory_usage_bytes / container_spec_memory_limit_bytes) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage in {{ $labels.container_label_com_docker_compose_service }}"
+          description: "Memory usage is above 90% for {{ $labels.container_label_com_docker_compose_service }}"
+
+      - alert: HighCPUUsage
+        expr: rate(container_cpu_usage_seconds_total[5m]) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage in {{ $labels.container_label_com_docker_compose_service }}"
+          description: "CPU usage is above 80% for {{ $labels.container_label_com_docker_compose_service }}"
+
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) < 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk space is running low"
+          description: "Available disk space is below 10%"
+
+  - name: application_alerts
+    rules:
+      - alert: AuthServiceDown
+        expr: up{job="auth-service"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Auth Service is down"
+          description: "Auth Service has been unreachable for more than 2 minutes"
+
+      - alert: TelegramBotDown
+        expr: up{job="telegram-bot-service"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Telegram Bot Service is down"
+          description: "Telegram Bot Service has been unreachable for more than 2 minutes"
+
+      - alert: HighLoginFailureRate
+        expr: rate(business_events_total{event="user_login",status="failed"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High login failure rate"
+          description: "Login failure rate is {{ $value }} failures per second"
