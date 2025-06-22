@@ -40,4 +40,5 @@ Thumbs.db
 
 services/telegram-bot-service/telegram-bot-service
 services/auth-service/bin/auth-service
-services/auth-service/bin//deploy/monitoring/.env
+services/auth-service/auth-service
+services/ping-service/ping-service
