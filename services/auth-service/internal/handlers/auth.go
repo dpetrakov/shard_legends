@@ -18,15 +18,17 @@ type AuthHandler struct {
 	telegramValidator *services.TelegramValidator
 	jwtService        *services.JWTService
 	userRepo          storage.UserRepository
+	tokenStorage      storage.TokenStorage
 }
 
 // NewAuthHandler creates a new auth handler
-func NewAuthHandler(logger *slog.Logger, telegramValidator *services.TelegramValidator, jwtService *services.JWTService, userRepo storage.UserRepository) *AuthHandler {
+func NewAuthHandler(logger *slog.Logger, telegramValidator *services.TelegramValidator, jwtService *services.JWTService, userRepo storage.UserRepository, tokenStorage storage.TokenStorage) *AuthHandler {
 	return &AuthHandler{
 		logger:            logger,
 		telegramValidator: telegramValidator,
 		jwtService:        jwtService,
 		userRepo:          userRepo,
+		tokenStorage:      tokenStorage,
 	}
 }
 
@@ -108,8 +110,19 @@ func (h *AuthHandler) Auth(c *gin.Context) {
 		// Don't fail the request for this non-critical error
 	}
 	
+	// Revoke all existing tokens for this user before creating a new one
+	// This ensures only one active token per user (security best practice)
+	if h.tokenStorage != nil {
+		if err := h.tokenStorage.RevokeUserTokens(ctx, user.ID); err != nil {
+			h.logger.Warn("Failed to revoke previous user tokens", "error", err, "user_id", user.ID.String())
+			// Don't fail the request - continue with token creation
+		} else {
+			h.logger.Info("Previous user tokens revoked", "user_id", user.ID.String())
+		}
+	}
+
 	// Generate JWT token
-	token, err := h.jwtService.GenerateToken(user.ID, telegramData.User.ID)
+	tokenInfo, err := h.jwtService.GenerateToken(user.ID, telegramData.User.ID)
 	if err != nil {
 		h.logger.Error("Failed to generate JWT token", "error", err, "telegram_id", telegramData.User.ID)
 		c.JSON(http.StatusInternalServerError, AuthResponse{
@@ -120,8 +133,15 @@ func (h *AuthHandler) Auth(c *gin.Context) {
 		return
 	}
 
-	// Calculate expiration time (24 hours from now)
-	expiresAt := time.Now().Add(24 * time.Hour)
+	// Store new token in Redis
+	if h.tokenStorage != nil {
+		if err := h.tokenStorage.StoreActiveToken(ctx, tokenInfo.JTI, user.ID, telegramData.User.ID, tokenInfo.ExpiresAt); err != nil {
+			h.logger.Warn("Failed to store token in Redis", "error", err, "jti", tokenInfo.JTI)
+			// Don't fail the request - token is still valid even if not stored in Redis
+		} else {
+			h.logger.Info("New token stored successfully", "jti", tokenInfo.JTI, "user_id", user.ID.String())
+		}
+	}
 
 	// Create user response
 	userResponse := &UserResponse{
@@ -138,8 +158,8 @@ func (h *AuthHandler) Auth(c *gin.Context) {
 
 	response := AuthResponse{
 		Success:   true,
-		Token:     token,
-		ExpiresAt: expiresAt.Format(time.RFC3339),
+		Token:     tokenInfo.Token,
+		ExpiresAt: tokenInfo.ExpiresAt.Format(time.RFC3339),
 		User:      userResponse,
 	}
 

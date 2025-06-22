@@ -81,12 +81,21 @@ func main() {
 	}
 	defer userRepo.Close()
 
+	// Initialize Redis token storage
+	tokenStorage, err := storage.NewRedisTokenStorage(cfg.RedisURL, cfg.RedisMaxConns, logger)
+	if err != nil {
+		logger.Error("Failed to initialize Redis token storage", "error", err)
+		os.Exit(1)
+	}
+	defer tokenStorage.Close()
+
 	// Initialize middleware
 	jwtPublicKeyMiddleware := middleware.NewJWTPublicKeyMiddleware(jwtService)
 
 	// Initialize handlers
-	healthHandler := handlers.NewHealthHandler(logger, userRepo)
-	authHandler := handlers.NewAuthHandler(logger, telegramValidator, jwtService, userRepo)
+	healthHandler := handlers.NewHealthHandler(logger, userRepo, tokenStorage)
+	authHandler := handlers.NewAuthHandler(logger, telegramValidator, jwtService, userRepo, tokenStorage)
+	adminHandler := handlers.NewAdminHandler(logger, tokenStorage)
 
 	// Register routes
 	router.GET("/health", healthHandler.Health)
@@ -95,6 +104,16 @@ func main() {
 	// JWT public key endpoints for other services
 	router.GET("/jwks", jwtPublicKeyMiddleware.PublicKeyHandler())
 	router.GET("/public-key.pem", jwtPublicKeyMiddleware.PublicKeyPEMHandler())
+	
+	// Admin endpoints for token management (should be protected in production)
+	adminGroup := router.Group("/admin")
+	{
+		adminGroup.GET("/tokens/stats", adminHandler.GetTokenStats)
+		adminGroup.GET("/tokens/user/:userId", adminHandler.GetUserTokens)
+		adminGroup.DELETE("/tokens/user/:userId", adminHandler.RevokeUserTokens)
+		adminGroup.DELETE("/tokens/:jti", adminHandler.RevokeToken)
+		adminGroup.POST("/tokens/cleanup", adminHandler.CleanupExpiredTokens)
+	}
 
 	// Create HTTP server
 	server := &http.Server{
@@ -104,6 +123,27 @@ func main() {
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
+
+	// Start token cleanup goroutine
+	go func() {
+		ticker := time.NewTicker(time.Duration(cfg.TokenCleanupIntervalHours) * time.Hour)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.TokenCleanupTimeoutMins)*time.Minute)
+				cleanedCount, err := tokenStorage.CleanupExpiredTokens(ctx)
+				cancel()
+
+				if err != nil {
+					logger.Error("Token cleanup failed", "error", err)
+				} else {
+					logger.Info("Token cleanup completed", "cleaned_tokens", cleanedCount)
+				}
+			}
+		}
+	}()
 
 	// Start server in a goroutine
 	go func() {

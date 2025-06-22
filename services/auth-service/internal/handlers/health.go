@@ -12,15 +12,17 @@ import (
 
 // HealthHandler handles health check requests
 type HealthHandler struct {
-	logger   *slog.Logger
-	userRepo storage.UserRepository
+	logger       *slog.Logger
+	userRepo     storage.UserRepository
+	tokenStorage storage.TokenStorage
 }
 
 // NewHealthHandler creates a new health handler
-func NewHealthHandler(logger *slog.Logger, userRepo storage.UserRepository) *HealthHandler {
+func NewHealthHandler(logger *slog.Logger, userRepo storage.UserRepository, tokenStorage storage.TokenStorage) *HealthHandler {
 	return &HealthHandler{
-		logger:   logger,
-		userRepo: userRepo,
+		logger:       logger,
+		userRepo:     userRepo,
+		tokenStorage: tokenStorage,
 	}
 }
 
@@ -44,9 +46,20 @@ func (h *HealthHandler) Health(c *gin.Context) {
 		dbStatus = "unhealthy"
 	}
 
+	// Check Redis health
+	redisStatus := "healthy"
+	if h.tokenStorage != nil {
+		if err := h.tokenStorage.Health(ctx); err != nil {
+			h.logger.Error("Redis health check failed", "error", err)
+			redisStatus = "unhealthy"
+		}
+	} else {
+		redisStatus = "not_configured"
+	}
+
 	// Determine overall status
 	overallStatus := "healthy"
-	if dbStatus == "unhealthy" {
+	if dbStatus == "unhealthy" || redisStatus == "unhealthy" {
 		overallStatus = "unhealthy"
 	}
 
@@ -56,14 +69,15 @@ func (h *HealthHandler) Health(c *gin.Context) {
 		Version:   "1.0.0",
 		Dependencies: map[string]string{
 			"postgresql": dbStatus,
-			"redis":      "not_configured", // TODO: Add Redis health check when implemented
-			"jwt_keys":   "loaded",         // JWT keys are loaded since we have JWT service running
+			"redis":      redisStatus,
+			"jwt_keys":   "loaded", // JWT keys are loaded since we have JWT service running
 		},
 	}
 
 	h.logger.Debug("Health check requested", 
 		"status", response.Status,
-		"postgresql", dbStatus)
+		"postgresql", dbStatus,
+		"redis", redisStatus)
 
 	// Return appropriate HTTP status code
 	statusCode := http.StatusOK

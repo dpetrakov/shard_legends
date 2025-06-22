@@ -248,8 +248,15 @@ func (j *JWTService) ensureKeyDirectory(keyPath string) error {
 	return nil
 }
 
+// TokenInfo represents generated token information
+type TokenInfo struct {
+	Token     string
+	JTI       string
+	ExpiresAt time.Time
+}
+
 // GenerateToken generates a new JWT token for the given user ID and telegram ID
-func (j *JWTService) GenerateToken(userID uuid.UUID, telegramID int64) (string, error) {
+func (j *JWTService) GenerateToken(userID uuid.UUID, telegramID int64) (*TokenInfo, error) {
 	now := time.Now()
 	expirationTime := now.Add(time.Duration(j.expiryHours) * time.Hour)
 
@@ -275,7 +282,7 @@ func (j *JWTService) GenerateToken(userID uuid.UUID, telegramID int64) (string, 
 			"error", err, 
 			"user_id", userID.String(),
 			"telegram_id", telegramID)
-		return "", fmt.Errorf("failed to sign token: %w", err)
+		return nil, fmt.Errorf("failed to sign token: %w", err)
 	}
 
 	j.logger.Info("JWT token generated successfully",
@@ -284,7 +291,11 @@ func (j *JWTService) GenerateToken(userID uuid.UUID, telegramID int64) (string, 
 		"jti", claims.JTI,
 		"expires_at", expirationTime)
 
-	return tokenString, nil
+	return &TokenInfo{
+		Token:     tokenString,
+		JTI:       claims.JTI,
+		ExpiresAt: expirationTime,
+	}, nil
 }
 
 // ValidateToken validates a JWT token and returns the claims if valid
