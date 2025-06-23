@@ -147,5 +147,12 @@ ALTER TABLE auth.users DROP COLUMN IF EXISTS preferences;
 
 - `000_init_schemas.*` - Создание схем auth, game, clan + PostgreSQL расширения
 - `001_create_users_table.*` - Таблица пользователей для auth-service
+- `002_create_inventory_schema.*` - Создание схемы и структура схемы inventory (таблицы, индексы, constraints)
+- `003_populate_classifiers.*` - Дистрибутивные данные классификаторов с фиксированными UUID
+
+## Тестовые данные
+
+Тестовые данные для dev среды размещены в `dev-data/`:
+- `dev-data/inventory-service/001_test_items_and_operations.sql` - тестовые предметы, операции и остатки
 
 Следующие миграции будут добавляться по мере развития проекта.

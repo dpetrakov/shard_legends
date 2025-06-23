@@ -2,45 +2,65 @@
 
 ## Обзор
 
-Проект Shard Legends: Clan Wars использует декларативный подход к управлению схемой базы данных PostgreSQL. Все изменения схемы применяются через SQL миграции, организованные по сервисам и выполняемые одноразовыми контейнерами при развертывании.
+Проект Shard Legends: Clan Wars использует **простую линейную архитектуру миграций** для управления схемой базы данных PostgreSQL. Все изменения схемы применяются через SQL миграции в едином порядке с использованием golang-migrate/migrate.
 
 ## Принципы управления миграциями
 
-### 1. Декларативный подход
-- Схема БД описывается через SQL миграции
-- Каждая миграция - отдельный SQL файл
-- Миграции применяются последовательно в алфавитном порядке
-- Идемпотентность: повторное применение не изменяет результат
+### 1. Простая линейная структура
+- **Одна база данных** для всех микросервисов
+- **Отдельные схемы** для каждого сервиса (auth, game, clan, inventory)
+- **Единый набор миграций** в правильном порядке
+- **Простое управление** без избыточной сложности
 
-### 2. Сервисно-ориентированная организация
+### 2. Организация миграций
 ```
 migrations/
-├── Dockerfile                              # Контейнер для выполнения миграций
-├── auth-service/
-│   ├── 001_create_users_table.up.sql      # Создание таблицы пользователей
-│   ├── 001_create_users_table.down.sql    # Откат создания таблицы
-│   ├── 002_add_user_indexes.up.sql        # Добавление индексов
-│   └── 002_add_user_indexes.down.sql      # Откат индексов
-├── game-service/
-│   ├── 001_create_game_sessions.up.sql    # Игровые сессии
-│   ├── 001_create_game_sessions.down.sql  # Откат сессий
-│   ├── 002_create_match3_boards.up.sql    # Match-3 доски
-│   └── 002_create_match3_boards.down.sql  # Откат досок
-└── shared/
-    ├── 001_create_extensions.up.sql       # PostgreSQL расширения
-    ├── 001_create_extensions.down.sql     # Откат расширений
-    ├── 002_create_common_functions.up.sql # Общие функции
-    └── 002_create_common_functions.down.sql # Откат функций
+├── Dockerfile                            # Контейнер для выполнения миграций
+├── README.md                            # Документация  
+├── 000_init_schemas.up.sql              # Инициализация всех схем и расширений
+├── 000_init_schemas.down.sql            # Откат инициализации
+├── 001_create_users_table.up.sql        # Auth: таблица пользователей
+├── 001_create_users_table.down.sql      # Auth: откат таблицы
+├── 002_create_inventory_schema.up.sql   # Inventory: структура схемы
+├── 002_create_inventory_schema.down.sql # Inventory: откат структуры
+├── 003_populate_classifiers.up.sql      # Inventory: дистрибутивные данные
+├── 003_populate_classifiers.down.sql    # Inventory: откат данных
+└── dev-data/                            # Тестовые данные только для dev
+    └── inventory-service/
+        └── 001_test_items_and_operations.sql
 ```
 
-### 3. Версионирование
+### 3. Соглашения по нумерации
+
+**000-099: Общие компоненты**
+- `000_*` - Инициализация схем, расширений, прав доступа
+- `001-099` - Общие функции, триггеры, типы данных
+
+**100-199: Auth Service**  
+- `100_*` - Таблицы пользователей и авторизации
+- `101_*` - Индексы и оптимизации
+
+**200-299: Game Service**
+- `200_*` - Игровая логика и прогресс  
+- `201_*` - Match-3 доски и сессии
+
+**300-399: Clan Service**
+- `300_*` - Кланы и участники
+- `301_*` - Клановые войны
+
+**400-499: Inventory Service**
+- `400_*` - Структура инвентаря
+- `401_*` - Классификаторы и данные
+
+### 4. Версионирование
 - **Формат UP**: `{номер}_{описание}.up.sql` (применение миграции)
 - **Формат DOWN**: `{номер}_{описание}.down.sql` (откат миграции)
-- **Номер**: 3-значный (001, 002, 003...)
+- **Номер**: 3-значный (000, 001, 002...)
 - **Описание**: краткое описание на английском с подчеркиваниями
 - **Примеры**: 
+  - `000_init_schemas.up.sql` / `000_init_schemas.down.sql`
   - `001_create_users_table.up.sql` / `001_create_users_table.down.sql`
-  - `002_add_telegram_id_index.up.sql` / `002_add_telegram_id_index.down.sql`
+  - `002_create_inventory_schema.up.sql` / `002_create_inventory_schema.down.sql`
 
 ## Инструменты для миграций
 
@@ -51,34 +71,48 @@ migrations/
 # migrations/Dockerfile
 FROM alpine:3.19
 
-# Установка migrate CLI и PostgreSQL client
-RUN apk add --no-cache \
-    curl \
-    postgresql-client && \
-    curl -L https://github.com/golang-migrate/migrate/releases/download/v4.17.0/migrate.linux-arm64.tar.gz | tar xvz && \
+# Установка migrate CLI и PostgreSQL client с поддержкой архитектур
+RUN apk add --no-cache curl postgresql-client && \
+    ARCH=$(case $(uname -m) in \
+        x86_64) echo "amd64" ;; \
+        aarch64) echo "arm64" ;; \
+        armv7l) echo "armv7" ;; \
+        *) echo "amd64" ;; \
+    esac) && \
+    curl -L "https://github.com/golang-migrate/migrate/releases/download/v4.17.0/migrate.linux-${ARCH}.tar.gz" | tar xvz && \
     mv migrate /usr/local/bin/migrate && \
     chmod +x /usr/local/bin/migrate
 
 WORKDIR /migrations
 COPY . /migrations/
 
-ENTRYPOINT ["migrate"]
-CMD ["-help"]
+# Wrapper скрипт для работы с переменными окружения
+RUN echo '#!/bin/sh' > /migrate.sh && \
+    echo 'exec migrate -path /migrations -database "$DATABASE_URL" "$@"' >> /migrate.sh && \
+    chmod +x /migrate.sh
+
+ENTRYPOINT ["/migrate.sh"]
+CMD ["up"]
 ```
 
 ### Docker контейнер для миграций
 ```yaml
-# docker-compose.yml
+# deploy/dev/docker-compose.yml
 services:
-  migrate-auth:
-    build: ../migrations
-    volumes:
-      - ../migrations/auth-service:/migrations
+  migrate:
+    build: ../../migrations
+    container_name: slcw-migrate-dev
     environment:
-      - DATABASE_URL=postgresql://postgres:password@postgres:5432/shard_legends
+      - DATABASE_URL=postgresql://slcw_user:dev_password_2024@postgres:5432/shard_legends_dev?sslmode=disable
+    volumes:
+      - ../../migrations:/migrations
+    networks:
+      - slcw-dev
     depends_on:
-      - postgres
-    command: ["migrate", "-path", "/migrations", "-database", "${DATABASE_URL}", "up"]
+      postgres:
+        condition: service_healthy
+    profiles:
+      - migrations
 ```
 
 ## Процесс применения миграций
@@ -86,92 +120,102 @@ services:
 ### 1. Создание новой миграции
 
 ```bash
-# Создание миграции для auth-service
-cd migrations/auth-service/
+# Перейти в папку миграций
+cd migrations/
+
 # Найти следующий номер
-ls -1 *.sql | sort | tail -1  # получить последний файл
-# Создать новую миграцию
-touch 003_add_user_preferences.sql
+ls -1 *.up.sql | sort | tail -1  # получить последний файл
+# Результат: 001_create_users_table.up.sql
+
+# Создать новую миграцию (следующий номер: 002)
+touch 002_create_inventory_schema.up.sql
+touch 002_create_inventory_schema.down.sql
 ```
 
 ### 2. Содержимое миграции
 ```sql
--- 001_create_users_table.sql
--- Создание таблицы пользователей для auth-service
+-- 002_create_inventory_schema.up.sql
+-- Migration UP: Создание схемы inventory и таблиц
+-- Service: inventory-service
+-- Depends: 000_init_schemas.up.sql
 
-CREATE TABLE IF NOT EXISTS users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    telegram_id BIGINT UNIQUE NOT NULL,
-    username VARCHAR(100),
-    first_name VARCHAR(100),
-    last_name VARCHAR(100),
-    language_code VARCHAR(10),
-    is_premium BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    last_login_at TIMESTAMP WITH TIME ZONE,
-    is_active BOOLEAN DEFAULT TRUE
+CREATE TABLE IF NOT EXISTS inventory.classifiers (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    code varchar(100) UNIQUE NOT NULL,
+    description text,
+    created_at timestamptz DEFAULT now() NOT NULL,
+    updated_at timestamptz DEFAULT now() NOT NULL
 );
 
--- Индексы для быстрого поиска
-CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id);
-CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
-CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at);
-
--- Комментарии для документации
-COMMENT ON TABLE users IS 'Базовые данные пользователей для авторизации';
-COMMENT ON COLUMN users.telegram_id IS 'Уникальный ID пользователя в Telegram';
-COMMENT ON COLUMN users.is_premium IS 'Статус Telegram Premium пользователя';
+-- Индексы и комментарии...
 ```
 
 ### 3. Применение в разных средах
 
-#### Development
+#### Development (применение всех миграций)
 ```bash
 cd deploy/dev/
-docker-compose up migrate-auth
+docker-compose --profile migrations run --rm migrate up
 ```
 
 #### Staging  
 ```bash
 cd deploy/stage/
-docker-compose up migrate-auth
+docker-compose --profile migrations run --rm migrate up
 ```
 
 #### Production
 ```bash
 cd deploy/prod/
-docker-compose up migrate-auth
+docker-compose --profile migrations run --rm migrate up
 ```
 
 ### 4. Проверка результата
 ```bash
-# Проверка применения миграций
-docker-compose exec postgres psql -U postgres -d shard_legends -c "\dt"
-docker-compose exec postgres psql -U postgres -d shard_legends -c "SELECT * FROM schema_migrations;"
+# Проверка статуса миграций
+docker-compose --profile migrations run --rm migrate version
+
+# Проверка схем и таблиц в БД
+docker-compose exec postgres psql -U slcw_user -d shard_legends_dev -c "\dt auth.*"
+docker-compose exec postgres psql -U slcw_user -d shard_legends_dev -c "\dt inventory.*"
+
+# Проверка таблицы миграций
+docker-compose exec postgres psql -U slcw_user -d shard_legends_dev -c "SELECT * FROM schema_migrations ORDER BY version;"
 ```
 
 ## Структура миграций по сервисам
 
-### Auth Service (`migrations/auth-service/`)
+### Общие компоненты (000-099)
 ```sql
--- 001_create_users_table.sql - базовая таблица пользователей
--- 002_add_user_indexes.sql - индексы для производительности
--- 003_add_last_login_tracking.sql - отслеживание последнего входа
+-- 000_init_schemas.up.sql - инициализация схем auth, game, clan, inventory + расширения
+-- 001-099 - резерв для общих функций, триггеров, типов данных
 ```
 
-### Game Service (`migrations/game-service/`)
-```sql
--- 001_create_game_sessions.sql - игровые сессии
--- 002_create_match3_boards.sql - состояния игровых досок
--- 003_create_user_progress.sql - прогресс пользователей
+### Auth Service (100-199)
+```sql  
+-- 001_create_users_table.up.sql - базовая таблица пользователей
+-- 100-199 - будущие миграции auth-service
 ```
 
-### Shared (`migrations/shared/`)
+### Inventory Service (002-003 сейчас, 400-499 в будущем)
 ```sql
--- 001_create_extensions.sql - необходимые PostgreSQL расширения
--- 002_create_common_functions.sql - общие функции
--- 003_create_audit_triggers.sql - триггеры для аудита
+-- 002_create_inventory_schema.up.sql - структура схемы inventory
+-- 003_populate_classifiers.up.sql - дистрибутивные данные классификаторов
+-- 400-499 - будущие миграции inventory-service
+```
+
+### Game Service (200-299) 
+```sql
+-- 200-299 - планируемые миграции game-service
+-- 200_create_game_sessions.up.sql - игровые сессии
+-- 201_create_match3_boards.up.sql - состояния игровых досок
+```
+
+### Clan Service (300-399)
+```sql  
+-- 300-399 - планируемые миграции clan-service
+-- 300_create_clans.up.sql - структура кланов
+-- 301_create_clan_wars.up.sql - клановые войны
 ```
 
 ## Правила создания миграций
@@ -317,56 +361,53 @@ docker-compose run migrate-auth migrate \
 
 ## Примеры миграций
 
-### Auth Service миграции
+### Пример inventory-service миграции
 ```sql
--- migrations/auth-service/001_create_users_table.sql
--- Создание базовой таблицы пользователей для системы авторизации
+-- migrations/002_create_inventory_schema.up.sql
+-- Migration UP: Создание схемы inventory и всех таблиц
+-- Service: inventory-service  
+-- Depends: 000_init_schemas.up.sql
 
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
-CREATE TABLE IF NOT EXISTS users (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    telegram_id BIGINT UNIQUE NOT NULL,
-    username VARCHAR(100),
-    first_name VARCHAR(100),
-    last_name VARCHAR(100),
-    language_code VARCHAR(10),
-    is_premium BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    last_login_at TIMESTAMP WITH TIME ZONE,
-    is_active BOOLEAN DEFAULT TRUE,
+-- Общий классификатор для справочных данных
+CREATE TABLE inventory.classifiers (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    code varchar(100) UNIQUE NOT NULL,
+    description text,
+    created_at timestamptz DEFAULT now() NOT NULL,
+    updated_at timestamptz DEFAULT now() NOT NULL,
     
-    CONSTRAINT users_telegram_id_positive CHECK (telegram_id > 0)
+    CONSTRAINT chk_classifiers_code_not_empty CHECK (length(trim(code)) > 0)
 );
 
--- Индексы для производительности
-CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id);
-CREATE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at);
-CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active) WHERE is_active = TRUE;
+-- Индекс для быстрого поиска по коду классификатора
+CREATE UNIQUE INDEX idx_classifiers_code ON inventory.classifiers (code);
 
--- Триггер для автоматического обновления updated_at
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ language 'plpgsql';
+-- Элементы классификаторов
+CREATE TABLE inventory.classifier_items (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    classifier_id uuid NOT NULL REFERENCES inventory.classifiers(id),
+    code varchar(100) NOT NULL,
+    description text,
+    created_at timestamptz DEFAULT now() NOT NULL,
+    updated_at timestamptz DEFAULT now() NOT NULL,
+    
+    CONSTRAINT chk_classifier_items_code_not_empty CHECK (length(trim(code)) > 0)
+);
 
-CREATE TRIGGER update_users_updated_at 
-    BEFORE UPDATE ON users 
-    FOR EACH ROW 
-    EXECUTE FUNCTION update_updated_at_column();
+-- Остальные таблицы inventory...
 
 -- Комментарии для документации
-COMMENT ON TABLE users IS 'Базовые данные пользователей для системы авторизации';
-COMMENT ON COLUMN users.id IS 'Внутренний UUID пользователя в системе';
-COMMENT ON COLUMN users.telegram_id IS 'Уникальный ID пользователя в Telegram';
-COMMENT ON COLUMN users.username IS 'Username в Telegram (может отсутствовать)';
-COMMENT ON COLUMN users.is_premium IS 'Статус Telegram Premium пользователя';
-COMMENT ON COLUMN users.last_login_at IS 'Время последней авторизации пользователя';
+COMMENT ON TABLE inventory.classifiers IS 'Общий классификатор для всех справочных данных системы';
+COMMENT ON TABLE inventory.classifier_items IS 'Элементы классификаторов - конкретные значения внутри каждого классификатора';
 ```
 
-Эта стратегия обеспечивает контролируемое и безопасное управление схемой базы данных для всех микросервисов проекта.
+## Тестовые данные для dev среды
+
+Тестовые данные размещаются отдельно от основных миграций в папке `dev-data/` и применяются только в dev среде:
+
+```bash
+# Применение тестовых данных вручную в dev среде
+docker-compose exec postgres psql -U slcw_user -d shard_legends_dev -f /migrations/dev-data/inventory-service/001_test_items_and_operations.sql
+```
+
+Эта простая стратегия обеспечивает контролируемое и безопасное управление схемой базы данных для всех микросервисов проекта.
