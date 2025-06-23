@@ -1,0 +1,634 @@
+openapi: 3.0.3
+info:
+  title: Inventory Service API
+  description: |
+    API для управления инвентарем пользователей в игре Shard Legends: Clan Wars.
+    
+    Сервис обеспечивает:
+    - Просмотр инвентаря пользователей
+    - Резервирование предметов для производства
+    - Добавление предметов (награды, покупки)
+    - Административные операции
+    
+    Все эндпоинты требуют JWT токен для аутентификации.
+  version: 1.0.0
+  contact:
+    name: Shard Legends Team
+
+servers:
+  - url: http://localhost:9000/api/inventory
+    description: Локальный сервер разработки
+  - url: https://api.shardlegends.com/api/inventory
+    description: Продуктивный сервер
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Public
+    description: Публичные эндпоинты для фронтенда
+  - name: Internal
+    description: Внутренние эндпоинты для других сервисов
+  - name: Admin
+    description: Административные эндпоинты
+
+paths:
+  /inventory:
+    get:
+      tags:
+        - Public
+      summary: Получить инвентарь пользователя
+      description: |
+        Возвращает текущее состояние инвентаря пользователя.
+        Остатки рассчитываются динамически на основе дневных остатков и операций.
+      operationId: getUserInventory
+      parameters:
+        - name: section
+          in: query
+          description: Раздел инвентаря
+          required: false
+          schema:
+            type: string
+            enum: [main, factory, trade]
+            default: main
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /inventory/items/{item_id}:
+    get:
+      tags:
+        - Public
+      summary: Получить информацию о предмете
+      description: Возвращает детальную информацию о конкретном предмете
+      operationId: getItemInfo
+      parameters:
+        - name: item_id
+          in: path
+          description: UUID предмета
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemInfoResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /inventory/reserve:
+    post:
+      tags:
+        - Internal
+      summary: Зарезервировать предметы
+      description: |
+        Резервирует предметы для производственного задания.
+        Перемещает предметы из основного в фабричный инвентарь.
+      operationId: reserveItems
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReserveItemsRequest'
+      responses:
+        '200':
+          description: Предметы успешно зарезервированы
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '400':
+          description: Недостаточно предметов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InsufficientItemsError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /inventory/return-reserve:
+    post:
+      tags:
+        - Internal
+      summary: Вернуть зарезервированные предметы
+      description: |
+        Возвращает зарезервированные предметы из фабричного в основной инвентарь.
+        Используется при отмене производственного задания.
+      operationId: returnReservedItems
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReturnReserveRequest'
+      responses:
+        '200':
+          description: Предметы успешно возвращены
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Операция резервирования не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /inventory/consume-reserve:
+    post:
+      tags:
+        - Internal
+      summary: Потребить зарезервированные предметы
+      description: |
+        Уничтожает зарезервированные предметы при успешном завершении производства.
+        Предметы списываются из фабричного инвентаря без возврата.
+      operationId: consumeReservedItems
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsumeReserveRequest'
+      responses:
+        '200':
+          description: Предметы успешно потреблены
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Операция резервирования не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /inventory/add-items:
+    post:
+      tags:
+        - Internal
+      summary: Добавить предметы в инвентарь
+      description: |
+        Добавляет предметы в инвентарь пользователя.
+        Используется для начисления наград, покупок, результатов производства.
+      operationId: addItems
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddItemsRequest'
+      responses:
+        '200':
+          description: Предметы успешно добавлены
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /admin/inventory/adjust:
+    post:
+      tags:
+        - Admin
+      summary: Административная корректировка инвентаря
+      description: |
+        Позволяет администраторам корректировать инвентарь пользователей.
+        Требует административные права доступа.
+      operationId: adjustInventory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdjustInventoryRequest'
+      responses:
+        '200':
+          description: Инвентарь успешно скорректирован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdjustInventoryResponse'
+        '400':
+          description: Недостаточно предметов для списания
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InsufficientItemsError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT токен от Auth Service
+
+  schemas:
+    # Базовые типы
+    ItemQuantity:
+      type: object
+      required:
+        - item_id
+        - quantity
+      properties:
+        item_id:
+          type: string
+          format: uuid
+          description: UUID предмета
+        collection:
+          type: string
+          description: Код коллекции (опционально, если не указано - стандартная)
+          example: winter
+        quality_level:
+          type: string
+          description: Код уровня качества (опционально, если не указано - стандартный)
+          example: wooden
+        quantity:
+          type: integer
+          minimum: 1
+          description: Количество предметов
+
+    InventoryItem:
+      type: object
+      required:
+        - item_id
+        - item_class
+        - item_type
+        - quantity
+      properties:
+        item_id:
+          type: string
+          format: uuid
+          description: UUID предмета
+        item_class:
+          type: string
+          description: Код класса предмета
+          example: tools
+        item_type:
+          type: string
+          description: Код типа предмета
+          example: axe
+        collection:
+          type: string
+          description: Код коллекции (отсутствует для стандартной)
+          example: winter
+        quality_level:
+          type: string
+          description: Код уровня качества (отсутствует для стандартного)
+          example: wooden
+        quantity:
+          type: integer
+          minimum: 0
+          description: Текущее количество
+
+    # Ответы
+    InventoryResponse:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InventoryItem'
+
+    ItemInfoResponse:
+      type: object
+      required:
+        - item_id
+        - item_class
+        - item_type
+        - available_quality_levels
+        - available_collections
+      properties:
+        item_id:
+          type: string
+          format: uuid
+        item_class:
+          type: string
+          description: Код класса предмета
+        item_type:
+          type: string
+          description: Код типа предмета
+        available_quality_levels:
+          type: array
+          items:
+            type: string
+          description: Доступные уровни качества
+          example: ["wooden", "stone", "metal", "diamond"]
+        available_collections:
+          type: array
+          items:
+            type: string
+          description: Доступные коллекции
+          example: ["winter", "summer", "autumn"]
+
+    OperationResponse:
+      type: object
+      required:
+        - success
+        - operation_ids
+      properties:
+        success:
+          type: boolean
+        operation_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: UUID созданных операций
+
+    AdjustInventoryResponse:
+      type: object
+      required:
+        - success
+        - operation_ids
+        - final_balances
+      properties:
+        success:
+          type: boolean
+        operation_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        final_balances:
+          type: array
+          items:
+            $ref: '#/components/schemas/InventoryItem'
+          description: Итоговые остатки после корректировки
+
+    # Запросы
+    ReserveItemsRequest:
+      type: object
+      required:
+        - user_id
+        - operation_id
+        - items
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          description: UUID пользователя
+        operation_id:
+          type: string
+          format: uuid
+          description: UUID операции резервирования (для связи с производственным заданием)
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ItemQuantity'
+
+    ReturnReserveRequest:
+      type: object
+      required:
+        - user_id
+        - operation_id
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          description: UUID пользователя
+        operation_id:
+          type: string
+          format: uuid
+          description: UUID операции резервирования для возврата
+
+    ConsumeReserveRequest:
+      type: object
+      required:
+        - user_id
+        - operation_id
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          description: UUID пользователя
+        operation_id:
+          type: string
+          format: uuid
+          description: UUID операции резервирования для потребления
+
+    AddItemsRequest:
+      type: object
+      required:
+        - user_id
+        - section
+        - operation_type
+        - operation_id
+        - items
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          description: UUID пользователя
+        section:
+          type: string
+          enum: [main, factory, trade]
+          description: Раздел инвентаря
+          default: main
+        operation_type:
+          type: string
+          description: Код типа операции из классификатора
+          example: chest_reward
+        operation_id:
+          type: string
+          format: uuid
+          description: UUID внешней операции (для связи с источником)
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ItemQuantity'
+        comment:
+          type: string
+          description: Комментарий к операции
+          maxLength: 500
+
+    AdjustInventoryRequest:
+      type: object
+      required:
+        - user_id
+        - section
+        - items
+        - reason
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          description: UUID пользователя
+        section:
+          type: string
+          enum: [main, factory, trade]
+          description: Раздел инвентаря
+          default: main
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required:
+              - item_id
+              - quantity_change
+            properties:
+              item_id:
+                type: string
+                format: uuid
+              collection:
+                type: string
+                description: Код коллекции
+              quality_level:
+                type: string
+                description: Код уровня качества
+              quantity_change:
+                type: integer
+                description: Изменение количества (может быть отрицательным)
+        reason:
+          type: string
+          description: Причина административной корректировки
+          minLength: 10
+          maxLength: 500
+
+    # Ошибки
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Код ошибки
+        message:
+          type: string
+          description: Описание ошибки
+        details:
+          type: object
+          description: Дополнительная информация об ошибке
+
+    InsufficientItemsError:
+      type: object
+      required:
+        - error
+        - message
+        - missing_items
+      properties:
+        error:
+          type: string
+          enum: [insufficient_items]
+        message:
+          type: string
+        missing_items:
+          type: array
+          items:
+            type: object
+            required:
+              - item_id
+              - required
+              - available
+            properties:
+              item_id:
+                type: string
+                format: uuid
+              collection:
+                type: string
+              quality_level:
+                type: string
+              required:
+                type: integer
+                description: Требуемое количество
+              available:
+                type: integer
+                description: Доступное количество
+
+  responses:
+    Unauthorized:
+      description: Отсутствует или недействительный JWT токен
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: unauthorized
+            message: Invalid or missing JWT token
+
+    Forbidden:
+      description: Недостаточно прав доступа
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: forbidden
+            message: Insufficient permissions
+
+    NotFound:
+      description: Ресурс не найден
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: not_found
+            message: Resource not found
+
+    BadRequest:
+      description: Некорректный запрос
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: bad_request
+            message: Invalid request parameters
+
+    InternalError:
+      description: Внутренняя ошибка сервера
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: internal_error
+            message: An unexpected error occurred

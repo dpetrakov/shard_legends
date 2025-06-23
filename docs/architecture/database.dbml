@@ -46,3 +46,212 @@ Table auth.users {
     - first_name не пустой (length(trim(first_name)) > 0)
   '''
 }
+
+// ============================================================================
+// INVENTORY SERVICE SCHEMA - Сервис инвентаря и предметов
+// ============================================================================
+
+// Общий классификатор для справочных данных
+Table inventory.classifiers {
+  id uuid [primary key, default: `gen_random_uuid()`, note: 'UUID классификатора']
+  code varchar(100) [unique, not null, note: 'Код классификатора (item_class, item_type, quality_level, operation_type)']
+  description text [null, note: 'Описание назначения классификатора']
+  created_at timestamptz [default: `now()`, note: 'Время создания']
+  updated_at timestamptz [default: `now()`, note: 'Время последнего обновления']
+  
+  indexes {
+    code [unique, name: 'idx_classifiers_code', note: 'Быстрый поиск по коду классификатора']
+  }
+  
+  Note: '''
+    Общий классификатор для всех справочных данных системы.
+    Содержит категории: классы предметов, типы предметов, уровни качества, типы операций и др.
+    
+    Примеры классификаторов:
+    - item_class: Классы предметов (Ресурсы, Реагенты, Ускорители, Чертежи, Инструменты, Ключи, Валюты)
+    - item_type: Типы предметов внутри классов
+    - quality_level: Уровни качества (Базовый, Деревянный, Каменный, Металлический, Бриллиантовый)
+    - operation_type: Типы операций с инвентарем
+    - inventory_section: Разделы инвентаря (base, factory, trade)
+  '''
+}
+
+// Элементы классификаторов
+Table inventory.classifier_items {
+  id uuid [primary key, default: `gen_random_uuid()`, note: 'UUID элемента классификатора']
+  classifier_id uuid [not null, ref: > inventory.classifiers.id, note: 'Ссылка на классификатор']
+  code varchar(100) [not null, note: 'Код элемента в рамках классификатора']
+  description text [null, note: 'Описание элемента']
+  created_at timestamptz [default: `now()`, note: 'Время создания']
+  updated_at timestamptz [default: `now()`, note: 'Время последнего обновления']
+  
+  indexes {
+    (classifier_id, code) [unique, name: 'idx_classifier_items_classifier_code', note: 'Уникальность кода в рамках классификатора']
+    classifier_id [name: 'idx_classifier_items_classifier', note: 'Поиск элементов по классификатору']
+  }
+  
+  Note: '''
+    Элементы классификаторов - конкретные значения внутри каждого классификатора.
+    
+    Примеры элементов для item_class:
+    - resources: Ресурсы
+    - reagents: Реагенты  
+    - boosters: Ускорители
+    - blueprints: Чертежи
+    - tools: Инструменты
+    - keys: Ключи
+    - currencies: Валюты
+    
+    Constraints:
+    - Уникальность кода в рамках одного классификатора
+    - Название не может быть пустым
+  '''
+}
+
+// Предметы
+Table inventory.items {
+  id uuid [primary key, default: `gen_random_uuid()`, note: 'UUID предмета']
+  item_class_id uuid [not null, ref: > inventory.classifier_items.id, note: 'Класс предмета (ссылка на элемент классификатора item_class)']
+  item_type_id uuid [not null, ref: > inventory.classifier_items.id, note: 'Тип предмета (ссылка на элемент классификатора item_type)']
+  quality_levels_classifier_id uuid [not null, ref: > inventory.classifiers.id, note: 'Ссылка на классификатор уровней качества для данного предмета']
+  collections_classifier_id uuid [not null, ref: > inventory.classifiers.id, note: 'Ссылка на классификатор коллекций для данного предмета']
+  created_at timestamptz [default: `now()`, note: 'Время создания']
+  updated_at timestamptz [default: `now()`, note: 'Время последнего обновления']
+  
+  indexes {
+    item_class_id [name: 'idx_items_class', note: 'Поиск предметов по классу']
+    item_type_id [name: 'idx_items_type', note: 'Поиск предметов по типу']
+    quality_levels_classifier_id [name: 'idx_items_quality_classifier', note: 'Поиск предметов по классификатору качества']
+    collections_classifier_id [name: 'idx_items_collections_classifier', note: 'Поиск предметов по классификатору коллекций']
+    }
+  
+  Note: '''
+    Каталог всех игровых предметов.
+    Каждый предмет принадлежит к определенному классу и типу из классификаторов.
+    Названия и описания хранятся отдельно в системе мультиязычности.
+    
+    Доступные уровни качества определяются через ссылку на классификатор - 
+    все активные элементы этого классификатора являются доступными уровнями качества.
+    
+    Доступные коллекции определяются аналогично через ссылку на классификатор коллекций -
+    все активные элементы этого классификатора являются доступными коллекциями.
+    
+    Constraints:
+    - item_class_id и item_type_id должны ссылаться на элементы соответствующих классификаторов
+    - quality_levels_classifier_id должен ссылаться на классификатор типа "quality_level"
+    - collections_classifier_id должен ссылаться на классификатор типа "collection"
+  '''
+}
+
+// Изображения предметов
+Table inventory.item_images {
+  item_id uuid [not null, ref: > inventory.items.id, note: 'UUID предмета']
+  collection_id uuid [not null, ref: > inventory.classifier_items.id, note: 'Коллекция предмета']
+  quality_level_id uuid [not null, ref: > inventory.classifier_items.id, note: 'Уровень качества предмета']
+  image_url text [not null, note: 'URL изображения для данной комбинации предмет+коллекция+качество']
+  created_at timestamptz [default: `now()`, note: 'Время создания']
+  updated_at timestamptz [default: `now()`, note: 'Время последнего обновления']
+  
+  indexes {
+    (item_id, collection_id, quality_level_id) [pk]
+    item_id [name: 'idx_item_images_item', note: 'Поиск изображений по предмету']
+    (collection_id, quality_level_id) [name: 'idx_item_images_collection_quality', note: 'Поиск изображений по коллекции и качеству']
+  }
+  
+  Note: '''
+    Хранит URL изображений для каждой уникальной комбинации предмет+коллекция+качество.
+    Это позволяет иметь разные изображения для одного предмета в зависимости от коллекции и качества.
+    Например, топор деревянный базовой коллекции и топор деревянный зимней коллекции могут иметь разные изображения.
+  '''
+}
+
+
+// Дневные остатки (снимки на конец дня)
+Table inventory.daily_balances {
+  user_id uuid [not null, ref: > auth.users.id, note: 'UUID пользователя']
+  section_id uuid [not null, ref: > inventory.classifier_items.id, note: 'Раздел инвентаря']
+  item_id uuid [not null, ref: > inventory.items.id, note: 'UUID предмета']
+  collection_id uuid [not null, ref: > inventory.classifier_items.id, note: 'Коллекция предмета']
+  quality_level_id uuid [not null, ref: > inventory.classifier_items.id, note: 'Уровень качества предмета']
+  balance_date date [not null, note: 'Дата остатка (конец дня в UTC)']
+  quantity bigint [not null, note: 'Количество предметов на конец дня']
+  created_at timestamptz [default: `now()`, note: 'Время создания записи']
+  
+  indexes {
+    (user_id, section_id, item_id, collection_id, quality_level_id, balance_date) [pk]
+    balance_date [name: 'idx_daily_balances_date', note: 'Поиск остатков по дате']
+    (user_id, balance_date) [name: 'idx_daily_balances_user_date', note: 'Остатки пользователя на дату']
+    created_at [name: 'idx_daily_balances_created', note: 'Аналитика создания остатков']
+  }
+  
+  Note: '''
+    Дневные остатки - основа для расчета текущих остатков инвентаря.
+    Текущий остаток рассчитывается динамически по формуле:
+    текущий_остаток = дневной_остаток + сумма_операций_за_текущий_день
+    
+    Дневные остатки создаются "по запросу" - если дневного остатка нет, 
+    система находит последний доступный остаток и применяет к нему все операции до нужной даты.
+    
+    Это исключает необходимость в отдельной таблице user_inventory для хранения текущих остатков.
+    
+    Constraints:
+    - balance_date в формате UTC
+    - quantity >= 0
+    - Уникальность комбинации всех полей
+  '''
+}
+
+// Операции с инвентарем (протокол всех изменений)
+Table inventory.operations {
+  id uuid [primary key, default: `gen_random_uuid()`, note: 'UUID операции']
+  user_id uuid [not null, ref: > auth.users.id, note: 'UUID пользователя']
+  section_id uuid [not null, ref: > inventory.classifier_items.id, note: 'Раздел инвентаря']
+  item_id uuid [not null, ref: > inventory.items.id, note: 'UUID предмета']
+  collection_id uuid [not null, ref: > inventory.classifier_items.id, note: 'Коллекция предмета']
+  quality_level_id uuid [not null, ref: > inventory.classifier_items.id, note: 'Уровень качества предмета']
+  quantity_change bigint [not null, note: 'Изменение количества (+ поступление, - расход)']
+  operation_type_id uuid [not null, ref: > inventory.classifier_items.id, note: 'Тип операции из классификатора']
+  operation_id uuid [null, note: 'Внешний UUID операции для связи с другими системами']
+  recipe_id uuid [null, note: 'UUID рецепта для контроля лимитов (опционально)']
+  comment text [null, note: 'Комментарий к операции']
+  created_at timestamptz [default: `now()`, note: 'Время выполнения операции']
+  
+  indexes {
+    user_id [name: 'idx_operations_user', note: 'История операций пользователя']
+    (user_id, created_at) [name: 'idx_operations_user_time', note: 'История операций пользователя по времени']
+    (user_id, section_id, item_id, collection_id, quality_level_id, created_at) [name: 'idx_operations_item_time', note: 'Операции с конкретным предметом']
+    operation_type_id [name: 'idx_operations_type', note: 'Аналитика по типам операций']
+    operation_id [name: 'idx_operations_external', note: 'Поиск по внешнему ID операции']
+    recipe_id [name: 'idx_operations_recipe', note: 'Поиск операций по рецепту']
+    created_at [name: 'idx_operations_time', note: 'Операции по времени для дневных остатков']
+  }
+  
+  Note: '''
+    Полный протокол всех операций с инвентарем пользователей.
+    Каждое изменение количества предметов должно сопровождаться записью в этой таблице.
+    
+    Типы операций (operation_type_id):
+    Стандартные операции (базовый инвентарь):
+    - chest_reward: получение из сундука
+    - craft_result: результат производства
+    - trade_sale: продажа в торговле
+    - trade_purchase: покупка в торговле
+    - admin_adjustment: административная корректировка
+    - system_reward: системная награда
+    - system_penalty: системное списание
+    
+    Операции фабричного инвентаря:
+    - factory_reservation: резервирование материалов
+    - factory_return: возврат материалов
+    - factory_consumption: уничтожение материалов
+    
+    Операции торгового инвентаря:
+    - trade_listing: размещение на продажу
+    - trade_delisting: снятие с продажи
+    
+    Constraints:
+    - quantity_change != 0 (операция должна изменять количество)
+    - created_at не может быть изменен после записи
+    - operation_type_id должен ссылаться на существующий тип операции
+  '''
+}

@@ -34,17 +34,21 @@ graph TB
     Gateway --> AuthService[Auth Service<br/>Golang]
     Gateway --> BotService[Telegram Bot Service<br/>Golang]
     Gateway --> PingService[Ping Service<br/>Golang]
+    Gateway --> InventoryService[Inventory Service<br/>Golang]
     Gateway --> GameAPI[Game API<br/>планируется]
     
     AuthService --> DB[(PostgreSQL 17)]
     AuthService --> Cache[(Redis 8.0.2)]
     BotService --> DB
+    InventoryService --> DB
+    InventoryService --> Cache
     GameAPI --> DB
     GameAPI --> Cache
     
     subgraph "Проверка токенов"
         GameAPI -.->|JWT validation| Cache
         BotService -.->|JWT validation| Cache
+        InventoryService -.->|JWT validation| Cache
     end
     
     subgraph "Docker Compose Environment"
@@ -52,6 +56,7 @@ graph TB
         AuthService
         BotService
         PingService
+        InventoryService
         GameAPI
         DB
         Cache
@@ -68,7 +73,7 @@ graph TB
 
 **Конфигурация:**
 - Порт: 8080 (внутри контейнера), 9000 (внешний)
-- Маршруты: `/api/ping` → ping-service, `/api/webhook` → telegram-bot-service, `/api/auth` → auth-service
+- Маршруты: `/api/ping` → ping-service, `/api/webhook` → telegram-bot-service, `/api/auth` → auth-service, `/api/inventory` → inventory-service
 - Health check: `/health` (внутренний)
 
 ### 2. Telegram Bot Service (Golang)
@@ -109,7 +114,31 @@ graph TB
 **API эндпоинты:**
 - `GET /ping` → `{"message": "pong"}`
 
-### 5. Telegram Mini App (Frontend)
+### 5. Inventory Service (Golang)
+
+**Назначение:**
+- Управление инвентарем пользователей и игровыми предметами
+- Система классификаторов для справочных данных
+- Учет остатков и операций с предметами
+- Поддержка разделов инвентаря (базовый, фабричный, торговый)
+
+**API эндпоинты:**
+- `GET /inventory` → Получение инвентаря пользователя
+- `GET /inventory/items/{item_id}` → Информация о предмете
+- `POST /inventory/operations` → Операции с инвентарем (внутренний)
+- `POST /inventory/reserve` → Резервирование для фабрики (внутренний)
+- `POST /admin/inventory/adjust` → Административная корректировка
+- `GET /health` → Проверка состояния сервиса
+
+**Ключевые возможности:**
+- Общий классификатор для справочных данных всей системы
+- Система дневных остатков для оптимизации расчетов
+- Поддержка атомарных операций с инвентарем
+- Раздельный учет предметов по разделам инвентаря
+- Протоколирование всех операций с предметами
+- Интеграция с Factory Service для резервирования материалов
+
+### 6. Telegram Mini App (Frontend)
 
 **Ключевые возможности:**
 - Интеграция с Telegram через Web App SDK
@@ -118,7 +147,7 @@ graph TB
 - Клановая система
 - Responsive дизайн для мобильных устройств
 
-### 6. Game API (Golang) - планируется
+### 7. Game API (Golang) - планируется
 
 **Основная функциональность:**
 - RESTful API для всех игровых операций
@@ -139,6 +168,7 @@ https://domain.com/api/* → nginx → API Gateway:9000/* → микросерв
 - `/api/ping` → ping-service:8080/ping  
 - `/api/webhook` → telegram-bot-service:8080/webhook
 - `/api/auth` → auth-service:8080/auth
+- `/api/inventory` → inventory-service:8080/inventory
 
 ### Добавление новых сервисов
 1. Создать новый микросервис на порту 8080
@@ -175,11 +205,19 @@ https://domain.com/api/* → nginx → API Gateway:9000/* → микросерв
 - Магазин и покупки
 - Система наград
 
+#### Factory Service
+- Управление производственными рецептами
+- Система фабрики и производственных заданий
+- Интеграция с Inventory Service для резервирования материалов
+- Планировщик и очереди производства
+
 ### 7. Хранилище данных
 
 #### PostgreSQL 17
 Основная база данных для хранения:
 - **Пользователи** (базовые данные авторизации в auth-service)
+- **Инвентарь и предметы** (inventory-service: предметы, остатки, операции)
+- **Классификаторы** (общие справочные данные для всех сервисов)
 - Профили игроков (расширенные данные в user-service)
 - Клановые данные
 - История игр и достижения
@@ -194,6 +232,8 @@ https://domain.com/api/* → nginx → API Gateway:9000/* → микросерв
 #### Redis 8.0.2
 Кеширование и временные данные:
 - **JWT токены** (активные и отозванные)
+- **Справочные данные** (классификаторы и каталог предметов)
+- **Актуальные остатки инвентаря** (краткосрочное кеширование)
 - Сессии пользователей
 - Активные игровые состояния
 - Очереди матчмейкинга
