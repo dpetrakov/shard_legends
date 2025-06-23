@@ -43,6 +43,13 @@ scrape_configs:
     metrics_path: '/metrics'
     scrape_interval: 30s
 
+  # Inventory Service
+  - job_name: 'inventory-service'
+    static_configs:
+      - targets: ['inventory-service:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
   # API Gateway (nginx metrics if enabled)
   - job_name: 'api-gateway'
     static_configs:

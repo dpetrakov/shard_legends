@@ -30,6 +30,7 @@ services:
       - ping-service
       - telegram-bot-service
       - auth-service
+      - inventory-service
 
   # Frontend service
   frontend:
@@ -151,6 +152,47 @@ services:
     restart: unless-stopped
     labels:
       - "logging.service=auth-service"
+      - "logging.environment=dev"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "logging.service,logging.environment"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Inventory Service - Inventory and items management
+  inventory-service:
+    build:
+      context: ../../services/inventory-service
+      dockerfile: Dockerfile
+    container_name: slcw-inventory-service-dev
+    # No external ports - accessed via API Gateway
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-slcw_user}:${POSTGRES_PASSWORD:-dev_password_2024}@postgres:5432/${POSTGRES_DB:-shard_legends_dev}?sslmode=disable
+      - REDIS_URL=redis://redis:6379/1
+      - INVENTORY_SERVICE_HOST=0.0.0.0
+      - INVENTORY_SERVICE_PORT=8080
+      - DATABASE_MAX_CONNECTIONS=10
+      - REDIS_MAX_CONNECTIONS=10
+      - LOG_LEVEL=info
+      - METRICS_PORT=9090
+    networks:
+      - slcw-dev
+      - slcw-monitoring
+    restart: unless-stopped
+    labels:
+      - "logging.service=inventory-service"
       - "logging.environment=dev"
     logging:
       driver: "json-file"

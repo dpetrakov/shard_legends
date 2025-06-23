@@ -5,103 +5,7 @@
 ## Высокий приоритет
 <!-- Критически важные задачи, блокирующие другие -->
 
-## H-1: Создание скриптов миграции базы данных для Inventory Service
-**Роль:** Backend Developer
-**Приоритет:** Высокий
-**Статус:** [ ] Готов к выполнению
-
-**Описание:**
-`docs/tasks/inventory-service-task-1-database-migrations.md`
-Создание SQL-скриптов миграции для инициализации схемы базы данных inventory-service. Включает создание таблиц, индексов, constraints и первичную заливку справочных данных с фиксированными UUID.
-
-**Файлы для изучения:**
-- `docs/architecture/database.dbml` - полная схема БД с индексами и constraints (строки 54-261)
-- `docs/specs/inventory-service.md` - описание таблиц и модели данных (строки 198-586)
-- `docs/concept/game-mechanics-chests-keys-deck-minigame.md` - игровые механики для валидации данных
-
-**Критерии готовности:**
-
-**Структура схемы:**
-- [ ] `migrations/001_create_inventory_schema.sql` - создание всех таблиц схемы inventory
-- [ ] `migrations/001_create_inventory_schema_rollback.sql` - скрипт отката структуры
-- [ ] Все constraints из database.dbml реализованы
-- [ ] Все индексы для производительности созданы
-- [ ] Foreign key constraints настроены
-- [ ] UUID default значения установлены
-
-**Дистрибутивные данные:**
-- [ ] `migrations/002_inventory_classifiers_data.sql` - все 16 классификаторов с фиксированными UUID
-- [ ] `migrations/002_inventory_classifiers_data_rollback.sql` - скрипт очистки классификаторов
-- [ ] ~90 элементов классификаторов с описаниями
-- [ ] Возможность многократных откатов/накатов без изменения UUID
-
-**Тестовые данные:**
-- [ ] `migrations/003_inventory_test_data.sql` - тестовые предметы и операции
-- [ ] Создание тестовых изображений (item_images)
-- [ ] Создание тестовых операций для демонстрации
-- [ ] Создание тестовых дневных остатков
-
-**Проверка:**
-```bash
-psql -d shard_legends -c "SELECT count(*) FROM inventory.classifiers;" # = 16
-psql -d shard_legends -c "SELECT count(*) FROM inventory.classifier_items;" # = ~90
-```
-
-**Зависимости:** PostgreSQL 17
-**Оценка:** 1-2 дня
-
----
-
-## H-2: Базовое Go приложение для Inventory Service
-**Роль:** Backend Developer  
-**Приоритет:** Высокий
-**Статус:** [ ] Готов к выполнению
-
-**Описание:**
-Создание основной структуры Go приложения для inventory-service с базовой конфигурацией, подключением к БД, логированием и health check эндпоинтами.
-
-**Файлы для изучения:**
-- `services/auth-service/` - структура проекта как референс
-- `docs/specs/inventory-service.md` - технические характеристики (строки 7-16)
-- `docs/tasks/inventory-service-task-2-core-application.md` - детальные требования
-
-**Критерии готовности:**
-
-**Структура проекта:**
-- [ ] Go модуль инициализирован в `services/inventory-service/`
-- [ ] Структура каталогов: cmd/, internal/, pkg/, migrations/, docker/
-- [ ] Dockerfile с multi-stage build
-- [ ] docker-compose.yml с PostgreSQL, Redis, Prometheus
-
-**Конфигурация:**
-- [ ] `internal/config/config.go` - чтение env переменных
-- [ ] Поддержка DB_HOST, DB_PORT, REDIS_HOST, SERVER_PORT
-- [ ] Конфигурация логирования и метрик
-
-**Подключения:**
-- [ ] `internal/database/postgres.go` - connection pool для PostgreSQL 17
-- [ ] `internal/database/redis.go` - подключение к Redis 8.0.2
-- [ ] Ping проверки соединений
-- [ ] Graceful shutdown
-
-**Health Checks:**
-- [ ] `internal/handlers/health.go` - /health, /health/ready, /health/live
-- [ ] Проверка доступности БД и Redis
-- [ ] JSON ответы с timestamp и статусом сервисов
-
-**Логирование:**
-- [ ] `pkg/logger/logger.go` - structured JSON logging
-- [ ] Различные уровни логирования
-- [ ] Request ID для трассировки
-
-**Проверка:**
-```bash
-curl http://localhost:8080/health # возвращает 200
-docker-compose up -d # стек поднимается без ошибок
-```
-
-**Зависимости:** H-1 (миграции БД)
-**Оценка:** 1 день
+*Нет задач высокого приоритета*
 
 ---
 
@@ -114,6 +18,7 @@ docker-compose up -d # стек поднимается без ошибок
 **Статус:** [ ] Готов к выполнению
 
 **Описание:**
+`docs/tasks/inventory-service-task-3-data-models.md`
 Создание Go структур для работы с данными, реализация repository паттерна для доступа к БД и базовых операций с классификаторами и предметами.
 
 **Файлы для изучения:**
@@ -155,7 +60,7 @@ go test ./internal/repository/... # все тесты проходят
 go test ./internal/models/... # валидация работает
 ```
 
-**Зависимости:** H-2 (базовое приложение)
+**Зависимости:** H-1 (базовое приложение)
 **Оценка:** 2-3 дня
 
 ---

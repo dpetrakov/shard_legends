@@ -42,3 +42,4 @@ services/telegram-bot-service/telegram-bot-service
 services/auth-service/bin/auth-service
 services/auth-service/auth-service
 services/ping-service/ping-service
+services/inventory-service/inventory-service
