@@ -63,35 +63,6 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
-  /inventory/items/{item_id}:
-    get:
-      tags:
-        - Public
-      summary: Получить информацию о предмете
-      description: Возвращает детальную информацию о конкретном предмете
-      operationId: getItemInfo
-      parameters:
-        - name: item_id
-          in: path
-          description: UUID предмета
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Успешный ответ
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ItemInfoResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '500':
-          $ref: '#/components/responses/InternalError'
-
   /inventory/reserve:
     post:
       tags:
@@ -331,37 +302,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/InventoryItem'
-
-    ItemInfoResponse:
-      type: object
-      required:
-        - item_id
-        - item_class
-        - item_type
-        - available_quality_levels
-        - available_collections
-      properties:
-        item_id:
-          type: string
-          format: uuid
-        item_class:
-          type: string
-          description: Код класса предмета
-        item_type:
-          type: string
-          description: Код типа предмета
-        available_quality_levels:
-          type: array
-          items:
-            type: string
-          description: Доступные уровни качества
-          example: ["wooden", "stone", "metal", "diamond"]
-        available_collections:
-          type: array
-          items:
-            type: string
-          description: Доступные коллекции
-          example: ["winter", "summer", "autumn"]
 
     OperationResponse:
       type: object

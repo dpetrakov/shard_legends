@@ -12,58 +12,6 @@
 ## Средний приоритет  
 <!-- Важные задачи для текущего спринта/итерации -->
 
-## M-1: Модели данных и репозитории для Inventory Service
-**Роль:** Backend Developer
-**Приоритет:** Средний
-**Статус:** [ ] Готов к выполнению
-
-**Описание:**
-`docs/tasks/inventory-service-task-3-data-models.md`
-Создание Go структур для работы с данными, реализация repository паттерна для доступа к БД и базовых операций с классификаторами и предметами.
-
-**Файлы для изучения:**
-- `docs/architecture/database.dbml` - все таблицы схемы inventory (строки 54-261)  
-- `docs/specs/inventory-service.md` - описание моделей данных (строки 198-255)
-- `docs/specs/inventory-service-openapi.yml` - request/response схемы
-- `services/auth-service/internal/repository/` - паттерны repository
-- `docs/tasks/inventory-service-task-3-data-models.md` - детальные требования
-
-**Критерии готовности:**
-
-**Go структуры:**
-- [ ] `internal/models/classifier.go` - Classifier, ClassifierItem
-- [ ] `internal/models/item.go` - Item, ItemImage  
-- [ ] `internal/models/inventory.go` - DailyBalance, Operation
-- [ ] `internal/models/dto.go` - API структуры с валидацией
-- [ ] Правильные db и json теги для всех полей
-
-**Repository интерфейсы:**
-- [ ] `internal/repository/interfaces.go` - ClassifierRepository, ItemRepository, InventoryRepository
-- [ ] Методы для CRUD операций
-- [ ] Методы для кеширования и преобразования код↔UUID
-
-**Реализация репозиториев:**
-- [ ] `internal/repository/classifier_repo.go` - работа с классификаторами + Redis кеш
-- [ ] `internal/repository/item_repo.go` - операции с предметами и изображениями
-- [ ] `internal/repository/inventory_repo.go` - дневные остатки и операции
-- [ ] Batch операции для производительности
-- [ ] Транзакционные методы
-
-**Валидация:**
-- [ ] `internal/models/validation.go` - валидаторы для всех структур
-- [ ] Custom validation rules
-- [ ] Error handling для валидации
-
-**Проверка:**
-```bash
-go test ./internal/repository/... # все тесты проходят
-go test ./internal/models/... # валидация работает
-```
-
-**Зависимости:** H-1 (базовое приложение)
-**Оценка:** 2-3 дня
-
----
 
 ## M-2: Бизнес-логика и общие алгоритмы для Inventory Service
 **Роль:** Backend Developer
@@ -71,6 +19,7 @@ go test ./internal/models/... # валидация работает
 **Статус:** [ ] Готов к выполнению
 
 **Описание:**
+`docs/tasks/inventory-service-task-4-business-logic.md`
 Реализация основных бизнес-алгоритмов inventory-service согласно спецификации. Включает расчет остатков, создание дневных балансов, преобразование кодов и валидацию операций.
 
 **Файлы для изучения:**
@@ -121,6 +70,7 @@ go test -race ./internal/service/... # проверка race conditions
 **Статус:** [ ] Готов к выполнению
 
 **Описание:**
+`docs/tasks/inventory-service-task-5-http-endpoints.md`
 Реализация всех HTTP эндпоинтов согласно OpenAPI спецификации. Включает публичные, внутренние и административные эндпоинты с полной валидацией, аутентификацией и обработкой ошибок.
 
 **Файлы для изучения:**
@@ -166,55 +116,6 @@ go test ./internal/handlers/... # coverage >85%
 
 ---
 
-## M-4: Добавление Prometheus метрик в Auth Service  
-**Роль:** DevOps/Backend Developer
-**Приоритет:** Средний
-**Статус:** [ ] Готов к выполнению
-
-**Описание:**
-Интегрировать Prometheus метрики в auth-service для мониторинга производительности, безопасности и состояния системы. Реализовать comprehensive набор метрик для всех критических операций и создать основу для alerting системы.
-
-**Файлы для изучения:**
-- `services/auth-service/` - текущая реализация сервиса
-- `docs/specs/auth-service.md` - спецификация сервиса
-- Prometheus Go client documentation
-
-**Критерии готовности:**
-
-**Базовые HTTP метрики:**
-- [ ] Добавлена зависимость на `github.com/prometheus/client_golang` в go.mod
-- [ ] Создан middleware для сбора HTTP метрик (request duration, status codes, request count)
-- [ ] Реализован endpoint `GET /metrics` для экспорта метрик в Prometheus формате
-- [ ] Настроены labels для метрик: method, endpoint, status_code
-
-**Метрики аутентификации:**
-- [ ] `auth_requests_total` - счетчик всех запросов аутентификации с labels: status, reason
-- [ ] `auth_request_duration_seconds` - гистограмма времени обработки запросов
-- [ ] `auth_telegram_validation_duration_seconds` - время валидации Telegram подписи
-- [ ] `auth_new_users_total` - счетчик регистраций новых пользователей
-- [ ] `auth_rate_limit_hits_total` - количество заблокированных запросов
-
-**Метрики JWT токенов:**
-- [ ] `jwt_tokens_generated_total` - счетчик созданных JWT токенов
-- [ ] `jwt_tokens_validated_total` - счетчик валидированных токенов с labels: status
-- [ ] `jwt_key_generation_duration_seconds` - время генерации RSA ключей
-- [ ] `jwt_active_tokens_count` - gauge активных токенов в системе
-
-**Интеграция и конфигурация:**
-- [ ] Создан пакет `internal/metrics/` с инициализацией всех метрик
-- [ ] Интегрированы метрики во все handlers, storage слои, services
-- [ ] Настроен namespace для метрик: `auth_service_`
-- [ ] Добавлена конфигурация метрик через переменные окружения
-
-**Проверка:**
-```bash
-curl http://localhost:9090/metrics | grep auth_service # метрики видны
-```
-
-**Зависимости:** Auth Service полностью реализован
-**Оценка:** 2-3 дня
-
----
 
 ## Низкий приоритет
 <!-- Задачи для будущих итераций -->
@@ -225,6 +126,7 @@ curl http://localhost:9090/metrics | grep auth_service # метрики видн
 **Статус:** [ ] Готов к выполнению
 
 **Описание:**
+`docs/tasks/inventory-service-task-6-monitoring-metrics.md`
 Реализация комплексной системы мониторинга для inventory-service на основе Prometheus метрик и Grafana дашбордов, аналогично auth-service.
 
 **Файлы для изучения:**
