@@ -4,9 +4,31 @@
 
 ## Дайджест работ - 24 июня 2025
 
-### Inventory Service Data Layer - Complete Implementation (2 задачи)
+### Inventory Service Business Logic & Data Layer - Complete Implementation (3 задачи)
 
-**Объем работ:** Завершена полная реализация слоя данных для inventory-service с моделями, репозиториями и Prometheus метриками в auth-service.
+**Объем работ:** Завершена полная реализация слоя данных и бизнес-логики для inventory-service с моделями, репозиториями, core algorithms и Prometheus метриками в auth-service.
+
+**M-2: Бизнес-логика и общие алгоритмы для Inventory Service**
+**Дата завершения:** 2025-06-24
+**Роль:** Backend Developer
+**Статус:** [x] Выполнена
+
+**Описание:** Реализация основных бизнес-алгоритмов inventory-service согласно спецификации. Включает расчет остатков, создание дневных балансов, преобразование кодов и валидацию операций.
+
+**Результат:**
+- ✅ **Service интерфейсы:** `internal/service/interfaces.go` - InventoryService, ClassifierService и интерфейсы для всех 6 ключевых алгоритмов
+- ✅ **Ключевые алгоритмы:** balance_calculator.go, daily_balance_creator.go, code_converter.go, balance_checker.go, operation_creator.go, cache_manager.go
+- ✅ **Главный сервис:** inventory_service.go с координацией всех алгоритмов, транзакционной безопасностью и error handling
+- ✅ **Кеширование:** Redis кеширование с TTL 1 час для остатков, TTL 24 часа для классификаторов, namespace `inventory:{user_id}:...`
+- ✅ **Comprehensive testing:** 28 тестов проходят успешно, race conditions проверены
+
+**Технические достижения:**
+- Полная реализация всех 6 бизнес-алгоритмов согласно спецификации
+- Ленивое создание дневных балансов с оптимизацией производительности
+- Двунаправленное преобразование код↔UUID для классификаторов
+- Graceful degradation при недоступности Redis
+- Транзакционная безопасность для операций с инвентарем
+- Структурированные ошибки с детализацией недостающих предметов
 
 **M-1: Модели данных и репозитории для Inventory Service**
 **Дата завершения:** 2025-06-24

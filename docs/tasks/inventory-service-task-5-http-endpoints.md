@@ -173,15 +173,133 @@ func (h *InventoryHandler) AdjustInventory(c *gin.Context) {
 
 #### JWT Authentication
 ```go
-func JWTAuthMiddleware(authService AuthService) gin.HandlerFunc {
+func JWTAuthMiddleware(publicKey *rsa.PublicKey, redisClient *redis.Client) gin.HandlerFunc {
     return func(c *gin.Context) {
         // 1. Извлечь JWT токен из Authorization header
-        // 2. Валидировать токен через Auth Service
-        // 3. Извлечь user_id и сохранить в context
-        // 4. Продолжить выполнение или вернуть 401
+        tokenString := c.GetHeader("Authorization")
+        if tokenString == "" {
+            c.JSON(401, gin.H{"error": "missing_token"})
+            c.Abort()
+            return
+        }
+        
+        // Удаление префикса "Bearer "
+        if strings.HasPrefix(tokenString, "Bearer ") {
+            tokenString = tokenString[7:]
+        } else {
+            c.JSON(401, gin.H{"error": "invalid_token_format"})
+            c.Abort()
+            return
+        }
+        
+        // 2. Валидация JWT подписи с публичным ключом от Auth Service
+        token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+            // Проверка алгоритма подписи
+            if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
+                return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+            }
+            return publicKey, nil
+        })
+        
+        if err != nil || !token.Valid {
+            c.JSON(401, gin.H{"error": "invalid_token_signature"})
+            c.Abort()
+            return
+        }
+        
+        claims, ok := token.Claims.(jwt.MapClaims)
+        if !ok {
+            c.JSON(401, gin.H{"error": "invalid_token_claims"})
+            c.Abort()
+            return
+        }
+        
+        // 3. Проверка времени действия уже выполнена в jwt.Parse()
+        
+        // 4. Проверка в Redis что токен не отозван
+        jti, ok := claims["jti"].(string)
+        if !ok {
+            c.JSON(401, gin.H{"error": "missing_token_id"})
+            c.Abort()
+            return
+        }
+        
+        ctx := context.Background()
+        isRevoked := redisClient.Exists(ctx, "revoked:"+jti).Val()
+        if isRevoked > 0 {
+            c.JSON(401, gin.H{"error": "token_revoked"})
+            c.Abort()
+            return
+        }
+        
+        // 5. Извлечь user_id и сохранить в context
+        userID, ok := claims["sub"].(string)
+        if !ok {
+            c.JSON(401, gin.H{"error": "missing_user_id"})
+            c.Abort()
+            return
+        }
+        
+        telegramID, ok := claims["telegram_id"].(float64)
+        if !ok {
+            c.JSON(401, gin.H{"error": "missing_telegram_id"})
+            c.Abort()
+            return
+        }
+        
+        // Сохранение данных пользователя в контексте
+        c.Set("user_id", userID)
+        c.Set("telegram_id", int64(telegramID))
+        c.Set("token_jti", jti)
+        c.Next()
     }
 }
+
+// Инициализация публичного ключа от Auth Service
+func InitAuthPublicKey() (*rsa.PublicKey, error) {
+    // Получение публичного ключа от auth-service
+    resp, err := http.Get("http://auth-service:8080/public-key.pem")
+    if err != nil {
+        return nil, fmt.Errorf("failed to fetch public key: %w", err)
+    }
+    defer resp.Body.Close()
+    
+    keyData, err := io.ReadAll(resp.Body)
+    if err != nil {
+        return nil, fmt.Errorf("failed to read public key: %w", err)
+    }
+    
+    block, _ := pem.Decode(keyData)
+    if block == nil {
+        return nil, fmt.Errorf("failed to decode PEM block")
+    }
+    
+    publicKeyInterface, err := x509.ParsePKIXPublicKey(block.Bytes)
+    if err != nil {
+        return nil, fmt.Errorf("failed to parse public key: %w", err)
+    }
+    
+    publicKey, ok := publicKeyInterface.(*rsa.PublicKey)
+    if !ok {
+        return nil, fmt.Errorf("not an RSA public key")
+    }
+    
+    return publicKey, nil
+}
 ```
+
+**Критическая последовательность JWT валидации:**
+
+1. **Проверка формата токена**: Bearer prefix, извлечение токена
+2. **Валидация подписи JWT**: Используя публичный ключ от auth-service (`GET /public-key.pem`)
+3. **Проверка времени действия**: Автоматически в `jwt.Parse()` (проверка `exp` claim)
+4. **Проверка отзыва в Redis**: `EXISTS revoked:{jti}` - токен не должен быть отозван
+5. **Извлечение данных пользователя**: `user_id`, `telegram_id` из JWT claims
+
+**Зависимости**:
+- Публичный ключ RSA от Auth Service
+- Redis клиент для проверки отозванных токенов
+- JWT библиотека (`github.com/dgrijalva/jwt-go`)
 
 #### Admin Authorization
 ```go
@@ -291,9 +409,15 @@ func SetupRoutes(
     r.Use(MetricsMiddleware(metrics))
     r.Use(gin.Recovery())
 
+    // Инициализация публичного ключа и Redis для JWT валидации
+    publicKey, err := InitAuthPublicKey()
+    if err != nil {
+        log.Fatal("Failed to initialize auth public key:", err)
+    }
+    
     // Public routes with JWT auth
     public := r.Group("/inventory")
-    public.Use(JWTAuthMiddleware(authService))
+    public.Use(JWTAuthMiddleware(publicKey, redisClient))
     {
         public.GET("", inventoryHandler.GetUserInventory)
         public.GET("/items/:item_id", inventoryHandler.GetItemInfo)
@@ -311,7 +435,7 @@ func SetupRoutes(
 
     // Admin routes
     admin := r.Group("/admin/inventory")
-    admin.Use(JWTAuthMiddleware(authService))
+    admin.Use(JWTAuthMiddleware(publicKey, redisClient))
     admin.Use(AdminAuthMiddleware())
     {
         admin.POST("/adjust", inventoryHandler.AdjustInventory)
@@ -331,18 +455,36 @@ func SetupRoutes(
 
 **Тестовые сценарии**:
 ```go
+// Базовая функциональность
 func TestGetUserInventory_Success(t *testing.T)
-func TestGetUserInventory_InvalidJWT(t *testing.T)
 func TestReserveItems_InsufficientBalance(t *testing.T)
 func TestAdjustInventory_AdminOnly(t *testing.T)
 func TestAddItems_ValidationError(t *testing.T)
+
+// JWT аутентификация
+func TestJWTAuth_MissingToken(t *testing.T)
+func TestJWTAuth_InvalidTokenFormat(t *testing.T)
+func TestJWTAuth_InvalidSignature(t *testing.T)
+func TestJWTAuth_ExpiredToken(t *testing.T)
+func TestJWTAuth_RevokedToken(t *testing.T)
+func TestJWTAuth_MissingUserID(t *testing.T)
+func TestJWTAuth_ValidToken_Success(t *testing.T)
+
+// Публичный ключ
+func TestInitAuthPublicKey_Success(t *testing.T)
+func TestInitAuthPublicKey_AuthServiceDown(t *testing.T)
+func TestInitAuthPublicKey_InvalidPEM(t *testing.T)
 ```
 
 ## Критерии готовности
 
 ### Функциональные
 - [ ] Все эндпоинты работают согласно OpenAPI spec
-- [ ] JWT аутентификация функционирует
+- [ ] JWT аутентификация функционирует с полной валидацией:
+  - [ ] Проверка подписи RS256 с публичным ключом
+  - [ ] Проверка времени действия токена (exp claim)
+  - [ ] Проверка отзыва токенов в Redis (revoked:{jti})
+  - [ ] Извлечение user_id из JWT claims
 - [ ] Валидация отклоняет некорректные данные
 - [ ] Ошибки возвращаются в правильном формате
 - [ ] Авторизация admin эндпоинтов работает
@@ -414,7 +556,17 @@ k6 run loadtest.js
 github.com/gin-gonic/gin               // HTTP framework
 github.com/gin-contrib/cors            // CORS middleware
 github.com/gin-contrib/requestid       // Request ID
-github.com/dgrijalva/jwt-go            // JWT parsing
+github.com/dgrijalva/jwt-go            // JWT parsing и валидация
+
+// Криптография для JWT
+crypto/rsa                             // RSA ключи
+crypto/x509                            // X.509 сертификаты  
+encoding/pem                           // PEM декодинг
+net/http                               // HTTP клиент для получения ключей
+io                                     // IO операции
+
+// Redis для проверки отозванных токенов
+github.com/go-redis/redis/v8           // Redis клиент
 
 // Валидация
 github.com/go-playground/validator/v10 // Validation
@@ -433,10 +585,13 @@ github.com/gavv/httpexpect/v2          // HTTP testing
 - Idempotent operations где возможно
 
 ### Безопасность
-- Input validation для всех параметров
-- SQL injection protection
-- Rate limiting (в будущих версиях)
-- Audit logging для admin операций
+- **JWT валидация**: Трехэтапная проверка токенов (подпись + время + отзыв)
+- **RSA подписи**: Валидация с публичным ключом от Auth Service
+- **Token revocation**: Проверка отозванных токенов в Redis
+- **Input validation**: Валидация всех входных параметров
+- **SQL injection protection**: Параметризованные запросы
+- **Rate limiting** (в будущих версиях): Защита от перебора
+- **Audit logging**: Логирование всех admin операций с JWT claims
 
 ### Производительность
 - Connection pooling
@@ -446,7 +601,34 @@ github.com/gavv/httpexpect/v2          // HTTP testing
 
 ## Риски и ограничения
 
+### Безопасность JWT
 - **Риск**: JWT token hijacking
+  **Митигация**: 
+  - Короткий срок жизни токенов (24 часа)
+  - Проверка отзыва в Redis
+  - RSA подписи для защиты от подделки
+  - HTTPS only передача токенов
+
+- **Риск**: Auth Service недоступен
+  **Митигация**: 
+  - Кеширование публичного ключа
+  - Graceful degradation при недоступности Redis
+  - Retry механизм для получения ключа
+
+- **Риск**: Redis недоступен для проверки отзыва
+  **Митигация**: 
+  - Fallback на проверку только подписи и времени
+  - Circuit breaker pattern
+  - Мониторинг доступности Redis
+
+### Производительность
+- **Риск**: Медленная проверка токенов
+  **Митигация**:
+  - Кеширование публичного ключа в памяти
+  - Connection pooling для Redis
+  - Асинхронная проверка отзыва (optional)
+
+### Операционные
   **Митигация**: Short-lived tokens, refresh mechanism
 
 - **Риск**: DoS через massive requests

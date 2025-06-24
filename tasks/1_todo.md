@@ -13,61 +13,12 @@
 <!-- Важные задачи для текущего спринта/итерации -->
 
 
-## M-2: Бизнес-логика и общие алгоритмы для Inventory Service
-**Роль:** Backend Developer
-**Приоритет:** Средний
-**Статус:** [x] Выполнен
 
-**Описание:**
-`docs/tasks/inventory-service-task-4-business-logic.md`
-Реализация основных бизнес-алгоритмов inventory-service согласно спецификации. Включает расчет остатков, создание дневных балансов, преобразование кодов и валидацию операций.
-
-**Файлы для изучения:**
-- `docs/specs/inventory-service.md` - общие алгоритмы (строки 306-384)
-- `docs/specs/inventory-service.md` - формула расчета остатков (строки 273-280)
-- `docs/specs/inventory-service.md` - ленивое создание остатков (строки 281-287)
-- `docs/tasks/inventory-service-task-4-business-logic.md` - детальные требования
-
-**Критерии готовности:**
-
-**Service интерфейсы:**
-- [ ] `internal/service/interfaces.go` - InventoryService, ClassifierService
-- [ ] Интерфейсы для всех 6 ключевых алгоритмов
-
-**Ключевые алгоритмы:**
-- [ ] `internal/service/balance_calculator.go` - CalculateCurrentBalance с кешированием
-- [ ] `internal/service/daily_balance_creator.go` - CreateDailyBalance (ленивое создание)
-- [ ] `internal/service/code_converter.go` - ConvertClassifierCodes (двунаправленное)
-- [ ] `internal/service/balance_checker.go` - CheckSufficientBalance
-- [ ] `internal/service/operation_creator.go` - CreateOperationsInTransaction
-- [ ] `internal/service/cache_manager.go` - InvalidateUserCache
-
-**Главный сервис:**
-- [ ] `internal/service/inventory_service.go` - координация всех алгоритмов
-- [ ] Транзакционная безопасность
-- [ ] Error handling и логирование
-
-**Кеширование:**
-- [ ] Redis кеширование с TTL 1 час для остатков
-- [ ] Redis кеширование с TTL 24 часа для классификаторов
-- [ ] Namespace ключей: `inventory:{user_id}:...`
-- [ ] Graceful degradation при недоступности Redis
-
-**Проверка:**
-```bash
-go test ./internal/service/... # coverage >90%
-go test -race ./internal/service/... # проверка race conditions
-```
-
-**Зависимости:** M-1 (модели и репозитории)
-**Оценка:** 3-4 дня
-
----
 
 ## M-3: HTTP API эндпоинты для Inventory Service
 **Роль:** Backend Developer
 **Приоритет:** Средний  
-**Статус:** [ ] Готов к выполнению
+**Статус:** [ ] Готов к выполнению (все зависимости выполнены)
 
 **Описание:**
 `docs/tasks/inventory-service-task-5-http-endpoints.md`
@@ -111,7 +62,7 @@ curl -H "Authorization: Bearer <jwt>" http://localhost:8080/inventory # рабо
 go test ./internal/handlers/... # coverage >85%
 ```
 
-**Зависимости:** M-2 (бизнес-логика), Auth Service (JWT токены)
+**Зависимости:** ✅ M-2 (бизнес-логика), ✅ Auth Service (JWT токены)
 **Оценка:** 2-3 дня
 
 ---
@@ -123,7 +74,7 @@ go test ./internal/handlers/... # coverage >85%
 ## L-1: Мониторинг и метрики для Inventory Service
 **Роль:** DevOps/Backend Developer
 **Приоритет:** Низкий
-**Статус:** [ ] Готов к выполнению
+**Статус:** [ ] Частично готов (базовые метрики есть, нужен дашборд и алерты)
 
 **Описание:**
 `docs/tasks/inventory-service-task-6-monitoring-metrics.md`
@@ -151,7 +102,12 @@ go test ./internal/handlers/... # coverage >85%
 - [ ] `monitoring/prometheus/rules/inventory-service.yml` - 6 алертов
 - [ ] High error rate, high latency, DB issues, cache problems, service down
 
-**Зависимости:** M-3 (HTTP API), M-4 (auth-service метрики как референс)
+**Зависимости:** ⏳ M-3 (HTTP API), ✅ M-4 (auth-service метрики как референс)
+
+**Прогресс реализации:**
+- ✅ Базовые метрики: `pkg/metrics/metrics.go` содержит HTTP, DB, Redis и бизнес-метрики
+- ❌ Grafana дашборд: отсутствует `monitoring/grafana/dashboards/inventory-service.json`
+- ❌ Prometheus алерты: отсутствует `monitoring/prometheus/rules/inventory-service.yml`
 **Оценка:** 2 дня
 
 ---
@@ -198,7 +154,13 @@ go test -tags=e2e ./tests/e2e/... # E2E тесты проходят
 k6 run tests/load/loadtest.js # нагрузочные тесты
 ```
 
-**Зависимости:** L-1 (мониторинг), все предыдущие задачи Inventory Service
+**Зависимости:** ⏳ L-1 (мониторинг), ✅ M-1 (модели), ✅ M-2 (бизнес-логика), ⏳ M-3 (HTTP API)
+
+**Прогресс реализации:**
+- ❌ Интеграционные тесты: отсутствует директория `tests/`
+- ❌ E2E тесты: не реализованы
+- ❌ CI/CD Pipeline: отсутствует `.github/workflows/inventory-service.yml`
+- ❌ Development environment: нет интеграции в `deploy/dev`
 **Оценка:** 2-3 дня
 
 ---

@@ -11,6 +11,28 @@ info:
     - Административные операции
     
     Все эндпоинты требуют JWT токен для аутентификации.
+    
+    ## JWT Аутентификация
+    
+    ### Процесс валидации токена:
+    
+    1. **Проверка формата токена** - Bearer prefix в Authorization header
+    2. **Валидация RS256 подписи** - используя публичный ключ от Auth Service
+    3. **Проверка времени действия** - проверка exp claim
+    4. **Проверка отзыва в Redis** - проверка что токен не отозван
+    5. **Извлечение user_id** - из sub claim для авторизации
+    
+    ### Заголовок запроса:
+    ```
+    Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
+    ```
+    
+    ### Возможные ошибки аутентификации:
+    - `missing_token` - отсутствует Authorization header
+    - `invalid_token_format` - неправильный формат Bearer токена  
+    - `invalid_token_signature` - неверная RS256 подпись
+    - `token_revoked` - токен отозван в Redis
+    - `missing_user_id` - отсутствует user_id в токене
   version: 1.0.0
   contact:
     name: Shard Legends Team
@@ -232,7 +254,17 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: JWT токен от Auth Service
+      description: |
+        JWT токен с RS256 подписью от Auth Service.
+        
+        Процесс валидации:
+        1. Проверка Bearer формата
+        2. Валидация RS256 подписи (публичный ключ от auth-service:8080/public-key.pem)
+        3. Проверка времени действия (exp claim)  
+        4. Проверка отзыва в Redis (EXISTS revoked:{jti})
+        5. Извлечение user_id из sub claim
+        
+        Формат: Authorization: Bearer <jwt_token>
 
   schemas:
     # Базовые типы
@@ -529,9 +561,32 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
-          example:
-            error: unauthorized
-            message: Invalid or missing JWT token
+          examples:
+            missing_token:
+              summary: Отсутствует токен
+              value:
+                error: missing_token
+                message: Missing Authorization header
+            invalid_token_format:
+              summary: Неправильный формат
+              value:
+                error: invalid_token_format  
+                message: Invalid Bearer token format
+            invalid_token_signature:
+              summary: Неверная подпись
+              value:
+                error: invalid_token_signature
+                message: Invalid JWT signature
+            token_revoked:
+              summary: Токен отозван
+              value:
+                error: token_revoked
+                message: Token has been revoked
+            missing_user_id:
+              summary: Отсутствует user_id
+              value:
+                error: missing_user_id
+                message: Missing user_id in token claims
 
     Forbidden:
       description: Недостаточно прав доступа
