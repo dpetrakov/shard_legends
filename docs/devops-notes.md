@@ -41,6 +41,10 @@ openssl rand -hex 32
   docker compose --profile migrations run --rm migrate version
 ```
 
+Тестирование
+```bash
+go test ./...
+```
 
   1. Откройте Grafana: http://localhost:15000
   2. Войдите: admin / 

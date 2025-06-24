@@ -16,7 +16,7 @@
 ## M-2: Бизнес-логика и общие алгоритмы для Inventory Service
 **Роль:** Backend Developer
 **Приоритет:** Средний
-**Статус:** [ ] Готов к выполнению
+**Статус:** [x] Выполнен
 
 **Описание:**
 `docs/tasks/inventory-service-task-4-business-logic.md`
