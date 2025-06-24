@@ -39,8 +39,8 @@ func TestNewRedisDB_ConnectionFail(t *testing.T) {
 	logger := slog.Default()
 
 	t.Run("connection fails", func(t *testing.T) {
-		// Use unrouteable IP address for faster failure (RFC 5737)
-		invalidURL := "redis://192.0.2.1:6379"
+		// Use localhost with wrong port for immediate connection refused
+		invalidURL := "redis://localhost:1"
 
 		db, err := NewRedisDB(invalidURL, 10, logger, nil)
 		assert.Error(t, err)
@@ -133,8 +133,8 @@ func TestRedisDB_ConfigValidation(t *testing.T) {
 
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
-				// Use unrouteable IP address for faster failure (RFC 5737)
-				url := "redis://192.0.2.1:6379"
+				// Use localhost with wrong port for immediate connection refused
+				url := "redis://localhost:1"
 
 				if tc.panics {
 					assert.Panics(t, func() {
@@ -260,7 +260,7 @@ func TestRedisDB_EdgeCases(t *testing.T) {
 	t.Run("nil logger", func(t *testing.T) {
 		// Should not panic with nil logger
 		assert.NotPanics(t, func() {
-			_, _ = NewRedisDB("redis://192.0.2.1:6379", 10, nil, nil)
+			_, _ = NewRedisDB("redis://localhost:1", 10, nil, nil)
 		})
 	})
 
@@ -351,7 +351,7 @@ func TestRedisDB_MetricsIntegration(t *testing.T) {
 		// We can't easily test successful connection without a real Redis
 		// But we can test that metrics are handled safely with nil metrics
 
-		invalidURL := "redis://192.0.2.1:6379"
+		invalidURL := "redis://localhost:1"
 		db, err := NewRedisDB(invalidURL, 10, logger, nil)
 
 		assert.Error(t, err)
