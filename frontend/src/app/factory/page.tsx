@@ -83,7 +83,9 @@ function RefiningTab() {
                         <h4 className="font-headline text-lg text-primary">Активные процессы</h4>
                         {activeProcesses.map(proc => {
                              const isFinished = Date.now() >= proc.endTime;
-                             const progress = isFinished ? 100 : Math.min(100, ((Date.now() - (proc.endTime - proc.recipe.durationSeconds * proc.quantity * 1000)) / (proc.recipe.durationSeconds * proc.quantity * 1000)) * 100);
+                             const totalDuration = proc.recipe.durationSeconds * proc.quantity * 1000;
+                             const timeElapsed = Date.now() - (proc.endTime - totalDuration);
+                             const progress = isFinished ? 100 : Math.min(100, (timeElapsed / totalDuration) * 100);
 
                             return (
                             <Card key={proc.id} className="bg-card/70">

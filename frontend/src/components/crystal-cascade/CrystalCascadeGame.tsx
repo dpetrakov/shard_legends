@@ -4,10 +4,8 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import GameBoardComponent from './GameBoard';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import type { FloatingScoreItem } from '@/types/crystal-cascade';
 import type { ChestType } from '@/types/profile';
-import FloatingScoreManager from './FloatingScoreEffect';
-import { animate, motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useIconSet } from '@/contexts/IconSetContext';
 import { useChests } from '@/contexts/ChestContext';
 import Image from 'next/image';
@@ -79,10 +77,8 @@ const determineChestReward = (): ChestType => {
 
 const CrystalCascadeGame: React.FC = () => {
   const [score, setScore] = useState(0);
-  const [displayScore, setDisplayScore] = useState(0);
   const [gameKey, setGameKey] = useState(() => Date.now());
   const [, setHasPossibleMoves] = useState(true); 
-  const [floatingScores, setFloatingScores] = useState<FloatingScoreItem[]>([]);
 
   const [comboCount, setComboCount] = useState(0);
   const comboCountRef = useRef(0);
@@ -93,9 +89,6 @@ const CrystalCascadeGame: React.FC = () => {
 
   const { iconSet } = useIconSet();
   const { awardChest } = useChests();
-
-  const scoreDisplayElementRef = useRef<HTMLDivElement>(null);
-  const floatingScoreSpawnRef = useRef<HTMLDivElement>(null);
 
   const [isBoardFlipped, setIsBoardFlipped] = useState(false);
   const [revealedGameCardIndex, setRevealedGameCardIndex] = useState<number | null>(null);
@@ -109,7 +102,6 @@ const CrystalCascadeGame: React.FC = () => {
   useEffect(() => {
     const loadedScore = parseInt(localStorage.getItem(SCORE_STORAGE_KEY) || '0', 10);
     setScore(loadedScore);
-    setDisplayScore(loadedScore);
 
     const loadedMaxCombo = parseInt(localStorage.getItem(MAX_COMBO_STORAGE_KEY) || '0', 10);
     setMaxCombo(loadedMaxCombo);
@@ -150,36 +142,13 @@ const CrystalCascadeGame: React.FC = () => {
     localStorage.setItem(REWARD_REQUIREMENT_STORAGE_KEY, currentRewardComboRequirement.toString());
   }, [currentRewardComboRequirement]);
 
-  useEffect(() => {
-    const controls = animate(displayScore, score, {
-      duration: 0.4,
-      ease: "easeOut",
-      onUpdate: (latestValue) => setDisplayScore(Math.round(latestValue)),
-    });
-    return () => controls.stop();
-  }, [score, displayScore]); 
-
   const handleScoreUpdate = useCallback((scoreIncrement: number) => {
     if (scoreIncrement === -1) { 
       setGameKey(Date.now());
       setHasPossibleMoves(true); 
-      setFloatingScores([]); 
     } else {
       setScore(prevScore => Math.max(0, prevScore + scoreIncrement));
     }
-  }, []);
-
-  const handleCreateFloatingScore = useCallback((points: number) => {
-    const newFloatingScore: FloatingScoreItem = {
-      id: `${Date.now()}-${Math.random()}`,
-      value: points,
-      key: `${Date.now()}-${Math.random()}-key`, 
-    };
-    setFloatingScores(prevScores => [...prevScores, newFloatingScore]);
-  }, []);
-
-  const handleFloatingScoreAnimationComplete = useCallback((id: string) => {
-    setFloatingScores(prevScores => prevScores.filter(scoreItem => scoreItem.id !== id));
   }, []);
 
   const handlePossibleMoveUpdate = useCallback((possible: boolean) => {
@@ -290,13 +259,13 @@ const CrystalCascadeGame: React.FC = () => {
 
 
   return (
-    <div className="flex flex-col items-center justify-end px-2 h-full w-full relative">
+    <div className="flex flex-col items-center justify-center px-2 h-full w-full relative">
       <div className="w-full max-w-md">
         <Card className="shadow-2xl bg-card/80 backdrop-blur-md">
           <CardHeader className="text-center items-center justify-center flex flex-col pt-4 pb-1">
-            <div ref={scoreDisplayElementRef} className="flex items-center justify-center">
+            <div className="flex items-center justify-center">
               <span className="font-code text-4xl text-foreground tracking-wider">
-                {displayScore.toString().padStart(12, '0')}
+                {score.toString().padStart(12, '0')}
               </span>
             </div>
           </CardHeader>
@@ -346,7 +315,6 @@ const CrystalCascadeGame: React.FC = () => {
         </Card>
 
         <div
-          ref={floatingScoreSpawnRef}
           className="relative h-5 w-full flex items-center justify-center"
         >
           <AnimatePresence>
@@ -386,7 +354,6 @@ const CrystalCascadeGame: React.FC = () => {
                 gameKeyProp={gameKey}
                 onScoreUpdate={handleScoreUpdate}
                 onPossibleMoveUpdate={handlePossibleMoveUpdate}
-                onCreateFloatingScore={handleCreateFloatingScore}
                 onMatchProcessed={handleMatchProcessed}
                 onNoMatchOrComboEnd={handleNoMatchOrComboEnd}
                 isProcessingExternally={isBoardFlipped || isRevealingFlippedCard}
@@ -440,7 +407,7 @@ const CrystalCascadeGame: React.FC = () => {
                         >
                           <div className="relative w-full h-full">
                              <Image
-                              src="/images/card-back.png"
+                              src="/images/card-back.png?v=2"
                               alt={`Карта ${index + 1}`}
                               layout="fill"
                               objectFit="contain"
@@ -463,13 +430,6 @@ const CrystalCascadeGame: React.FC = () => {
           </motion.div>
         </div>
       </div>
-
-      <FloatingScoreManager
-        floatingScores={floatingScores}
-        spawnElement={floatingScoreSpawnRef.current}
-        scoreElement={scoreDisplayElementRef.current}
-        onAnimationComplete={handleFloatingScoreAnimationComplete}
-      />
     </div>
   );
 };

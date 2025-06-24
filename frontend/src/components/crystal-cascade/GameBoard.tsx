@@ -11,7 +11,6 @@ import { useIconSet } from '@/contexts/IconSetContext';
 interface GameBoardProps {
   onScoreUpdate: (scoreIncrement: number) => void;
   onPossibleMoveUpdate: (hasPossibleMoves: boolean) => void;
-  onCreateFloatingScore: (points: number) => void;
   onMatchProcessed: (numberOfDistinctGroupsInStep: number, isFirstStepInChain: boolean) => void;
   onNoMatchOrComboEnd: () => void;
   gameKeyProp: number;
@@ -21,7 +20,6 @@ interface GameBoardProps {
 const GameBoardComponent: React.FC<GameBoardProps> = ({
   onScoreUpdate,
   onPossibleMoveUpdate,
-  onCreateFloatingScore,
   onMatchProcessed,
   onNoMatchOrComboEnd,
   gameKeyProp,
@@ -101,10 +99,7 @@ const GameBoardComponent: React.FC<GameBoardProps> = ({
 
       const pointsForThisMatch = allMatchedPositions.length * 10;
       onScoreUpdate(pointsForThisMatch);
-      if (allMatchedPositions.length > 0) {
-        onCreateFloatingScore(pointsForThisMatch);
-      }
-
+      
       await new Promise(resolve => setTimeout(resolve, 300)); // Duration for matched crystals to animate (e.g., fade out/shrink)
 
       const { newBoard: shiftedBoard } = shiftAndFillCrystals(boardAfterMatches, matchGroups, activeIconsRef.current);
@@ -120,7 +115,7 @@ const GameBoardComponent: React.FC<GameBoardProps> = ({
        onNoMatchOrComboEnd();
     }
     return boardAfterMatches;
-  }, [onScoreUpdate, onCreateFloatingScore, onMatchProcessed, onNoMatchOrComboEnd]);
+  }, [onScoreUpdate, onMatchProcessed, onNoMatchOrComboEnd]);
 
   const performSwapAndProcess = useCallback(async (pos1: Position, pos2: Position) => {
     if (isProcessing || isProcessingExternally) return;

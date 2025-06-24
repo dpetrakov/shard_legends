@@ -27,10 +27,11 @@ export interface Position {
   col: number;
 }
 
+export type IconSetType = 'classic' | 'sweets' | 'gothic' | 'animals' | 'in-match3';
+
 export interface FloatingScoreItem {
   id: string;
-  value: number;
   key: string;
+  value: number;
+  position: Position;
 }
-
-export type IconSetType = 'classic' | 'sweets' | 'gothic' | 'animals' | 'in-match3';
