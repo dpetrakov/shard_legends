@@ -27,33 +27,37 @@ export function createCrystal(row: number, col: number, icons: CrystalIcon[], sp
 }
 
 export function generateInitialBoard(icons: CrystalIcon[]): GameBoard {
-  let board: GameBoard = [];
+  const board: GameBoard = Array(BOARD_ROWS).fill(null).map(() => Array(BOARD_COLS).fill(null));
   nextCrystalId = 0;
 
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-  while (true) {
-    board = [];
-    for (let r = 0; r < BOARD_ROWS; r++) {
-      board[r] = [];
-      for (let c = 0; c < BOARD_COLS; c++) {
-        const crystal = createCrystal(r, c, icons);
-        board[r][c] = crystal;
-      }
-    }
+  if (!icons || icons.length === 0) {
+    console.error("Cannot generate board with no icons.");
+    return board; // Return empty board if no icons are provided
+  }
 
-    const initialMatchGroups = findMatchGroups(board);
-    if (initialMatchGroups.length === 0) {
-      // Ensure all crystals have correct row/col before returning
-      for (let r = 0; r < BOARD_ROWS; r++) {
-        for (let c = 0; c < BOARD_COLS; c++) {
-          const crystal = board[r][c];
-          if (crystal) {
-            crystal.row = r;
-            crystal.col = c;
-          }
-        }
+  for (let r = 0; r < BOARD_ROWS; r++) {
+    for (let c = 0; c < BOARD_COLS; c++) {
+      let possibleIcons = [...icons];
+
+      // Check for horizontal match to the left
+      if (c >= 2 && board[r][c - 1]?.type.name === board[r][c - 2]?.type.name) {
+        const forbiddenTypeName = board[r][c - 1]?.type.name;
+        possibleIcons = possibleIcons.filter(icon => icon.name !== forbiddenTypeName);
       }
-      break;
+
+      // Check for vertical match above
+      if (r >= 2 && board[r - 1][c]?.type.name === board[r - 2][c]?.type.name) {
+        const forbiddenTypeName = board[r - 1][c]?.type.name;
+        possibleIcons = possibleIcons.filter(icon => icon.name !== forbiddenTypeName);
+      }
+      
+      // If all icons are forbidden (very unlikely but a safe fallback)
+      if (possibleIcons.length === 0) {
+        possibleIcons = icons;
+      }
+
+      // Create a crystal using one of the allowed icon types
+      board[r][c] = createCrystal(r, c, possibleIcons);
     }
   }
   return board;

@@ -35,11 +35,11 @@ export const ANIMAL_CRYSTAL_ICONS: CrystalIcon[] = [
 ];
 
 export const IN_MATCH3_ICONS: CrystalIcon[] = [
-  { iconType: 'image', name: 'RedPNG', imageSrc: '/images/match-items/red.png', colorClass: '' },
-  { iconType: 'image', name: 'BluePNG', imageSrc: '/images/match-items/blue.png', colorClass: '' },
-  { iconType: 'image', name: 'GreenPNG', imageSrc: '/images/match-items/green.png', colorClass: '' },
-  { iconType: 'image', name: 'YellowPNG', imageSrc: '/images/match-items/yellow.png', colorClass: '' },
-  { iconType: 'image', name: 'VioletPNG', imageSrc: '/images/match-items/violet.png', colorClass: '' },
+  { iconType: 'image', name: 'RedPNG', imageSrc: '/images/red.png', colorClass: '' },
+  { iconType: 'image', name: 'BluePNG', imageSrc: '/images/blue.png', colorClass: '' },
+  { iconType: 'image', name: 'GreenPNG', imageSrc: '/images/green.png', colorClass: '' },
+  { iconType: 'image', name: 'YellowPNG', imageSrc: '/images/yellow.png', colorClass: '' },
+  { iconType: 'image', name: 'VioletPNG', imageSrc: '/images/violet.png', colorClass: '' },
 ];
 
 export const ICON_SETS: Record<IconSetType, CrystalIcon[]> = {

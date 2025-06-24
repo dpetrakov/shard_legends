@@ -18,9 +18,9 @@ if [ -d "frontend" ]; then
     mv frontend frontend.bak
 fi
 
-# Клонируем весь репозиторий из ветки тест
-echo "Загружаю репозиторий из ветки 'тест'..."
-git clone --depth 1 --branch тест --single-branch git@github.com:Forlyongame/forly-shard_legends.git temp_repo
+# Клонируем весь репозиторий из ветки stable
+echo "Загружаю репозиторий из ветки 'stable'..."
+git clone --depth 1 --branch stable --single-branch git@github.com:Forlyongame/forly-shard_legends.git temp_repo
 
 # Создаем каталог frontend и копируем все файлы из корня репозитория
 if [ -d "temp_repo" ]; then

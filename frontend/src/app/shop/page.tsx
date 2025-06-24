@@ -28,7 +28,7 @@ export default function ShopPage() {
   // const handleCardClick = (cardIndex: number) => { ... }; // Removed
 
   return (
-    <div className="flex flex-col items-center justify-start min-h-screen p-4 pt-6 text-foreground pb-20 space-y-6">
+    <div className="flex flex-col items-center justify-start min-h-full p-4 space-y-6 text-foreground">
       <Card className="w-full max-w-md bg-card/80 backdrop-blur-md shadow-xl">
         <CardHeader>
           <CardTitle className="text-3xl font-headline text-center text-primary">Магазин</CardTitle>

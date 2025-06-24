@@ -54,9 +54,8 @@ const CrystalCell: React.FC<CrystalCellProps> = ({
             }}
             exit={{
               opacity: 0,
-              scale: 0.3,
-              y: 60,
-              transition: { duration: 0.2, ease: "anticipate" }
+              scale: 0,
+              transition: { duration: 0.3, ease: "easeIn" }
             }}
             className={cn(
               "absolute inset-0 flex items-center justify-center cursor-pointer",
@@ -82,9 +81,8 @@ const CrystalCell: React.FC<CrystalCellProps> = ({
             }}
             exit={{
               opacity: 0,
-              scale: 0.3,
-              y: 60,
-              transition: { duration: 0.2, ease: "anticipate" }
+              scale: 0,
+              transition: { duration: 0.3, ease: "easeIn" }
             }}
             className={cn(
               "absolute inset-0 flex items-center justify-center cursor-pointer",

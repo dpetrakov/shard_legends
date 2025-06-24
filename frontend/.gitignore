@@ -1,45 +1,36 @@
-
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# Dependencies
+# dependencies
 /node_modules
 /.pnp
 .pnp.js
 
-# Testing
+# testing
 /coverage
 
-# Next.js telemetry data
-.next/cache/fetch-cache/
-.next/trace
+# next.js
+/.next/
+/out/
 
-# Production
-/.next
-/out
+# production
+/build
 
-# Misc
+# misc
 .DS_Store
 *.pem
 
-# Local Environment Variables
-.env*.local
-.env
-
-# Log files
+# debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
 
-# Editor directories and files
-.idea
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-*.sublime-workspace
+# local env files
+.env*.local
+.env
 
-# Firebase
-.firebase
-firebase-debug.log
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts

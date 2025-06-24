@@ -13,7 +13,8 @@ import { useChests } from '@/contexts/ChestContext';
 import Image from 'next/image';
 import { BOARD_COLS, BOARD_ROWS } from '@/components/crystal-cascade/crystal-definitions';
 import { Button } from '@/components/ui/button';
-import { RefreshCcw } from 'lucide-react';
+import { PlusCircle, RefreshCcw } from 'lucide-react';
+import { chestDetails as chestVisualData, allChestTypes } from '@/lib/chest-definitions';
 
 interface ComboStyle {
   background: string;
@@ -43,21 +44,36 @@ const MAX_COMBO_STORAGE_KEY = 'crystalCascadeMaxCombo';
 const REWARD_REQUIREMENT_STORAGE_KEY = 'crystalCascadeRewardRequirement';
 const MAX_REWARD_COMBO_THRESHOLD = 15; // Max combo requirement for reward
 
-const chestVisualData: Record<ChestType, { name: string; hint: string; imageUrl?: string }> = {
-  small: { name: "Малый", hint: "small treasure chest", imageUrl: "https://placehold.co/150x200/deb887/000000.png" },
-  medium: { name: "Средний", hint: "medium treasure chest", imageUrl: "https://placehold.co/150x200/cd7f32/FFFFFF.png" },
-  large: { name: "Большой", hint: "large treasure chest", imageUrl: "https://placehold.co/150x200/ffd700/000000.png" }
-};
-
 const determineChestReward = (): ChestType => {
-  const rand = Math.random();
-  if (rand < 0.01) { 
-    return 'large';
-  } else if (rand < 0.25) { 
-    return 'medium';
-  } else { 
-    return 'small';
+  const categoryRand = Math.random();
+  let category: 'resource' | 'reagent' | 'booster' | 'blueprint';
+
+  if (categoryRand < 0.5) { // 50%
+    category = 'resource';
+  } else if (categoryRand < 0.8) { // 30% (0.5 + 0.3)
+    category = 'reagent';
+  } else if (categoryRand < 0.9) { // 10% (0.8 + 0.1)
+    category = 'booster';
+  } else { // 10%
+    category = 'blueprint';
   }
+
+  if (category === 'blueprint') {
+    return 'blueprint';
+  }
+
+  const sizeRand = Math.random();
+  let size: 'small' | 'medium' | 'large';
+
+  if (sizeRand < 0.6) { // 60%
+    size = 'small';
+  } else if (sizeRand < 0.9) { // 30% (0.6 + 0.3)
+    size = 'medium';
+  } else { // 10%
+    size = 'large';
+  }
+
+  return `${category}_${size}` as ChestType;
 };
 
 
@@ -85,6 +101,7 @@ const CrystalCascadeGame: React.FC = () => {
   const [revealedGameCardIndex, setRevealedGameCardIndex] = useState<number | null>(null);
   const [isRevealingFlippedCard, setIsRevealingFlippedCard] = useState<boolean>(false);
   const [revealedFlippedCardImageUrl, setRevealedFlippedCardImageUrl] = useState<string | null>(null);
+  const [revealedChestType, setRevealedChestType] = useState<ChestType | null>(null);
   const [awaitingCardPick, setAwaitingCardPick] = useState(false);
   const [currentRewardComboRequirement, setCurrentRewardComboRequirement] = useState(5);
 
@@ -140,7 +157,7 @@ const CrystalCascadeGame: React.FC = () => {
       onUpdate: (latestValue) => setDisplayScore(Math.round(latestValue)),
     });
     return () => controls.stop();
-  }, [score]); 
+  }, [score, displayScore]); 
 
   const handleScoreUpdate = useCallback((scoreIncrement: number) => {
     if (scoreIncrement === -1) { 
@@ -231,10 +248,12 @@ const CrystalCascadeGame: React.FC = () => {
     setRevealedGameCardIndex(cardIndex);
     
     const chestWon = determineChestReward();
-    awardChest(chestWon); 
+    awardChest(chestWon);
+    setRevealedChestType(chestWon);
     
     const chestData = chestVisualData[chestWon];
-    setRevealedFlippedCardImageUrl(chestData.imageUrl || `https://placehold.co/150x200.png`);
+    const placeholderText = chestData.name.replace(/ /g, '+');
+    setRevealedFlippedCardImageUrl(`https://placehold.co/150x200/663399/FFFFFF.png?text=${placeholderText}`);
 
     const showDuration = 2500; 
     const animationDuration = 600; 
@@ -245,6 +264,7 @@ const CrystalCascadeGame: React.FC = () => {
       setTimeout(() => {
         setRevealedGameCardIndex(null); 
         setRevealedFlippedCardImageUrl(null);
+        setRevealedChestType(null);
         setIsBoardFlipped(false); 
         if (currentRewardComboRequirement <= MAX_REWARD_COMBO_THRESHOLD) {
             setCurrentRewardComboRequirement(prev => prev + 1);
@@ -259,169 +279,189 @@ const CrystalCascadeGame: React.FC = () => {
     console.log("[DEBUG] Reward requirement reset to 5 by test button.");
   };
 
+  const handleAddTestChests = useCallback(() => {
+    allChestTypes.forEach(chestType => {
+      for (let i = 0; i < 10; i++) {
+        awardChest(chestType);
+      }
+    });
+    console.log("[DEBUG] Added 10 of each chest type for testing.");
+  }, [awardChest]);
+
 
   return (
-    <div className="flex flex-col items-center justify-start p-2 min-h-screen w-full gap-2 relative pb-20">
-      <Card className="w-full max-w-md shadow-2xl bg-card/80 backdrop-blur-md">
-        <CardHeader className="text-center items-center justify-center flex flex-col pt-4 pb-1">
-           <div ref={scoreDisplayElementRef} className="flex items-center justify-center">
-            <span className="font-code text-4xl text-foreground tracking-wider">
-              {displayScore.toString().padStart(12, '0')}
-            </span>
-          </div>
-        </CardHeader>
-        <CardContent className="flex flex-col items-center text-center pt-0 pb-3 gap-1">
-          <div className="flex items-center gap-1">
-            <span className="text-muted-foreground text-xs">Max Combo: </span>
-            <span
-              className="font-headline text-base"
-              style={{ color: maxComboStyleColor }}
-            >
-              {maxCombo > 0 ? `${maxCombo}x` : '0'}
-            </span>
-          </div>
-           <div className="flex items-center gap-2"> {/* Increased gap for icon */}
-            <span className="text-muted-foreground text-xs">
-              {currentRewardComboRequirement <= MAX_REWARD_COMBO_THRESHOLD 
-                ? "Приз за:" 
-                : "Наград:"}
-            </span>
-            <span className="font-headline text-base text-primary">
-              {currentRewardComboRequirement <= MAX_REWARD_COMBO_THRESHOLD
-                ? `Комбо ${currentRewardComboRequirement}+`
-                : "сегодня нет"}
-            </span>
-            {currentRewardComboRequirement <= MAX_REWARD_COMBO_THRESHOLD && (
-              <Button 
-                onClick={handleResetRewardRequirement} 
-                variant="ghost" 
-                size="icon" 
-                className="h-5 w-5 text-muted-foreground hover:text-primary" // Adjusted size and colors
-                aria-label="Сбросить требование комбо"
+    <div className="flex flex-col items-center justify-end px-2 h-full w-full relative">
+      <div className="w-full max-w-md">
+        <Card className="shadow-2xl bg-card/80 backdrop-blur-md">
+          <CardHeader className="text-center items-center justify-center flex flex-col pt-4 pb-1">
+            <div ref={scoreDisplayElementRef} className="flex items-center justify-center">
+              <span className="font-code text-4xl text-foreground tracking-wider">
+                {displayScore.toString().padStart(12, '0')}
+              </span>
+            </div>
+          </CardHeader>
+          <CardContent className="flex flex-col items-center text-center pt-0 pb-3 gap-1">
+            <div className="flex items-center gap-1">
+              <span className="text-muted-foreground text-xs">Max Combo: </span>
+              <span
+                className="font-headline text-base"
+                style={{ color: maxComboStyleColor }}
               >
-                <RefreshCcw className="h-4 w-4" />
+                {maxCombo > 0 ? `${maxCombo}x` : '0'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground text-xs">
+                {currentRewardComboRequirement <= MAX_REWARD_COMBO_THRESHOLD 
+                  ? "Приз за:" 
+                  : "Наград:"}
+              </span>
+              <span className="font-headline text-base text-primary">
+                {currentRewardComboRequirement <= MAX_REWARD_COMBO_THRESHOLD
+                  ? `Комбо ${currentRewardComboRequirement}+`
+                  : "сегодня нет"}
+              </span>
+              {currentRewardComboRequirement <= MAX_REWARD_COMBO_THRESHOLD && (
+                <Button 
+                  onClick={handleResetRewardRequirement} 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-5 w-5 text-muted-foreground hover:text-primary"
+                  aria-label="Сбросить требование комбо"
+                >
+                  <RefreshCcw className="h-4 w-4" />
+                </Button>
+              )}
+              <Button
+                onClick={handleAddTestChests}
+                variant="ghost"
+                size="icon"
+                className="h-5 w-5 text-muted-foreground hover:text-accent"
+                aria-label="Добавить 10 сундуков каждого типа"
+              >
+                <PlusCircle className="h-4 w-4" />
               </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+            </div>
+          </CardContent>
+        </Card>
 
-      <div
-        ref={floatingScoreSpawnRef}
-        className="relative h-16 w-full max-w-md flex items-center justify-center my-1"
-      >
-        <AnimatePresence>
-          {showComboText && comboCount > 0 && ( 
-            <motion.div
-              key={comboDisplayKey}
-              initial={{ opacity: 0, y: 20, scale: 0.8 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -20, scale: 0.8, transition: { duration: 0.3 } }}
-              className="absolute text-3xl md:text-4xl font-headline px-4 py-1 md:px-6 md:py-2 rounded-lg shadow-xl z-20"
-              style={{
-                backgroundColor: currentComboStyle.background,
-                color: currentComboStyle.text,
-                textShadow: '1px 1px 2px rgba(0,0,0,0.2), 2px 2px 4px rgba(0,0,0,0.2)'
-              }}
-            >
-              {currentComboTextDisplay}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-      
-      <div 
-        className="relative w-full max-w-md mx-auto z-10"
-        style={{ perspective: '1200px', aspectRatio: `${BOARD_COLS}/${BOARD_ROWS}` }}
-      >
-        <motion.div
-          className="relative w-full h-full"
-          style={{ transformStyle: 'preserve-3d' }}
-          animate={{ rotateY: isBoardFlipped ? 180 : 0 }}
-          transition={{ duration: 0.6 }}
+        <div
+          ref={floatingScoreSpawnRef}
+          className="relative h-5 w-full flex items-center justify-center"
+        >
+          <AnimatePresence>
+            {showComboText && comboCount > 0 && ( 
+              <motion.div
+                key={comboDisplayKey}
+                initial={{ opacity: 0, y: 20, scale: 0.8 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -20, scale: 0.8, transition: { duration: 0.3 } }}
+                className="absolute text-3xl md:text-4xl font-headline px-4 py-1 md:px-6 md:py-2 rounded-lg shadow-xl z-20"
+                style={{
+                  backgroundColor: currentComboStyle.background,
+                  color: currentComboStyle.text,
+                  textShadow: '1px 1px 2px rgba(0,0,0,0.2), 2px 2px 4px rgba(0,0,0,0.2)'
+                }}
+              >
+                {currentComboTextDisplay}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+        
+        <div 
+          className="relative w-full mx-auto z-10"
+          style={{ perspective: '1200px', aspectRatio: `${BOARD_COLS}/${BOARD_ROWS}` }}
         >
           <motion.div
-            className="absolute inset-0 w-full h-full backface-hidden flex items-center justify-center"
+            className="relative w-full h-full"
+            style={{ transformStyle: 'preserve-3d' }}
+            animate={{ rotateY: isBoardFlipped ? 180 : 0 }}
+            transition={{ duration: 0.6 }}
           >
-            <GameBoardComponent
-              gameKeyProp={gameKey}
-              onScoreUpdate={handleScoreUpdate}
-              onPossibleMoveUpdate={handlePossibleMoveUpdate}
-              onCreateFloatingScore={handleCreateFloatingScore}
-              onMatchProcessed={handleMatchProcessed}
-              onNoMatchOrComboEnd={handleNoMatchOrComboEnd}
-              isProcessingExternally={isBoardFlipped || isRevealingFlippedCard}
-            />
-          </motion.div>
+            <motion.div
+              className="absolute inset-0 w-full h-full backface-hidden flex items-center justify-center"
+            >
+              <GameBoardComponent
+                gameKeyProp={gameKey}
+                onScoreUpdate={handleScoreUpdate}
+                onPossibleMoveUpdate={handlePossibleMoveUpdate}
+                onCreateFloatingScore={handleCreateFloatingScore}
+                onMatchProcessed={handleMatchProcessed}
+                onNoMatchOrComboEnd={handleNoMatchOrComboEnd}
+                isProcessingExternally={isBoardFlipped || isRevealingFlippedCard}
+              />
+            </motion.div>
 
-          <motion.div
-            className="absolute inset-0 w-full h-full backface-hidden bg-card/90 backdrop-blur-sm p-2 sm:p-4 rounded-lg shadow-xl flex items-center justify-center"
-            style={{ transform: 'rotateY(180deg)' }}
-          >
-            <div className="grid grid-cols-3 gap-2 sm:gap-3 w-full h-full">
-              {[...Array(6)].map((_, index) => (
-                <Card
-                  key={`game-card-wrapper-${index}`}
-                  className="bg-transparent shadow-md flex flex-col items-center justify-center p-0 cursor-pointer overflow-hidden relative rounded-lg"
-                  style={{ perspective: '1000px' }} 
-                  onClick={() => handleGameCardClick(index)}
-                  role="button"
-                  tabIndex={0}
-                  aria-label={revealedGameCardIndex === index && revealedFlippedCardImageUrl ? `Revealed Card ${index + 1}` : `Card ${index + 1}`}
-                >
-                  <AnimatePresence initial={false} mode="wait">
-                    {isRevealingFlippedCard && revealedGameCardIndex === index && revealedFlippedCardImageUrl ? (
-                       <motion.div
-                        key={`game-card-front-${index}`}
-                        className="absolute inset-0 w-full h-full bg-secondary/90 rounded-lg flex flex-col items-center justify-center backface-hidden p-1"
-                        initial={{ rotateY: -180 }}
-                        animate={{ rotateY: 0 }}
-                        exit={{ rotateY: 180 }}
-                        transition={{ duration: 0.6 }}
-                       >
-                        <div className="relative w-full h-full">
-                          <Image
-                            src={revealedFlippedCardImageUrl} 
-                            alt={`Открытая карта ${index + 1}`}
-                            layout="fill"
-                            objectFit="contain"
-                            className="rounded-sm"
-                            data-ai-hint={chestVisualData[determineChestReward()]?.hint || "treasure card"} 
-                          />
-                        </div>
-                      </motion.div>
-                    ) : (
-                      <motion.div
-                        key={`game-card-back-${index}`}
-                        className="absolute inset-0 w-full h-full bg-secondary/70 hover:bg-secondary/80 rounded-lg flex flex-col items-center justify-center backface-hidden p-1"
-                        initial={{ rotateY: 0 }}
-                        animate={{ rotateY: 0 }} 
-                        exit={{ rotateY: -180 }} 
-                        transition={{ duration: 0.6 }}
-                      >
-                        <div className="relative w-full h-full">
-                           <Image
-                            src="/images/card-elements/card-back.png"
-                            alt={`Карта ${index + 1}`}
-                            layout="fill"
-                            objectFit="contain"
-                            className="rounded-sm"
-                            data-ai-hint="card back"
-                          />
-                        </div>
-                        {awaitingCardPick && !isRevealingFlippedCard && (
-                           <span className="absolute bottom-2 text-xs text-center text-primary-foreground bg-black/60 px-2 py-0.5 rounded">
-                             Выбери карту!
-                           </span>
-                        )}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </Card>
-              ))}
-            </div>
+            <motion.div
+              className="absolute inset-0 w-full h-full backface-hidden bg-card/90 backdrop-blur-sm p-2 sm:p-4 rounded-lg shadow-xl flex items-center justify-center"
+              style={{ transform: 'rotateY(180deg)' }}
+            >
+              <div className="grid grid-cols-3 grid-rows-2 gap-2 sm:gap-3 w-full h-full">
+                {[...Array(6)].map((_, index) => (
+                  <Card
+                    key={`game-card-wrapper-${index}`}
+                    className="bg-transparent shadow-md flex flex-col items-center justify-center p-0 cursor-pointer overflow-hidden relative rounded-lg"
+                    style={{ perspective: '1000px' }} 
+                    onClick={() => handleGameCardClick(index)}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={revealedGameCardIndex === index && revealedFlippedCardImageUrl ? `Revealed Card ${index + 1}` : `Card ${index + 1}`}
+                  >
+                    <AnimatePresence initial={false} mode="wait">
+                      {isRevealingFlippedCard && revealedGameCardIndex === index && revealedFlippedCardImageUrl ? (
+                         <motion.div
+                          key={`game-card-front-${index}`}
+                          className="absolute inset-0 w-full h-full bg-secondary/90 rounded-lg flex flex-col items-center justify-center backface-hidden p-1"
+                          initial={{ rotateY: -180 }}
+                          animate={{ rotateY: 0 }}
+                          exit={{ rotateY: 180 }}
+                          transition={{ duration: 0.6 }}
+                         >
+                          <div className="relative w-full h-full">
+                            <Image
+                              src={revealedFlippedCardImageUrl} 
+                              alt={`Открытая карта ${index + 1}`}
+                              layout="fill"
+                              objectFit="contain"
+                              className="rounded-sm"
+                              data-ai-hint={revealedChestType ? chestVisualData[revealedChestType]?.hint : "treasure card"} 
+                            />
+                          </div>
+                        </motion.div>
+                      ) : (
+                        <motion.div
+                          key={`game-card-back-${index}`}
+                          className="absolute inset-0 w-full h-full bg-secondary/70 hover:bg-secondary/80 rounded-lg flex flex-col items-center justify-center backface-hidden p-1"
+                          initial={{ rotateY: 0 }}
+                          animate={{ rotateY: 0 }} 
+                          exit={{ rotateY: -180 }} 
+                          transition={{ duration: 0.6 }}
+                        >
+                          <div className="relative w-full h-full">
+                             <Image
+                              src="/images/card-back.png"
+                              alt={`Карта ${index + 1}`}
+                              layout="fill"
+                              objectFit="contain"
+                              className="rounded-sm"
+                              data-ai-hint="card back"
+                            />
+                          </div>
+                          {awaitingCardPick && !isRevealingFlippedCard && (
+                             <span className="absolute bottom-2 text-xs text-center text-primary-foreground bg-black/60 px-2 py-0.5 rounded">
+                               Выбери карту!
+                             </span>
+                          )}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </Card>
+                ))}
+              </div>
+            </motion.div>
           </motion.div>
-        </motion.div>
+        </div>
       </div>
 
       <FloatingScoreManager
@@ -435,9 +475,3 @@ const CrystalCascadeGame: React.FC = () => {
 };
 
 export default CrystalCascadeGame;
-    
-
-    
-
-    
-

@@ -53,14 +53,14 @@ const GameBoardComponent: React.FC<GameBoardProps> = ({
         if (c < BOARD_COLS - 1) {
           const crystalToSwap = currentBoard[r][c+1];
           if (crystalToSwap) {
-            const testBoard = logicalSwap(currentBoard, {row: r, col: c}, {row: r, col: c+1});
+            const testBoard = logicalSwap(currentBoard, {r,c}, {r, c: c+1});
             if (findMatchGroups(testBoard).length > 0) return true;
           }
         }
         if (r < BOARD_ROWS - 1) {
            const crystalToSwap = currentBoard[r+1]?.[c];
            if (crystalToSwap) {
-            const testBoard = logicalSwap(currentBoard, {row: r, col: c}, {row: r+1, col: c});
+            const testBoard = logicalSwap(currentBoard, {r,c}, {r: r+1, c});
             if (findMatchGroups(testBoard).length > 0) return true;
           }
         }
@@ -200,7 +200,7 @@ const GameBoardComponent: React.FC<GameBoardProps> = ({
       {board.map((row, r) =>
         row.map((crystal, c) => {
           const currentPosition = { row: r, col: c };
-          const cellKey = crystal ? `crystal-${crystal.id}-${r}-${c}` : `empty-${r}-${c}`;
+          const cellKey = crystal ? `crystal-${crystal.id}` : `empty-${r}-${c}`;
           return (
             <CrystalCell
               key={cellKey}
@@ -217,4 +217,3 @@ const GameBoardComponent: React.FC<GameBoardProps> = ({
 };
 
 export default GameBoardComponent;
-

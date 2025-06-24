@@ -2,21 +2,12 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, type ReactNode, useCallback } from 'react';
-import type { ChestType, ChestCounts, ChestContextType, ChestData } from '@/types/profile';
+import type { ChestType, ChestCounts, ChestContextType } from '@/types/profile';
+import { chestDetails } from '@/lib/chest-definitions';
 
 const CHEST_STORAGE_KEY = 'crystalCascadeChestCounts';
 
-const initialChestCounts: ChestCounts = {
-  small: 0,
-  medium: 0,
-  large: 0,
-};
-
-const chestDetails: Record<ChestType, { name: string; imageHint: string }> = {
-  small: { name: "Малый", imageHint: "small treasure" },
-  medium: { name: "Средний", imageHint: "medium treasure" },
-  large: { name: "Большой", imageHint: "large treasure" }
-};
+const initialChestCounts: ChestCounts = {};
 
 const ChestContext = createContext<ChestContextType | undefined>(undefined);
 
@@ -28,10 +19,7 @@ export const ChestProvider = ({ children }: { children: ReactNode }) => {
     if (storedCounts) {
       try {
         const parsedCounts = JSON.parse(storedCounts);
-        // Basic validation
-        if (typeof parsedCounts.small === 'number' &&
-            typeof parsedCounts.medium === 'number' &&
-            typeof parsedCounts.large === 'number') {
+        if (typeof parsedCounts === 'object' && parsedCounts !== null) {
           setChestCounts(parsedCounts);
         } else {
           localStorage.setItem(CHEST_STORAGE_KEY, JSON.stringify(initialChestCounts));
@@ -49,19 +37,36 @@ export const ChestProvider = ({ children }: { children: ReactNode }) => {
     setChestCounts(prevCounts => {
       const newCounts = {
         ...prevCounts,
-        [chestType]: prevCounts[chestType] + 1,
+        [chestType]: (prevCounts[chestType] || 0) + 1,
       };
       localStorage.setItem(CHEST_STORAGE_KEY, JSON.stringify(newCounts));
       return newCounts;
     });
   }, []);
 
+  const spendChests = useCallback((chestType: ChestType, amount: number) => {
+    setChestCounts(prevCounts => {
+      const currentAmount = prevCounts[chestType] || 0;
+      const newCounts = {
+        ...prevCounts,
+        [chestType]: Math.max(0, currentAmount - amount),
+      };
+      
+      if (newCounts[chestType] === 0) {
+        delete newCounts[chestType];
+      }
+
+      localStorage.setItem(CHEST_STORAGE_KEY, JSON.stringify(newCounts));
+      return newCounts;
+    });
+  }, []);
+
   const getChestName = useCallback((chestType: ChestType): string => {
-    return chestDetails[chestType]?.name || "Неизвестный";
+    return chestDetails[chestType]?.name || "Неизвестный сундук";
   }, []);
 
   return (
-    <ChestContext.Provider value={{ chestCounts, awardChest, getChestName }}>
+    <ChestContext.Provider value={{ chestCounts, awardChest, spendChests, getChestName }}>
       {children}
     </ChestContext.Provider>
   );

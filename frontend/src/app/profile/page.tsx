@@ -1,117 +1,88 @@
 
 "use client";
 
-import { useState } from "react";
-import "@/types/telegram";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { useChests } from "@/contexts/ChestContext";
-import type { ChestType } from "@/types/profile";
-import { User, Gem, Candy, Skull as SkullIcon, Dog as DogIcon, Image as ImageIcon, Wifi, Loader2 } from "lucide-react";
-import NextImage from 'next/image';
+import { User, Gem, Candy, Skull as SkullIcon, Dog as DogIcon, Image as ImageIcon } from "lucide-react";
 import { useIconSet } from "@/contexts/IconSetContext";
 import { cn } from "@/lib/utils";
 
-const chestDisplayOrder: ChestType[] = ['small', 'medium', 'large'];
-const chestVisualData: Record<ChestType, { name: string; hint: string }> = {
-  small: { name: "Малый", hint: "small treasure" },
-  medium: { name: "Средний", hint: "medium treasure" },
-  large: { name: "Большой", hint: "large treasure" }
-};
-
 export default function ProfilePage() {
-  const { chestCounts } = useChests();
   const { iconSet, setIconSet } = useIconSet();
 
-  const [isPingModalOpen, setIsPingModalOpen] = useState(false);
-  const [pingModalMessage, setPingModalMessage] = useState("");
-  const [isPinging, setIsPinging] = useState(false);
-
-  const handlePingServer = async () => {
-    setIsPinging(true);
-    setPingModalMessage("Testing auth service...");
-    setIsPingModalOpen(true);
+  const handleTelegramAuth = async () => {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-
-    if (!apiUrl) {
-      setPingModalMessage("Ошибка: Переменная окружения NEXT_PUBLIC_API_URL не установлена.");
-      setIsPinging(false);
+    if (!apiUrl || apiUrl === "YOUR_BACKEND_URL_HERE") {
+      alert("Критическая ошибка: URL бэкенда не настроен в .env файле.");
+      console.error("Error: NEXT_PUBLIC_API_URL is not defined in .env file.");
       return;
     }
 
+    const tg = (window as any).Telegram;
+    if (!tg || !tg.WebApp) {
+        alert("Ошибка: Не удалось найти API Telegram. Убедитесь, что приложение запущено внутри Telegram.");
+        return;
+    }
+    
+    const initData = tg.WebApp.initData;
+    const initDataUnsafe = tg.WebApp.initDataUnsafe || {};
+    const userInfo = initDataUnsafe.user || { id: 'неизвестно', username: 'неизвестно' };
+
+    if (!initData) {
+      alert(`Ошибка: Данные Telegram (initData) не найдены для пользователя ${userInfo.username} (ID: ${userInfo.id}).\n\nУбедитесь, что приложение открыто через кнопку в боте, а не по прямой ссылке.`);
+      console.error("Error: Telegram initData is not available.");
+      return;
+    }
+    
     try {
-      // Get Telegram Web App data
-      let initData = '';
-      
-      // Проверяем, доступен ли Telegram Web App
-      if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
-        // Инициализируем Telegram Web App если не инициализирован
-        if (!window.Telegram.WebApp.isExpanded) {
-          window.Telegram.WebApp.ready();
-          window.Telegram.WebApp.expand();  
-        }
-        
-        // Получаем initData
-        const telegramInitData = window.Telegram.WebApp.initData;
-        if (telegramInitData && telegramInitData.trim()) {
-          initData = telegramInitData;
-          setPingModalMessage("Отправляем запрос с Telegram данными...");
-        } else {
-          setPingModalMessage("Отправляем запрос без Telegram данных...");
-        }
-      } else {
-        setPingModalMessage("Отправляем запрос без Telegram данных...");
-      }
-
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-      };
-
-      // Add Telegram data header if available
-      if (initData) {
-        headers['X-Telegram-Init-Data'] = initData;
-      }
-
       const response = await fetch(`${apiUrl}/api/auth`, {
         method: 'POST',
-        headers: headers,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Telegram-Init-Data': initData
+        }
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText || 'Unknown server error'}`);
-      }
+      const responseBodyText = await response.text();
       
-      const data = await response.json();
-      
-      if (data.success) {
-        setPingModalMessage(`✅ Авторизация успешна!\n\nПользователь: ${data.user.first_name} ${data.user.last_name || ''}\nTelegram ID: ${data.user.telegram_id}\nUsername: ${data.user.username || 'не указан'}\nНовый пользователь: ${data.user.is_new_user ? 'Да' : 'Нет'}\n\nТокен получен: ${data.token.substring(0, 20)}...`);
-      } else {
-        setPingModalMessage(`❌ Ошибка авторизации:\n${data.message || data.error}`);
+      let data;
+      try {
+        data = JSON.parse(responseBodyText);
+      } catch (jsonError) {
+        alert(`Ошибка ответа сервера: Не удалось разобрать JSON.\nСтатус: ${response.status} ${response.statusText}\nОтвет: ${responseBodyText.substring(0, 200)}...`);
+        console.error("Failed to parse JSON response:", { status: response.status, body: responseBodyText });
+        return;
       }
-    } catch (error) {
-      if (error instanceof Error) {
-        setPingModalMessage(`Ошибка: ${error.message}`);
+
+      if (response.ok && data.success) {
+        alert(`Авторизация успешна! Привет, ${data.user.firstName} (ID: ${data.user.id})!`);
+        console.log(`Пользователь: ${data.user.firstName} ${data.user.lastName}`);
+        console.log(`JWT токен: ${data.token}`);
+        console.log(`Новый пользователь: ${data.isNewUser}`);
       } else {
-        setPingModalMessage(`Произошла неизвестная ошибка.`);
+        const errorMessage = data.message || "Неизвестная ошибка сервера";
+        let alertMessage = `Ошибка авторизации для пользователя ${userInfo.username} (ID: ${userInfo.id}).\n\nСообщение от сервера: "${errorMessage}"\nСтатус: ${response.status} ${response.statusText}`;
+
+        if (response.status === 401) {
+            alertMessage += `\n\n(Ошибка 401 Unauthorized обычно означает, что токен бота на сервере не совпадает с токеном бота, в котором запущено приложение. Проверьте это с бэкенд-разработчиком.)`;
+        }
+
+        alert(alertMessage);
+        console.error("Authentication failed. Server responded with:", {
+          status: response.status,
+          statusText: response.statusText,
+          responseBody: data,
+        });
       }
-    } finally {
-      setIsPinging(false);
+    } catch (error: any) {
+      alert(`Сетевая ошибка: Не удалось отправить запрос на сервер для пользователя ${userInfo.username} (ID: ${userInfo.id}).\n\nПроверьте URL и ваше интернет-соединение.\nДетали: ${error.message}`);
+      console.error("Fetch error:", error);
     }
   };
 
   return (
-    <div className="flex flex-col items-center justify-start min-h-screen p-4 pt-6 space-y-6 text-foreground pb-20">
+    <div className="flex flex-col items-center justify-start min-h-full p-4 space-y-6 text-foreground">
       {/* User Info Section */}
       <Card className="w-full max-w-md backdrop-blur-md shadow-xl">
         <CardContent className="pt-6 flex flex-col items-center space-y-4">
@@ -122,49 +93,14 @@ export default function ProfilePage() {
             </AvatarFallback>
           </Avatar>
           <span className="text-2xl font-headline">Имя пользователя</span>
-          <Button variant="outline" className="border-primary text-primary hover:bg-primary/10 hover:text-primary-foreground">
-            Подключить кошелек
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Auth Test Section */}
-      <Card className="w-full max-w-md backdrop-blur-md shadow-xl">
-        <CardHeader>
-          <CardTitle className="text-2xl font-headline text-center text-primary">Тест Авторизации</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col items-center">
-          <Button onClick={handlePingServer} variant="outline" className="border-accent text-accent hover:bg-accent/10 hover:text-accent-foreground" disabled={isPinging}>
-            {isPinging ? (
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-            ) : (
-              <User className="mr-2 h-5 w-5" />
-            )}
-            Тест Auth Service
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Chests Section */}
-      <Card className="w-full max-w-md backdrop-blur-md shadow-xl">
-        <CardHeader>
-          <CardTitle className="text-2xl font-headline text-center text-primary">Мои Сундуки</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-3 gap-4">
-          {chestDisplayOrder.map((chestType) => (
-            <div key={chestType} className="flex flex-col items-center space-y-2 p-3 bg-background/50 rounded-lg shadow-md hover:shadow-primary/30 transition-shadow">
-              <NextImage
-                src="https://placehold.co/80x80.png"
-                alt={`${chestVisualData[chestType].name} сундук`}
-                width={80}
-                height={80}
-                className="rounded"
-                data-ai-hint={chestVisualData[chestType].hint}
-              />
-              <span className="text-sm font-semibold">{chestVisualData[chestType].name} ({chestCounts[chestType]})</span>
-              <Button size="sm" variant="secondary" className="w-full">Открыть</Button>
-            </div>
-          ))}
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Button variant="outline" className="border-primary text-primary hover:bg-primary/10 hover:text-primary-foreground">
+              Подключить кошелек
+            </Button>
+            <Button onClick={handleTelegramAuth} variant="default">
+              Авторизация
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -234,31 +170,6 @@ export default function ProfilePage() {
           </Button>
         </CardContent>
       </Card>
-
-      <AlertDialog open={isPingModalOpen} onOpenChange={(isOpen) => {
-        if (!isPinging) { // Only allow closing if not actively pinging
-          setIsPingModalOpen(isOpen);
-        }
-      }}>
-        <AlertDialogContent className="bg-card/90 backdrop-blur-md">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-primary">Результат Авторизации</AlertDialogTitle>
-            <AlertDialogDescription className="text-card-foreground whitespace-pre-wrap">
-              {pingModalMessage}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogAction
-              onClick={() => setIsPingModalOpen(false)}
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
-              disabled={isPinging}
-            >
-              OK
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
     </div>
   );
 }
