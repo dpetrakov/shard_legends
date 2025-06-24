@@ -1,582 +1,329 @@
-# Задача 6: Мониторинг и метрики
+# Задача 6: Мониторинг и метрики для Inventory Service
 
 ## Описание
 
-Реализация комплексной системы мониторинга для inventory-service на основе Prometheus метрик и Grafana дашбордов, аналогично auth-service. Включает бизнес-метрики, технические метрики и алерты.
+Реализация комплексной системы мониторинга для inventory-service на основе Prometheus метрик и Grafana дашбордов, аналогично auth-service. Фокус на производительности балансовых расчетов, эффективности кеширования и мониторинге критичных бизнес-операций.
 
 ## Цели
 
-1. Изучить существующую реализацию метрик в auth-service
-2. Реализовать аналогичные метрики для inventory-service
-3. Создать специфичные для инвентаря метрики
-4. Настроить Grafana дашборды
-5. Добавить алерты для критичных ситуаций
+1. Дополнить существующие базовые метрики специфичными для inventory-service
+2. Создать Grafana дашборд по образцу auth-service-metrics.json
+3. Настроить алерты для критичных ситуаций inventory-service
+4. Интегрировать метрики в ключевые бизнес-алгоритмы
+5. Обеспечить мониторинг производительности кеширования и балансовых расчетов
 
 ## Подзадачи
 
-### 6.1. Анализ auth-service метрик
-**Задача**: Изучить реализацию метрик в auth-service
+### 6.1. Дополнительные inventory-специфичные метрики
+**Задача**: Дополнить существующие базовые метрики в `pkg/metrics/metrics.go`
 
-**Файлы для изучения**:
-- `services/auth-service/pkg/metrics/`
-- `services/auth-service/internal/middleware/metrics.go`
-- `monitoring/grafana/dashboards/auth-service.json`
-- `monitoring/prometheus/rules/auth-service.yml`
+**Текущие базовые метрики** (уже реализованы):
+- HTTP metrics: requests_total, request_duration, requests_in_flight
+- Database metrics: connections, queries_total, query_duration  
+- Redis metrics: connections, commands_total, command_duration
+- Basic business: inventory_operations_total, active_users_total
+- Health: dependency_health
 
-**Что изучить**:
-- Структура метрик
-- Naming conventions
-- Labels стратегия
-- Dashboard layout
-- Alert rules
-
-### 6.2. Базовые HTTP метрики
-**Файл**: `pkg/metrics/http.go`
-
-**Метрики**:
+**Дополнительные метрики для реализации**:
 ```go
-// HTTP request duration histogram
-var HTTPRequestDuration = prometheus.NewHistogramVec(
-    prometheus.HistogramOpts{
-        Name: "inventory_http_request_duration_seconds",
-        Help: "Duration of HTTP requests in seconds",
-        Buckets: prometheus.DefBuckets,
-    },
-    []string{"method", "endpoint", "status_code"},
-)
+// Производительность расчета остатков
+BalanceCalculationDuration *prometheus.HistogramVec // labels: cache_hit (true/false)
 
-// HTTP request count counter
-var HTTPRequestTotal = prometheus.NewCounterVec(
-    prometheus.CounterOpts{
-        Name: "inventory_http_requests_total",
-        Help: "Total number of HTTP requests",
-    },
-    []string{"method", "endpoint", "status_code"},
-)
+// Создание дневных остатков (ленивое создание)
+DailyBalanceCreated *prometheus.CounterVec // labels: section
 
-// HTTP request size histogram
-var HTTPRequestSize = prometheus.NewHistogramVec(
-    prometheus.HistogramOpts{
-        Name: "inventory_http_request_size_bytes",
-        Help: "Size of HTTP requests in bytes",
-        Buckets: prometheus.ExponentialBuckets(100, 10, 6),
-    },
-    []string{"method", "endpoint"},
-)
+// Эффективность кеширования
+CacheHitRatio *prometheus.GaugeVec // labels: cache_type (balances/classifiers)
+CacheOperations *prometheus.CounterVec // labels: operation (get/set/delete), cache_type, status
 
-// HTTP response size histogram
-var HTTPResponseSize = prometheus.NewHistogramVec(
-    prometheus.HistogramOpts{
-        Name: "inventory_http_response_size_bytes",
-        Help: "Size of HTTP responses in bytes",
-        Buckets: prometheus.ExponentialBuckets(100, 10, 6),
-    },
-    []string{"method", "endpoint", "status_code"},
-)
+// Преобразования классификаторов
+ClassifierConversions *prometheus.CounterVec // labels: direction (to_uuid/from_uuid), classifier_type
+
+// Бизнес-ошибки
+InsufficientBalanceErrors *prometheus.CounterVec // labels: section, item_class
+TransactionRollbacks *prometheus.CounterVec // labels: operation_type, reason
+
+// Service lifecycle (для uptime панели)
+ServiceUp prometheus.Gauge
+ServiceStartTime prometheus.Gauge
 ```
 
-### 6.3. Бизнес метрики инвентаря
-**Файл**: `pkg/metrics/business.go`
+### 6.2. Grafana дашборд
+**Задача**: Создать дашборд по образцу `deploy/monitoring/grafana/dashboards/auth-service-metrics.json`
 
-**Метрики**:
-```go
-// Inventory operations counter
-var InventoryOperationsTotal = prometheus.NewCounterVec(
-    prometheus.CounterOpts{
-        Name: "inventory_operations_total",
-        Help: "Total number of inventory operations",
-    },
-    []string{"operation_type", "section", "status"},
-)
+**Файл**: `deploy/monitoring/grafana/dashboards/inventory-service-metrics.json`
 
-// Items balance calculation duration
-var BalanceCalculationDuration = prometheus.NewHistogramVec(
-    prometheus.HistogramOpts{
-        Name: "inventory_balance_calculation_duration_seconds",
-        Help: "Duration of balance calculations in seconds",
-        Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0},
-    },
-    []string{"cache_hit"},
-)
+**Структура дашборда** (7 групп панелей):
 
-// Daily balance creation counter
-var DailyBalanceCreated = prometheus.NewCounterVec(
-    prometheus.CounterOpts{
-        Name: "inventory_daily_balances_created_total",
-        Help: "Total number of daily balances created",
-    },
-    []string{"section"},
-)
-
-// Cache operations
-var CacheOperations = prometheus.NewCounterVec(
-    prometheus.CounterOpts{
-        Name: "inventory_cache_operations_total",
-        Help: "Total number of cache operations",
-    },
-    []string{"operation", "cache_type", "status"},
-)
-
-// Cache hit ratio
-var CacheHitRatio = prometheus.NewGaugeVec(
-    prometheus.GaugeOpts{
-        Name: "inventory_cache_hit_ratio",
-        Help: "Cache hit ratio",
-    },
-    []string{"cache_type"},
-)
-
-// Current inventory items count
-var InventoryItemsCount = prometheus.NewGaugeVec(
-    prometheus.GaugeOpts{
-        Name: "inventory_items_current_count",
-        Help: "Current count of inventory items per user",
-    },
-    []string{"user_id", "section", "item_class"},
-)
-
-// Insufficient balance errors
-var InsufficientBalanceErrors = prometheus.NewCounterVec(
-    prometheus.CounterOpts{
-        Name: "inventory_insufficient_balance_errors_total",
-        Help: "Total number of insufficient balance errors",
-    },
-    []string{"section", "item_class"},
-)
-
-// Transaction rollbacks
-var TransactionRollbacks = prometheus.NewCounterVec(
-    prometheus.CounterOpts{
-        Name: "inventory_transaction_rollbacks_total",
-        Help: "Total number of transaction rollbacks",
-    },
-    []string{"operation_type", "reason"},
-)
-```
-
-### 6.4. Технические метрики
-**Файл**: `pkg/metrics/technical.go`
-
-**Метрики**:
-```go
-// Database connection pool stats
-var DBConnections = prometheus.NewGaugeVec(
-    prometheus.GaugeOpts{
-        Name: "inventory_db_connections",
-        Help: "Current database connections",
-    },
-    []string{"status"}, // active, idle, waiting
-)
-
-// Database query duration
-var DBQueryDuration = prometheus.NewHistogramVec(
-    prometheus.HistogramOpts{
-        Name: "inventory_db_query_duration_seconds",
-        Help: "Duration of database queries in seconds",
-        Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5},
-    },
-    []string{"query_type", "table"},
-)
-
-// Redis connection stats
-var RedisConnections = prometheus.NewGaugeVec(
-    prometheus.GaugeOpts{
-        Name: "inventory_redis_connections",
-        Help: "Current Redis connections",
-    },
-    []string{"status"}, // active, idle
-)
-
-// Redis operation duration
-var RedisOperationDuration = prometheus.NewHistogramVec(
-    prometheus.HistogramOpts{
-        Name: "inventory_redis_operation_duration_seconds",
-        Help: "Duration of Redis operations in seconds",
-        Buckets: []float64{0.0001, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1},
-    },
-    []string{"operation", "status"},
-)
-
-// Go runtime metrics (built-in)
-var GoMemoryUsage = prometheus.NewGaugeVec(
-    prometheus.GaugeOpts{
-        Name: "inventory_go_memory_usage_bytes",
-        Help: "Go memory usage in bytes",
-    },
-    []string{"type"}, // heap, stack, gc
-)
-
-// Goroutine count
-var GoroutineCount = prometheus.NewGauge(
-    prometheus.GaugeOpts{
-        Name: "inventory_goroutines_total",
-        Help: "Total number of goroutines",
-    },
-)
-```
-
-### 6.5. Metrics middleware
-**Файл**: `internal/middleware/metrics.go`
-
-```go
-type MetricsMiddleware struct {
-    metrics *Metrics
-}
-
-func NewMetricsMiddleware(m *Metrics) *MetricsMiddleware {
-    return &MetricsMiddleware{metrics: m}
-}
-
-func (m *MetricsMiddleware) Handler() gin.HandlerFunc {
-    return func(c *gin.Context) {
-        start := time.Now()
-        
-        // Record request size
-        if c.Request.ContentLength > 0 {
-            HTTPRequestSize.WithLabelValues(
-                c.Request.Method,
-                c.FullPath(),
-            ).Observe(float64(c.Request.ContentLength))
-        }
-        
-        c.Next()
-        
-        duration := time.Since(start).Seconds()
-        status := strconv.Itoa(c.Writer.Status())
-        
-        // Record request duration and count
-        HTTPRequestDuration.WithLabelValues(
-            c.Request.Method,
-            c.FullPath(),
-            status,
-        ).Observe(duration)
-        
-        HTTPRequestTotal.WithLabelValues(
-            c.Request.Method,
-            c.FullPath(),
-            status,
-        ).Inc()
-        
-        // Record response size
-        HTTPResponseSize.WithLabelValues(
-            c.Request.Method,
-            c.FullPath(),
-            status,
-        ).Observe(float64(c.Writer.Size()))
-    }
-}
-```
-
-### 6.6. Business metrics instrumentation
-**Файл**: `internal/service/instrumented_service.go`
-
-```go
-type InstrumentedInventoryService struct {
-    service InventoryService
-    metrics *Metrics
-}
-
-func (s *InstrumentedInventoryService) CalculateCurrentBalance(ctx context.Context, req BalanceRequest) (int64, error) {
-    start := time.Now()
-    
-    balance, err := s.service.CalculateCurrentBalance(ctx, req)
-    
-    duration := time.Since(start).Seconds()
-    cacheHit := "miss" // определить по логике кеширования
-    
-    BalanceCalculationDuration.WithLabelValues(cacheHit).Observe(duration)
-    
-    if err != nil {
-        if isInsufficientBalanceError(err) {
-            InsufficientBalanceErrors.WithLabelValues(
-                req.SectionCode,
-                req.ItemClassCode,
-            ).Inc()
-        }
-    }
-    
-    return balance, err
-}
-
-func (s *InstrumentedInventoryService) CreateOperationsInTransaction(ctx context.Context, operations []*models.Operation) ([]uuid.UUID, error) {
-    operationType := operations[0].OperationType // предполагаем однородные операции
-    
-    ids, err := s.service.CreateOperationsInTransaction(ctx, operations)
-    
-    status := "success"
-    if err != nil {
-        status = "error"
-        TransactionRollbacks.WithLabelValues(operationType, getErrorReason(err)).Inc()
-    }
-    
-    InventoryOperationsTotal.WithLabelValues(
-        operationType,
-        operations[0].Section,
-        status,
-    ).Add(float64(len(operations)))
-    
-    return ids, err
-}
-```
-
-### 6.7. Grafana дашборд
-**Файл**: `monitoring/grafana/dashboards/inventory-service.json`
-
-**Панели дашборда**:
-
-1. **Overview**
-   - Request rate (req/s)
-   - Error rate (%)
-   - Response time percentiles (p50, p95, p99)
-   - Active users count
+1. **Service Overview**
+   - Service Status (inventory_service_up: UP/DOWN)
+   - Service Uptime (time() - inventory_service_start_time_seconds)
+   - Memory Usage (process_resident_memory_bytes)
+   - Goroutines (go_goroutines)
 
 2. **HTTP Metrics**
-   - Request duration by endpoint
-   - Request count by status code
-   - Request/Response size histograms
-   - Top slowest endpoints
+   - HTTP Request Rate (inventory_http_requests_total)
+   - HTTP Response Time (inventory_http_request_duration_seconds)
+   - HTTP Status Codes (inventory_http_requests_total by status)
+   - HTTP Requests In Flight (inventory_http_requests_in_flight)
 
-3. **Business Metrics**
-   - Inventory operations by type
-   - Balance calculations per second
-   - Cache hit ratio
-   - Daily balances created
-   - Insufficient balance errors
+3. **Inventory Business Metrics**
+   - Inventory Operations Rate (inventory_operations_total by operation_type)
+   - Balance Calculation Performance (inventory_balance_calculation_duration_seconds)
+   - Daily Balance Creation Rate (inventory_daily_balance_created_total)
+   - Insufficient Balance Errors (inventory_insufficient_balance_errors_total)
 
-4. **Technical Metrics**
-   - Database connection pool usage
-   - Database query performance
-   - Redis operation performance
-   - Go memory usage
-   - Goroutine count
+4. **Cache Performance**
+   - Cache Hit Ratio (inventory_cache_hit_ratio by cache_type)
+   - Cache Operations (inventory_cache_operations_total by operation)
+   - Classifier Conversions (inventory_classifier_conversions_total)
 
-5. **Alerts Status**
-   - Current firing alerts
-   - Alert history
+5. **Database Metrics**
+   - PostgreSQL Operations (inventory_database_queries_total, inventory_database_query_duration_seconds)
+   - Redis Operations (inventory_redis_commands_total, inventory_redis_command_duration_seconds)
+   - Connection Pools (inventory_database_connections, inventory_redis_connections)
 
-### 6.8. Prometheus alert rules
-**Файл**: `monitoring/prometheus/rules/inventory-service.yml`
+6. **Dependencies Health**
+   - Dependencies Status (inventory_dependency_health)
+   - Transaction Rollbacks (inventory_transaction_rollbacks_total)
 
-```yaml
-groups:
-  - name: inventory-service
-    rules:
-      # High error rate
-      - alert: InventoryHighErrorRate
-        expr: rate(inventory_http_requests_total{status_code=~"5.."}[5m]) > 0.1
-        for: 2m
-        labels:
-          severity: warning
-        annotations:
-          summary: "High error rate on inventory service"
-          description: "Error rate is {{ $value }} errors per second"
+7. **Admin Operations**
+   - Admin Operations (inventory_operations_total{operation_type="admin_adjustment"})
+   - Active Users (inventory_active_users_total)
 
-      # High response time
-      - alert: InventoryHighLatency
-        expr: histogram_quantile(0.95, rate(inventory_http_request_duration_seconds_bucket[5m])) > 1.0
-        for: 2m
-        labels:
-          severity: warning
-        annotations:
-          summary: "High latency on inventory service"
-          description: "95th percentile latency is {{ $value }} seconds"
+### 6.3. Prometheus алерты
+**Задача**: Создать правила алертов для критичных ситуаций
 
-      # Database connection issues
-      - alert: InventoryDBConnectionIssues
-        expr: inventory_db_connections{status="active"} > 80
-        for: 1m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Database connection pool nearly exhausted"
-          description: "Active DB connections: {{ $value }}"
+**Файл**: `deploy/monitoring/prometheus/rules/inventory-service.yml`
 
-      # Cache hit ratio too low
-      - alert: InventoryCacheHitRatioLow
-        expr: inventory_cache_hit_ratio < 0.7
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Cache hit ratio is too low"
-          description: "Cache hit ratio is {{ $value }}"
+**Алерты** (6 правил):
 
-      # High insufficient balance errors
-      - alert: InventoryInsufficientBalanceHigh
-        expr: rate(inventory_insufficient_balance_errors_total[5m]) > 0.5
-        for: 2m
-        labels:
-          severity: warning
-        annotations:
-          summary: "High rate of insufficient balance errors"
-          description: "Rate: {{ $value }} errors per second"
+1. **InventoryServiceDown**
+   ```yaml
+   alert: InventoryServiceDown
+   expr: inventory_service_up == 0
+   for: 1m
+   labels:
+     severity: critical
+   annotations:
+     summary: "Inventory Service is down"
+     description: "Inventory Service has been down for more than 1 minute"
+   ```
 
-      # Service down
-      - alert: InventoryServiceDown
-        expr: up{job="inventory-service"} == 0
-        for: 1m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Inventory service is down"
-          description: "Inventory service has been down for more than 1 minute"
-```
+2. **InventoryHighErrorRate**
+   ```yaml
+   alert: InventoryHighErrorRate
+   expr: |
+     (
+       sum(rate(inventory_http_requests_total{status=~"5.."}[5m])) /
+       sum(rate(inventory_http_requests_total[5m]))
+     ) > 0.1
+   for: 5m
+   labels:
+     severity: warning
+   annotations:
+     summary: "High error rate in Inventory Service"
+     description: "Error rate is above 10% for 5 minutes"
+   ```
 
-### 6.9. Metrics initialization
-**Файл**: `pkg/metrics/init.go`
+3. **InventoryHighLatency**
+   ```yaml
+   alert: InventoryHighLatency
+   expr: |
+     histogram_quantile(0.95, 
+       sum(rate(inventory_http_request_duration_seconds_bucket[5m])) by (le)
+     ) > 2.0
+   for: 5m
+   labels:
+     severity: warning
+   annotations:
+     summary: "High latency in Inventory Service"
+     description: "95th percentile latency is above 2 seconds for 5 minutes"
+   ```
 
+4. **InventoryDatabaseIssues**
+   ```yaml
+   alert: InventoryDatabaseIssues
+   expr: |
+     (
+       sum(rate(inventory_database_queries_total{status="error"}[5m])) /
+       sum(rate(inventory_database_queries_total[5m]))
+     ) > 0.05
+     or
+     histogram_quantile(0.95,
+       sum(rate(inventory_database_query_duration_seconds_bucket[5m])) by (le)
+     ) > 5.0
+   for: 2m
+   labels:
+     severity: warning
+   annotations:
+     summary: "Database issues in Inventory Service"
+     description: "Database error rate >5% or query latency >5s for 2 minutes"
+   ```
+
+5. **InventoryCacheProblems**
+   ```yaml
+   alert: InventoryCacheProblems
+   expr: inventory_cache_hit_ratio < 0.7
+   for: 10m
+   labels:
+     severity: warning
+   annotations:
+     summary: "Low cache hit ratio in Inventory Service"
+     description: "Cache hit ratio is below 70% for 10 minutes"
+   ```
+
+6. **InventoryBalanceCalculationSlow**
+   ```yaml
+   alert: InventoryBalanceCalculationSlow
+   expr: |
+     histogram_quantile(0.95,
+       sum(rate(inventory_balance_calculation_duration_seconds_bucket[5m])) by (le)
+     ) > 1.0
+   for: 5m
+   labels:
+     severity: warning
+   annotations:
+     summary: "Slow balance calculations in Inventory Service"
+     description: "95th percentile balance calculation time >1s for 5 minutes"
+   ```
+
+### 6.4. Интеграция метрик в бизнес-алгоритмы
+**Задача**: Добавить метрики в ключевые алгоритмы inventory-service
+
+**Файлы для обновления**:
+- `internal/service/balance_calculator.go` - метрики времени расчета и cache hit/miss
+- `internal/service/daily_balance_creator.go` - счетчик создания дневных балансов
+- `internal/service/cache_manager.go` - метрики cache operations и hit ratio
+- `internal/service/code_converter.go` - счетчик преобразований классификаторов
+- `internal/middleware/metrics.go` - интеграция новых метрик в HTTP middleware
+
+**Примеры интеграции**:
 ```go
-type Metrics struct {
-    Registry prometheus.Registerer
-}
-
-func NewMetrics() *Metrics {
-    return &Metrics{
-        Registry: prometheus.DefaultRegisterer,
+// В balance_calculator.go
+func (bc *BalanceCalculator) CalculateCurrentBalance(...) (int64, error) {
+    start := time.Now()
+    cacheHit := false
+    
+    defer func() {
+        bc.metrics.BalanceCalculationDuration.WithLabelValues(
+            strconv.FormatBool(cacheHit),
+        ).Observe(time.Since(start).Seconds())
+    }()
+    
+    // Проверяем кеш
+    if cachedBalance, found := bc.cache.Get(cacheKey); found {
+        cacheHit = true
+        bc.metrics.CacheOperations.WithLabelValues("get", "balances", "hit").Inc()
+        return cachedBalance, nil
     }
+    
+    bc.metrics.CacheOperations.WithLabelValues("get", "balances", "miss").Inc()
+    
+    // Логика расчета баланса...
+    balance := calculateBalance(...)
+    
+    // Сохранение в кеш
+    bc.cache.Set(cacheKey, balance)
+    bc.metrics.CacheOperations.WithLabelValues("set", "balances", "success").Inc()
+    
+    return balance, nil
 }
 
-func (m *Metrics) MustRegister() {
-    // HTTP metrics
-    m.Registry.MustRegister(HTTPRequestDuration)
-    m.Registry.MustRegister(HTTPRequestTotal)
-    m.Registry.MustRegister(HTTPRequestSize)
-    m.Registry.MustRegister(HTTPResponseSize)
-    
-    // Business metrics
-    m.Registry.MustRegister(InventoryOperationsTotal)
-    m.Registry.MustRegister(BalanceCalculationDuration)
-    m.Registry.MustRegister(DailyBalanceCreated)
-    m.Registry.MustRegister(CacheOperations)
-    m.Registry.MustRegister(CacheHitRatio)
-    m.Registry.MustRegister(InventoryItemsCount)
-    m.Registry.MustRegister(InsufficientBalanceErrors)
-    m.Registry.MustRegister(TransactionRollbacks)
-    
-    // Technical metrics
-    m.Registry.MustRegister(DBConnections)
-    m.Registry.MustRegister(DBQueryDuration)
-    m.Registry.MustRegister(RedisConnections)
-    m.Registry.MustRegister(RedisOperationDuration)
-    m.Registry.MustRegister(GoMemoryUsage)
-    m.Registry.MustRegister(GoroutineCount)
-    
-    // Go runtime metrics
-    m.Registry.MustRegister(prometheus.NewGoCollector())
-    m.Registry.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+// В daily_balance_creator.go
+func (dbc *DailyBalanceCreator) CreateDailyBalance(...) error {
+    err := dbc.repository.CreateDailyBalance(...)
+    if err == nil {
+        dbc.metrics.DailyBalanceCreated.WithLabelValues(sectionCode).Inc()
+    }
+    return err
+}
+
+// В code_converter.go
+func (cc *CodeConverter) ConvertToUUID(codes map[string]string) (map[string]uuid.UUID, error) {
+    for classifierType := range codes {
+        cc.metrics.ClassifierConversions.WithLabelValues("to_uuid", classifierType).Inc()
+    }
+    return cc.doConversion(codes)
 }
 ```
-
-### 6.10. Тесты метрик
-**Файлы**: `pkg/metrics/*_test.go`
-
-**Типы тестов**:
-- Unit тесты для metrics middleware
-- Integration тесты для business metrics
-- Performance тесты для metrics overhead
-- Тесты корректности labels
 
 ## Критерии готовности
 
-### Функциональные
-- [ ] Все метрики корректно собираются
-- [ ] Grafana дашборд отображает данные
-- [ ] Алерты срабатывают при тестовых условиях
-- [ ] Метрики доступны на /metrics endpoint
-- [ ] Labels корректно применяются
+### Метрики
+- [ ] Дополнить `pkg/metrics/metrics.go` новыми inventory-специфичными метриками
+- [ ] Обновить структуру Metrics для новых метрик
+- [ ] Добавить инициализацию новых метрик в функции New() и Initialize()
 
-### Технические
-- [ ] Overhead метрик < 1% CPU/memory
-- [ ] Метрики не влияют на latency
-- [ ] Дашборд загружается быстро
-- [ ] Alert rules валидны
+### Дашборд
+- [ ] Создать `deploy/monitoring/grafana/dashboards/inventory-service-metrics.json`
+- [ ] Реализовать 7 групп панелей по образцу auth-service
+- [ ] Настроить правильные Prometheus queries для всех панелей
+- [ ] Проверить корректность отображения метрик
 
-### Проверочные
-- [ ] curl /metrics возвращает данные
-- [ ] Grafana показывает live данные
-- [ ] Prometheus targets healthy
-- [ ] Alertmanager получает уведомления
+### Алерты
+- [ ] Создать `deploy/monitoring/prometheus/rules/inventory-service.yml`
+- [ ] Реализовать 6 алертов для критичных ситуаций
+- [ ] Настроить корректные thresholds и временные интервалы
+- [ ] Добавить meaningful описания для алертов
 
-## Методы тестирования
+### Интеграция
+- [ ] Интегрировать метрики в balance_calculator.go
+- [ ] Интегрировать метрики в daily_balance_creator.go  
+- [ ] Интегрировать метрики в cache_manager.go
+- [ ] Интегрировать метрики в code_converter.go
+- [ ] Обновить middleware/metrics.go для новых метрик
 
-### 1. Functional тесты
+## Проверка результата
+
+**Команды для тестирования**:
 ```bash
+# Запуск inventory-service с метриками
+go run ./cmd/server
+
 # Проверка метрик endpoint
-curl http://localhost:9090/metrics | grep inventory_
+curl http://localhost:8080/metrics | grep inventory_
 
-# Проверка Prometheus targets
-curl http://prometheus:9090/api/v1/targets
+# Создание операций для генерации метрик
+curl -X POST http://localhost:8080/inventory/reserve \
+  -H "Authorization: Bearer <jwt>" \
+  -d '{"items": [{"item_code": "wood", "quantity": 5}]}'
 
-# Проверка Grafana API
-curl http://grafana:3000/api/dashboards/uid/inventory
+# Проверка конкретных метрик
+curl http://localhost:8080/metrics | grep -E "(inventory_operations_total|inventory_balance_calculation)"
 ```
 
-### 2. Load тесты для метрик
-```bash
-# Нагрузочное тестирование с метриками
-hey -n 10000 -c 100 http://localhost:8080/inventory
+**Валидация дашборда**:
+1. Открыть Grafana http://localhost:3000
+2. Найти дашборд "Inventory Service Metrics"
+3. Проверить отображение данных во всех панелях
+4. Убедиться в корректности метрик и queries
 
-# Проверка overhead метрик
-go test -bench=BenchmarkMetrics ./pkg/metrics/...
-```
+**Валидация алертов**:
+1. Открыть Prometheus http://localhost:9090/alerts
+2. Найти правила inventory-service  
+3. Создать нагрузку для тестирования алертов
+4. Убедиться в корректном срабатывании
 
-### 3. Alert тесты
-```bash
-# Симуляция high error rate
-# Симуляция high latency
-# Проверка срабатывания алертов
-```
+## Техническая реализация
 
-## Зависимости
+### Ключевые решения
+1. **Базовые метрики уже есть**: HTTP, Database, Redis метрики уже реализованы в `pkg/metrics/metrics.go`
+2. **Фокус на inventory-специфичные метрики**: balance calculation, cache hit ratio, daily balance creation
+3. **Структура дашборда по образцу auth-service**: 7 групп панелей с аналогичной визуализацией
+4. **Targeted алерты**: 6 критичных алертов для производственных ситуаций
+5. **Интеграция в бизнес-логику**: добавление метрик в ключевые алгоритмы без влияния на производительность
 
-### Входящие
-- HTTP API (Задача 5)
-- Service слой (Задача 4)
-- auth-service metrics implementation
-- Prometheus/Grafana infrastructure
+### Приоритеты реализации
+1. Дополнить метрики в `pkg/metrics/metrics.go`
+2. Создать Grafana дашборд по образцу auth-service
+3. Настроить Prometheus алерты  
+4. Интегрировать метрики в бизнес-алгоритмы
+5. Протестировать полную систему мониторинга
 
-### Исходящие
-- Production-ready мониторинг
-- Alerting для операционной команды
-- Метрики для capacity planning
-
-## Go зависимости
-
-```go
-// Metrics
-github.com/prometheus/client_golang    // Prometheus client
-github.com/prometheus/common           // Common Prometheus types
-
-// Runtime metrics
-github.com/prometheus/procfs           // Process metrics
-```
-
-## Заметки по реализации
-
-### Best practices
-- Consistent naming convention
-- Meaningful labels
-- Appropriate metric types (Counter, Gauge, Histogram)
-- Reasonable cardinality
-
-### Performance considerations
-- Lazy metric initialization
-- Efficient label handling
-- Minimal allocation in hot paths
-
-### Operational aspects
-- Clear alert descriptions
-- Actionable alerts only
-- Proper severity levels
-- Runbook references
-
-## Риски и ограничения
-
-- **Риск**: High cardinality metrics
-  **Митигация**: Careful label design, limit user_id labels
-
-- **Риск**: Metrics overhead
-  **Митигация**: Performance testing, optimization
-
-- **Ограничение**: Prometheus storage limitations
-  **Решение**: Proper retention policies, downsampling
+### Успешность реализации
+Задача считается успешно выполненной при:
+- Корректной работе всех метрик на /metrics endpoint
+- Отображении данных во всех панелях Grafana дашборда
+- Срабатывании алертов при тестовых нагрузках
+- Интеграции метрик в бизнес-алгоритмы без влияния на производительность

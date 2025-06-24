@@ -15,57 +15,7 @@
 
 
 
-## M-3: HTTP API эндпоинты для Inventory Service
-**Роль:** Backend Developer
-**Приоритет:** Средний  
-**Статус:** [ ] Готов к выполнению (все зависимости выполнены)
 
-**Описание:**
-`docs/tasks/inventory-service-task-5-http-endpoints.md`
-Реализация всех HTTP эндпоинтов согласно OpenAPI спецификации. Включает публичные, внутренние и административные эндпоинты с полной валидацией, аутентификацией и обработкой ошибок.
-
-**Файлы для изучения:**
-- `docs/specs/inventory-service-openapi.yml` - полная спецификация OpenAPI
-- `docs/specs/inventory-service.md` - описание всех эндпоинтов (строки 17-196)
-- `services/auth-service/internal/handlers/` - паттерны handlers  
-- `services/auth-service/internal/middleware/` - JWT authentication
-- `docs/tasks/inventory-service-task-5-http-endpoints.md` - детальные требования
-
-**Критерии готовности:**
-
-**HTTP handlers:**
-- [ ] `internal/handlers/inventory.go` - структура InventoryHandler
-- [ ] `internal/handlers/public.go` - GET /inventory, GET /inventory/items/{item_id}
-- [ ] `internal/handlers/internal.go` - /reserve, /return-reserve, /consume-reserve, /add-items
-- [ ] `internal/handlers/admin.go` - POST /admin/inventory/adjust
-
-**Middleware:**
-- [ ] `internal/middleware/auth.go` - JWT authentication
-- [ ] `internal/middleware/admin.go` - admin authorization
-- [ ] `internal/middleware/logging.go` - request logging
-- [ ] `internal/middleware/metrics.go` - metrics collection
-
-**Error handling:**
-- [ ] `internal/handlers/errors.go` - структурированные ошибки
-- [ ] ErrorResponse, InsufficientItemsError согласно OpenAPI
-- [ ] Правильные HTTP статус коды
-- [ ] Валидация входных данных
-
-**Routing:**
-- [ ] `internal/handlers/router.go` - настройка всех маршрутов
-- [ ] Группировка по типам (public, internal, admin)
-- [ ] Применение соответствующих middleware
-
-**Проверка:**
-```bash
-curl -H "Authorization: Bearer <jwt>" http://localhost:8080/inventory # работает
-go test ./internal/handlers/... # coverage >85%
-```
-
-**Зависимости:** ✅ M-2 (бизнес-логика), ✅ Auth Service (JWT токены)
-**Оценка:** 2-3 дня
-
----
 
 
 ## Низкий приоритет
@@ -74,41 +24,56 @@ go test ./internal/handlers/... # coverage >85%
 ## L-1: Мониторинг и метрики для Inventory Service
 **Роль:** DevOps/Backend Developer
 **Приоритет:** Низкий
-**Статус:** [ ] Частично готов (базовые метрики есть, нужен дашборд и алерты)
+**Статус:** [ ] Частично готов (базовые метрики есть, нужны дополнительные метрики, дашборд и алерты)
 
 **Описание:**
-`docs/tasks/inventory-service-task-6-monitoring-metrics.md`
-Реализация комплексной системы мониторинга для inventory-service на основе Prometheus метрик и Grafana дашбордов, аналогично auth-service.
+Реализация комплексной системы мониторинга для inventory-service на основе Prometheus метрик и Grafana дашбордов, аналогично auth-service. Фокус на производительности балансовых расчетов, эффективности кеширования и мониторинге бизнес-операций.
 
 **Файлы для изучения:**
-- `services/auth-service/pkg/metrics/` - структура метрик как референс
-- `docs/specs/inventory-service.md` - типы операций (строки 231-265)  
+- `deploy/monitoring/grafana/dashboards/auth-service-metrics.json` - референс структуры дашборда
+- `services/inventory-service/pkg/metrics/metrics.go` - текущие базовые метрики
+- `docs/specs/inventory-service.md` - бизнес-операции и алгоритмы
 - `docs/tasks/inventory-service-task-6-monitoring-metrics.md` - детальные требования
-- `monitoring/grafana/dashboards/auth-service.json` - дашборд как шаблон
 
 **Критерии готовности:**
 
-**Бизнес метрики:**
-- [ ] `inventory_operations_total` - счетчик операций по типам
-- [ ] `inventory_balance_calculation_duration_seconds` - время расчета остатков
-- [ ] `inventory_cache_hit_ratio` - эффективность кеширования
-- [ ] `inventory_insufficient_balance_errors_total` - ошибки недостаточного баланса
+**Дополнительные бизнес-метрики (дополнить существующие):**
+- [ ] `inventory_balance_calculation_duration_seconds` - время расчета остатков с label cache_hit
+- [ ] `inventory_daily_balance_created_total` - ленивое создание дневных остатков
+- [ ] `inventory_cache_hit_ratio` - эффективность кеширования по типам (balances, classifiers)
+- [ ] `inventory_classifier_conversions_total` - преобразования код↔UUID
+- [ ] `inventory_insufficient_balance_errors_total` - ошибки недостаточного баланса с деталями
+- [ ] `inventory_transaction_rollbacks_total` - откаты транзакций с причинами
+- [ ] `inventory_service_up` - статус сервиса (аналогично auth-service)
+- [ ] `inventory_service_start_time_seconds` - время запуска для uptime
 
-**Grafana дашборд:**
-- [ ] `monitoring/grafana/dashboards/inventory-service.json` - дашборд с 5 группами панелей
-- [ ] Overview, HTTP Metrics, Business Metrics, Technical Metrics, Alerts Status
+**Grafana дашборд (аналогично auth-service):**
+- [ ] `deploy/monitoring/grafana/dashboards/inventory-service-metrics.json` - основной дашборд
+- [ ] 7 групп панелей: Service Overview, HTTP Metrics, Inventory Business Metrics, Cache Performance, Database Metrics, Dependencies Health, Admin Operations
+- [ ] Панели: Service Status, Uptime, Memory Usage, Goroutines, HTTP rates/latency, Balance calculation performance, Cache hit ratios, DB/Redis operations
 
 **Prometheus алерты:**
-- [ ] `monitoring/prometheus/rules/inventory-service.yml` - 6 алертов
-- [ ] High error rate, high latency, DB issues, cache problems, service down
+- [ ] `deploy/monitoring/prometheus/rules/inventory-service.yml` - правила алертов
+- [ ] InventoryServiceDown - сервис недоступен >1 мин
+- [ ] InventoryHighErrorRate - error rate >10% за 5 мин  
+- [ ] InventoryHighLatency - p95 latency >2s за 5 мин
+- [ ] InventoryDatabaseIssues - DB queries >5s или errors >5%
+- [ ] InventoryCacheProblems - cache hit ratio <70% за 10 мин
+- [ ] InventoryBalanceCalculationSlow - balance calculation >1s за 5 мин
 
-**Зависимости:** ⏳ M-3 (HTTP API), ✅ M-4 (auth-service метрики как референс)
+**Интеграция в middleware:**
+- [ ] Обновить `internal/middleware/metrics.go` для новых метрик
+- [ ] Добавить метрики в ключевые бизнес-алгоритмы (balance_calculator, cache_manager, etc.)
+
+**Зависимости:** ✅ M-3 (HTTP API), ✅ M-4 (auth-service как референс), ✅ M-2 (бизнес-логика)
 
 **Прогресс реализации:**
-- ✅ Базовые метрики: `pkg/metrics/metrics.go` содержит HTTP, DB, Redis и бизнес-метрики
-- ❌ Grafana дашборд: отсутствует `monitoring/grafana/dashboards/inventory-service.json`
-- ❌ Prometheus алерты: отсутствует `monitoring/prometheus/rules/inventory-service.yml`
-**Оценка:** 2 дня
+- ✅ Базовые метрики: HTTP, DB, Redis, начальные inventory operations
+- ❌ Специфичные inventory метрики: balance calculation, cache hit ratio, daily balance creation
+- ❌ Grafana дашборд: нет `inventory-service-metrics.json`
+- ❌ Prometheus алерты: нет rules для inventory-service
+- ❌ Интеграция: метрики не подключены к бизнес-алгоритмам
+**Оценка:** 2-3 дня
 
 ---
 

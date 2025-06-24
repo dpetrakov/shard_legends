@@ -71,16 +71,7 @@ Authorization: Bearer <jwt_token>
 }
 ```
 
-#### GET /inventory/items/{item_id}
-```go
-func (h *InventoryHandler) GetItemInfo(c *gin.Context) {
-    // 1. Валидировать item_id UUID
-    // 2. Получить информацию о предмете из ItemRepository
-    // 3. Получить доступные коллекции и уровни качества
-    // 4. Преобразовать UUID в коды
-    // 5. Вернуть ItemInfoResponse
-}
-```
+
 
 ### 5.3. Внутренние эндпоинты
 **Файл**: `internal/handlers/internal.go`

@@ -4,9 +4,30 @@
 
 ## Дайджест работ - 24 июня 2025
 
-### Inventory Service Business Logic & Data Layer - Complete Implementation (3 задачи)
+### Inventory Service Business Logic & Data Layer - Complete Implementation (4 задачи)
 
-**Объем работ:** Завершена полная реализация слоя данных и бизнес-логики для inventory-service с моделями, репозиториями, core algorithms и Prometheus метриками в auth-service.
+**Объем работ:** Завершена полная реализация слоя данных и бизнес-логики для inventory-service с моделями, репозиториями, core algorithms, HTTP API endpoints и Prometheus метриками в auth-service.
+
+**M-3: HTTP API эндпоинты для Inventory Service**
+**Дата завершения:** 2025-06-24
+**Роль:** Backend Developer
+**Статус:** [x] Выполнена
+
+**Описание:** Реализация всех HTTP эндпоинтов согласно OpenAPI спецификации. Включает публичные, внутренние и административные эндпоинты с полной валидацией, аутентификацией и обработкой ошибок.
+
+**Результат:**
+- ✅ **HTTP handlers:** inventory.go, public.go (GET /inventory), internal.go (/reserve, /return-reserve, /consume-reserve, /add-items), admin.go (POST /admin/inventory/adjust)
+- ✅ **Middleware:** auth.go (JWT authentication с RS256), admin.go (admin authorization), logging.go (request logging с user context)
+- ✅ **Error handling:** ErrorResponse, InsufficientItemsError согласно OpenAPI, правильные HTTP статус коды, валидация входных данных
+- ✅ **Routing:** router.go с группировкой по типам (public, internal, admin) и применением соответствующих middleware
+
+**Технические достижения:**
+- JWT аутентификация с проверкой подписи RS256 и revocation check в Redis
+- Структурированные ошибки с детализацией недостающих предметов
+- Middleware для логирования с user context из JWT токенов
+- Административные эндпоинты с проверкой admin permissions
+- Валидация входных данных с использованием validator library
+- Правильная обработка всех HTTP статус кодов (400, 401, 403, 404, 500)
 
 **M-2: Бизнес-логика и общие алгоритмы для Inventory Service**
 **Дата завершения:** 2025-06-24

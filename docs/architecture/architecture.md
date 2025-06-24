@@ -124,7 +124,6 @@ graph TB
 
 **API эндпоинты:**
 - `GET /inventory` → Получение инвентаря пользователя
-- `GET /inventory/items/{item_id}` → Информация о предмете
 - `POST /inventory/operations` → Операции с инвентарем (внутренний)
 - `POST /inventory/reserve` → Резервирование для фабрики (внутренний)
 - `POST /admin/inventory/adjust` → Административная корректировка

@@ -90,9 +90,9 @@ type OperationResponse struct {
 
 // AdjustInventoryResponse represents the response for inventory adjustment
 type AdjustInventoryResponse struct {
-	Success        bool                    `json:"success"`
-	OperationIDs   []uuid.UUID             `json:"operation_ids"`
-	FinalBalances  []InventoryItemResponse `json:"final_balances"`
+	Success       bool                    `json:"success"`
+	OperationIDs  []uuid.UUID             `json:"operation_ids"`
+	FinalBalances []InventoryItemResponse `json:"final_balances"`
 }
 
 // ErrorResponse represents an error response
@@ -104,9 +104,14 @@ type ErrorResponse struct {
 
 // InsufficientItemsError represents an error when there are not enough items
 type InsufficientItemsError struct {
-	Error        string        `json:"error"`
+	ErrorCode    string        `json:"error"`
 	Message      string        `json:"message"`
 	MissingItems []MissingItem `json:"missing_items"`
+}
+
+// Error implements the error interface
+func (e *InsufficientItemsError) Error() string {
+	return e.Message
 }
 
 // MissingItem represents an item that is missing or insufficient
@@ -116,13 +121,4 @@ type MissingItem struct {
 	QualityLevel *string   `json:"quality_level,omitempty"`
 	Required     int64     `json:"required"`
 	Available    int64     `json:"available"`
-}
-
-// ItemInfoResponse represents detailed information about an item
-type ItemInfoResponse struct {
-	ItemID                 uuid.UUID `json:"item_id"`
-	ItemClass              string    `json:"item_class"`
-	ItemType               string    `json:"item_type"`
-	AvailableQualityLevels []string  `json:"available_quality_levels"`
-	AvailableCollections   []string  `json:"available_collections"`
 }
