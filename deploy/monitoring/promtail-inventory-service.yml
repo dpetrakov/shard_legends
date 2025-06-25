@@ -1,0 +1,157 @@
+server:
+  http_listen_port: 15200
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: inventory-service
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: inventory-service
+          __path__: /var/lib/docker/containers/*/*-json.log
+
+    pipeline_stages:
+      # Parse Docker JSON logs
+      - json:
+          expressions:
+            log: log
+            stream: stream
+            time: time
+            container_name: attrs.name
+
+      # Filter for inventory-service container
+      - match:
+          selector: '{container_name!~".*inventory-service.*"}'
+          action: drop
+
+      # Parse the actual log message (JSON structured logs)
+      - json:
+          expressions:
+            timestamp: time
+            level: level
+            message: msg
+            service: service
+            version: version
+            request_id: request_id
+            user_id: user_id
+            method: method
+            path: path
+            status: status
+            latency: latency
+            latency_ms: latency_ms
+            error: error
+            error_type: error_type
+            operation_type: operation_type
+            section: section
+            duration: duration
+            duration_ms: duration_ms
+          source: log
+
+      # Parse timestamp
+      - timestamp:
+          source: timestamp
+          format: RFC3339Nano
+
+      # Add labels based on log content
+      - labels:
+          level:
+          service:
+          request_id:
+          user_id:
+          method:
+          status:
+          operation_type:
+          section:
+
+      # Template for structured output
+      - template:
+          source: output
+          template: |
+            {{if .level}}[{{.level | upper}}]{{end}} 
+            {{if .request_id}}[{{.request_id}}]{{end}} 
+            {{if .user_id}}[user:{{.user_id}}]{{end}}
+            {{if .method}}{{.method}}{{end}}
+            {{if .path}} {{.path}}{{end}}
+            {{if .status}} ({{.status}}){{end}}
+            {{if .latency_ms}} {{.latency_ms}}ms{{end}}
+            {{if .operation_type}} op:{{.operation_type}}{{end}}
+            {{if .section}} section:{{.section}}{{end}}
+            {{if .duration_ms}} {{.duration_ms}}ms{{end}}
+            {{if .message}} - {{.message}}{{end}}
+            {{if .error}} ERROR: {{.error}}{{end}}
+
+      # Set the final log line
+      - output:
+          source: output
+
+  # Additional scrape config for inventory-service business events
+  - job_name: inventory-business-events
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: inventory-business-events
+          __path__: /var/lib/docker/containers/*/*-json.log
+
+    pipeline_stages:
+      # Parse Docker JSON logs
+      - json:
+          expressions:
+            log: log
+            container_name: attrs.name
+
+      # Filter for inventory-service container
+      - match:
+          selector: '{container_name!~".*inventory-service.*"}'
+          action: drop
+
+      # Parse inventory business events
+      - json:
+          expressions:
+            event_type: event_type
+            event: event
+            user_id: user_id
+            section_id: section_id
+            item_id: item_id
+            quantity: quantity
+            operation_id: operation_id
+            balance_before: balance_before
+            balance_after: balance_after
+            cache_hit: cache_hit
+            transaction_id: transaction_id
+          source: log
+
+      # Only process business events
+      - match:
+          selector: '{event_type=""}'
+          action: drop
+
+      # Add business event labels
+      - labels:
+          event_type:
+          event:
+          user_id:
+          section_id:
+
+      # Template for business events
+      - template:
+          source: output
+          template: |
+            [BUSINESS] {{.event_type}}: {{.event}}
+            {{if .user_id}} user:{{.user_id}}{{end}}
+            {{if .section_id}} section:{{.section_id}}{{end}}
+            {{if .quantity}} qty:{{.quantity}}{{end}}
+            {{if .balance_before}} before:{{.balance_before}}{{end}}
+            {{if .balance_after}} after:{{.balance_after}}{{end}}
+            {{if .cache_hit}} cache:{{.cache_hit}}{{end}}
+
+      # Set the final log line
+      - output:
+          source: output

@@ -2,10 +2,11 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/pkg/errors"
+	pkgerrors "github.com/pkg/errors"
 	
 	"github.com/shard-legends/inventory-service/internal/models"
 )
@@ -35,11 +36,11 @@ func NewBalanceChecker(deps *ServiceDependencies) BalanceChecker {
 // CheckSufficientBalance checks if user has sufficient balance for requested items
 func (bc *balanceChecker) CheckSufficientBalance(ctx context.Context, req *SufficientBalanceRequest) error {
 	if req == nil {
-		return errors.New("sufficient balance request cannot be nil")
+		return pkgerrors.New("sufficient balance request cannot be nil")
 	}
 
 	if len(req.Items) == 0 {
-		return errors.New("items list cannot be empty")
+		return pkgerrors.New("items list cannot be empty")
 	}
 
 	var missingItems []MissingItemDetails
@@ -48,7 +49,7 @@ func (bc *balanceChecker) CheckSufficientBalance(ctx context.Context, req *Suffi
 	// Check each item
 	for _, item := range req.Items {
 		if item.RequiredQty <= 0 {
-			return errors.Errorf("required quantity must be positive for item %s", item.ItemID.String())
+			return pkgerrors.Errorf("required quantity must be positive for item %s", item.ItemID.String())
 		}
 
 		// Calculate current balance for this item
@@ -62,7 +63,7 @@ func (bc *balanceChecker) CheckSufficientBalance(ctx context.Context, req *Suffi
 
 		currentBalance, err := calculator.CalculateCurrentBalance(ctx, balanceReq)
 		if err != nil {
-			return errors.Wrapf(err, "failed to calculate balance for item %s", item.ItemID.String())
+			return pkgerrors.Wrapf(err, "failed to calculate balance for item %s", item.ItemID.String())
 		}
 
 		// Check if balance is sufficient
@@ -93,7 +94,7 @@ func (bc *balanceChecker) CheckSufficientBalance(ctx context.Context, req *Suffi
 // CheckSufficientBalanceForItems is a convenience method that takes item quantity requests
 func (bc *balanceChecker) CheckSufficientBalanceForItems(ctx context.Context, userID, sectionID uuid.UUID, items []models.ItemQuantityRequest) error {
 	if len(items) == 0 {
-		return errors.New("items list cannot be empty")
+		return pkgerrors.New("items list cannot be empty")
 	}
 
 	// Convert to ItemQuantityCheck format
@@ -133,7 +134,7 @@ func (bc *balanceChecker) GetAvailableBalance(ctx context.Context, userID, secti
 
 		balance, err := calculator.CalculateCurrentBalance(ctx, balanceReq)
 		if err != nil {
-			return nil, errors.Wrapf(err, "failed to get balance for item %s", item.ItemID.String())
+			return nil, pkgerrors.Wrapf(err, "failed to get balance for item %s", item.ItemID.String())
 		}
 
 		// Create a unique key for this item combination
@@ -152,19 +153,19 @@ func (bc *balanceChecker) GetAvailableBalance(ctx context.Context, userID, secti
 func (bc *balanceChecker) ValidateItemQuantities(items []ItemQuantityCheck) error {
 	for i, item := range items {
 		if item.RequiredQty <= 0 {
-			return errors.Errorf("item at index %d has invalid quantity: %d", i, item.RequiredQty)
+			return pkgerrors.Errorf("item at index %d has invalid quantity: %d", i, item.RequiredQty)
 		}
 		
 		if item.ItemID == uuid.Nil {
-			return errors.Errorf("item at index %d has invalid item ID", i)
+			return pkgerrors.Errorf("item at index %d has invalid item ID", i)
 		}
 		
 		if item.CollectionID == uuid.Nil {
-			return errors.Errorf("item at index %d has invalid collection ID", i)
+			return pkgerrors.Errorf("item at index %d has invalid collection ID", i)
 		}
 		
 		if item.QualityLevelID == uuid.Nil {
-			return errors.Errorf("item at index %d has invalid quality level ID", i)
+			return pkgerrors.Errorf("item at index %d has invalid quality level ID", i)
 		}
 	}
 	
@@ -173,13 +174,14 @@ func (bc *balanceChecker) ValidateItemQuantities(items []ItemQuantityCheck) erro
 
 // IsInsufficientBalanceError checks if an error is an insufficient balance error
 func IsInsufficientBalanceError(err error) bool {
-	_, ok := err.(*InsufficientBalanceError)
-	return ok
+	var insuffErr *InsufficientBalanceError
+	return errors.As(err, &insuffErr)
 }
 
 // GetMissingItemsFromError extracts missing items from an insufficient balance error
 func GetMissingItemsFromError(err error) ([]MissingItemDetails, bool) {
-	if insuffErr, ok := err.(*InsufficientBalanceError); ok {
+	var insuffErr *InsufficientBalanceError
+	if errors.As(err, &insuffErr) {
 		return insuffErr.MissingItems, true
 	}
 	return nil, false

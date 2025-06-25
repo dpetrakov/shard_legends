@@ -23,10 +23,13 @@ type InventoryService interface {
 	
 	// High-level business operations
 	GetUserInventory(ctx context.Context, userID, sectionID uuid.UUID) ([]*models.InventoryItemResponse, error)
+	AddItems(ctx context.Context, req *models.AddItemsRequest) ([]uuid.UUID, error)
+	AdjustInventory(ctx context.Context, req *models.AdjustInventoryRequest) (*models.AdjustInventoryResponse, error)
+	
+	// Reservation operations  
 	ReserveItems(ctx context.Context, req *models.ReserveItemsRequest) ([]uuid.UUID, error)
 	ReturnReservedItems(ctx context.Context, req *models.ReturnReserveRequest) error
 	ConsumeReservedItems(ctx context.Context, req *models.ConsumeReserveRequest) error
-	AddItems(ctx context.Context, req *models.AddItemsRequest) ([]uuid.UUID, error)
 }
 
 // ClassifierService defines methods for working with classifiers and their mappings
@@ -59,6 +62,9 @@ type BalanceChecker interface {
 // OperationCreator defines the interface for creating operations in transactions
 type OperationCreator interface {
 	CreateOperationsInTransaction(ctx context.Context, operations []*models.Operation) ([]uuid.UUID, error)
+	CreateReservationOperations(ctx context.Context, req *models.ReserveItemsRequest) ([]uuid.UUID, error)
+	CreateReturnOperations(ctx context.Context, req *models.ReturnReserveRequest) error
+	CreateConsumptionOperations(ctx context.Context, req *models.ConsumeReserveRequest) error
 }
 
 // CacheManager defines the interface for cache management operations
@@ -181,6 +187,19 @@ type CacheInterface interface {
 
 // ServiceDependencies aggregates all dependencies needed by services
 type ServiceDependencies struct {
-	Repositories *RepositoryInterfaces
-	Cache        CacheInterface
+	Repositories   *RepositoryInterfaces
+	Cache          CacheInterface
+	Metrics        MetricsInterface
+	CodeConverter  CodeConverter
+	BalanceChecker BalanceChecker
+}
+
+// MetricsInterface defines the metrics collection interface
+type MetricsInterface interface {
+	RecordInventoryOperation(operationType, section, status string)
+	RecordBalanceCalculation(section string, duration time.Duration, status string)
+	RecordCacheHit(cacheType string)
+	RecordCacheMiss(cacheType string)
+	RecordTransactionMetrics(operationType string, operationCount int, duration time.Duration)
+	RecordItemsPerInventory(section string, count int)
 }

@@ -25,7 +25,7 @@ scrape_configs:
   # Auth Service
   - job_name: 'auth-service'
     static_configs:
-      - targets: ['auth-service:8080']
+      - targets: ['slcw-auth-service-dev:8080']
     metrics_path: '/metrics'
     scrape_interval: 30s
 
@@ -39,21 +39,21 @@ scrape_configs:
   # Telegram Bot Service
   - job_name: 'telegram-bot-service'
     static_configs:
-      - targets: ['telegram-bot-service:8080']
+      - targets: ['slcw-telegram-bot-dev:8080']
     metrics_path: '/metrics'
     scrape_interval: 30s
 
   # Inventory Service
   - job_name: 'inventory-service'
     static_configs:
-      - targets: ['inventory-service:8080']
+      - targets: ['slcw-inventory-service-dev:8080']
     metrics_path: '/metrics'
     scrape_interval: 30s
 
-  # API Gateway (nginx metrics if enabled)
+  # API Gateway
   - job_name: 'api-gateway'
     static_configs:
-      - targets: ['api-gateway:8080']
+      - targets: ['slcw-api-gateway-dev:8080']
     metrics_path: '/metrics'
     scrape_interval: 30s
 

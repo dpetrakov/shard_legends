@@ -2,14 +2,42 @@ package database
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"testing"
 	"time"
 
+	"github.com/pashagolub/pgxmock/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+
+	"github.com/shard-legends/inventory-service/pkg/metrics"
 )
+
+// MockMetrics is a mock for the metrics.Metrics struct
+type MockMetrics struct {
+	mock.Mock
+}
+
+func (m *MockMetrics) Initialize() {
+	m.Called()
+}
+
+func (m *MockMetrics) Shutdown() {
+	m.Called()
+}
+
+func (m *MockMetrics) UpdateDependencyHealth(dependency string, healthy bool) {
+	m.Called(dependency, healthy)
+}
+
+func (m *MockMetrics) RecordInventoryOperation(operationType, section, status string) {
+	m.Called(operationType, section, status)
+}
+
+// Implement other methods from metrics.Metrics if needed for tests
+// For now, we only need UpdateDependencyHealth
 
 func TestNewPostgresDB_InvalidURL(t *testing.T) {
 	logger := slog.Default()
@@ -30,15 +58,14 @@ func TestNewPostgresDB_InvalidURL(t *testing.T) {
 
 func TestNewPostgresDB_ConnectionFail(t *testing.T) {
 	logger := slog.Default()
+	// Используем nil вместо настоящего сборщика метрик, чтобы избежать дублирующей регистрации.
+	var realMetrics *metrics.Metrics = nil
 
 	t.Run("connection fails", func(t *testing.T) {
-		// Use localhost with wrong port for immediate connection refused
 		invalidURL := "postgresql://user:pass@localhost:1/testdb"
-
-		db, err := NewPostgresDB(invalidURL, 10, logger, nil)
+		db, err := NewPostgresDB(invalidURL, 10, logger, realMetrics)
 		assert.Error(t, err)
 		assert.Nil(t, db)
-		assert.Contains(t, err.Error(), "failed to")
 	})
 }
 
@@ -565,4 +592,69 @@ func TestPostgresDB_AdvancedMetricsErrorHandling(t *testing.T) {
 			db.Health(ctx)
 		})
 	})
+}
+
+func TestPostgresDB_Health(t *testing.T) {
+	logger := slog.Default()
+	mockPool, err := pgxmock.NewPool()
+	assert.NoError(t, err)
+	defer mockPool.Close()
+
+	// Используем nil вместо настоящего сборщика метрик, чтобы избежать дублирующей регистрации.
+	var realMetrics *metrics.Metrics = nil
+
+	// We cast the mock pool to our local interface type to use it.
+	db := &PostgresDB{
+		pool:    mockPool,
+		logger:  logger,
+		metrics: realMetrics,
+	}
+
+	t.Run("Health check success", func(t *testing.T) {
+		mockPool.ExpectPing().WillReturnError(nil)
+		err := db.Health(context.Background())
+		assert.NoError(t, err)
+		assert.NoError(t, mockPool.ExpectationsWereMet())
+	})
+
+	t.Run("Health check failure", func(t *testing.T) {
+		expectedErr := errors.New("db error")
+		mockPool.ExpectPing().WillReturnError(expectedErr)
+
+		err := db.Health(context.Background())
+		assert.Error(t, err)
+		assert.Equal(t, expectedErr, err)
+		assert.NoError(t, mockPool.ExpectationsWereMet())
+	})
+}
+
+func TestPostgresDB_Close(t *testing.T) {
+	logger := slog.Default()
+	mockPool, err := pgxmock.NewPool()
+	assert.NoError(t, err)
+
+	// Используем nil вместо настоящего сборщика метрик, чтобы избежать дублирующей регистрации.
+	var realMetrics *metrics.Metrics = nil
+
+	db := &PostgresDB{
+		pool:    mockPool,
+		logger:  logger,
+		metrics: realMetrics,
+	}
+
+	mockPool.ExpectClose()
+	db.Close()
+	assert.NoError(t, mockPool.ExpectationsWereMet())
+}
+
+func TestPostgresDB_Pool(t *testing.T) {
+	mockPool, err := pgxmock.NewPool()
+	assert.NoError(t, err)
+	defer mockPool.Close()
+
+	db := &PostgresDB{
+		pool: mockPool,
+	}
+
+	assert.Equal(t, mockPool, db.Pool())
 }

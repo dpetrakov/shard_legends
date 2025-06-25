@@ -84,6 +84,15 @@ groups:
           summary: "API Gateway is down"
           description: "API Gateway has been unreachable for more than 2 minutes"
 
+      - alert: InventoryServiceDown
+        expr: up{job="inventory-service"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Inventory Service is down"
+          description: "Inventory Service has been unreachable for more than 2 minutes"
+
       - alert: HighLoginFailureRate
         expr: rate(business_events_total{event="user_login",status="failed"}[5m]) > 0.1
         for: 5m
@@ -92,3 +101,68 @@ groups:
         annotations:
           summary: "High login failure rate"
           description: "Login failure rate is {{ $value }} failures per second"
+
+  - name: inventory_service_service_alerts
+    rules:
+      - alert: InventoryHighErrorRate
+        expr: rate(inventory_service_http_requests_total{job="inventory-service",status=~"5.."}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate in Inventory Service"
+          description: "Error rate is {{ $value }} errors per second"
+
+      - alert: InventoryHighResponseTime
+        expr: histogram_quantile(0.95, sum(rate(inventory_service_http_request_duration_seconds_bucket{job="inventory-service"}[5m])) by (le)) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High response time in Inventory Service"
+          description: "95th percentile response time is {{ $value }} seconds"
+
+      - alert: InventoryDatabaseDown
+        expr: inventory_service_dependency_health{job="inventory-service",dependency="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Inventory Service PostgreSQL is down"
+          description: "PostgreSQL health check is failing for Inventory Service"
+
+      - alert: InventoryRedisDown
+        expr: inventory_service_dependency_health{job="inventory-service",dependency="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Inventory Service Redis is down"
+          description: "Redis health check is failing for Inventory Service"
+
+      - alert: InventoryLowCacheHitRate
+        expr: sum(rate(inventory_service_cache_hits_total{job="inventory-service"}[5m])) / (sum(rate(inventory_service_cache_hits_total{job="inventory-service"}[5m])) + sum(rate(inventory_service_cache_misses_total{job="inventory-service"}[5m]))) < 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low cache hit rate in Inventory Service"
+          description: "Cache hit rate is {{ $value }}"
+
+      - alert: InventorySlowBalanceCalculation
+        expr: histogram_quantile(0.95, sum(rate(inventory_service_balance_calculation_duration_seconds_bucket{job="inventory-service"}[5m])) by (le)) > 2.0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow balance calculations in Inventory Service"
+          description: "95th percentile balance calculation time is {{ $value }} seconds"
+
+      - alert: InventoryHighTransactionFailureRate
+        expr: rate(inventory_service_operations_total{job="inventory-service",status="error"}[5m]) / rate(inventory_service_operations_total{job="inventory-service"}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High transaction failure rate in Inventory Service"
+          description: "Transaction failure rate is {{ $value }}"

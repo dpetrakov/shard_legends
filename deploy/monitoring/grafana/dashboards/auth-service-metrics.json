@@ -1752,7 +1752,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "auth_service_dependencies_healthy",
+          "expr": "auth_service_dependencies_healthy{job=\"auth-service\"}",
           "legendFormat": "{{dependency}}",
           "refId": "A"
         }

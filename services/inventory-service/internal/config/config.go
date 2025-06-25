@@ -25,6 +25,9 @@ type Config struct {
 
 	// Metrics configuration
 	MetricsPort string
+
+	// JWT configuration
+	JWTPublicKeyPath string
 }
 
 // Load loads configuration from environment variables
@@ -86,6 +89,12 @@ func Load() (*Config, error) {
 	cfg.MetricsPort = os.Getenv("METRICS_PORT")
 	if cfg.MetricsPort == "" {
 		cfg.MetricsPort = "9090"
+	}
+
+	// JWT configuration
+	cfg.JWTPublicKeyPath = os.Getenv("JWT_PUBLIC_KEY_PATH")
+	if cfg.JWTPublicKeyPath == "" {
+		cfg.JWTPublicKeyPath = "/etc/auth/public_key.pem"
 	}
 
 	return cfg, nil

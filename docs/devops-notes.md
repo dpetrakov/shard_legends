@@ -41,9 +41,15 @@ openssl rand -hex 32
   docker compose --profile migrations run --rm migrate version
 ```
 
-Тестирование
+# Тестирование
 ```bash
 go test ./...
+```
+
+# Создание токена dpetrkov78
+```
+cd scripts/jwt_gen
+go run .
 ```
 
   1. Откройте Grafana: http://localhost:15000

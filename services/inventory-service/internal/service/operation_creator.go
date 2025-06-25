@@ -24,6 +24,8 @@ func NewOperationCreator(deps *ServiceDependencies) OperationCreator {
 
 // CreateOperationsInTransaction creates multiple operations within a database transaction
 func (oc *operationCreator) CreateOperationsInTransaction(ctx context.Context, operations []*models.Operation) ([]uuid.UUID, error) {
+	start := time.Now()
+	
 	if len(operations) == 0 {
 		return nil, errors.New("operations list cannot be empty")
 	}
@@ -82,6 +84,16 @@ func (oc *operationCreator) CreateOperationsInTransaction(ctx context.Context, o
 		// Log the error but don't fail the operation since data is already committed
 		// In a real application, you might want to use structured logging here
 		_ = err
+	}
+
+	// Record metrics
+	if oc.deps.Metrics != nil {
+		// Determine operation type from first operation
+		operationType := "mixed"
+		if len(operations) > 0 && operations[0].OperationTypeID != uuid.Nil {
+			operationType = operations[0].OperationTypeID.String()
+		}
+		oc.deps.Metrics.RecordTransactionMetrics(operationType, len(operations), time.Since(start))
 	}
 
 	return operationIDs, nil
@@ -145,6 +157,7 @@ func (oc *operationCreator) invalidateCacheForOperations(ctx context.Context, op
 }
 
 // CreateReservationOperations creates operations for item reservation
+// According to spec: creates 2 operations per item (debit from main, credit to factory)
 func (oc *operationCreator) CreateReservationOperations(ctx context.Context, req *models.ReserveItemsRequest) ([]uuid.UUID, error) {
 	if req == nil {
 		return nil, errors.New("reserve items request cannot be nil")
@@ -154,9 +167,83 @@ func (oc *operationCreator) CreateReservationOperations(ctx context.Context, req
 		return nil, errors.Wrap(err, "reserve items request validation failed")
 	}
 
-	// TODO: Convert section name to UUID when implementing reservation operations
-	// For now, assume section is provided as code and needs conversion
-	// In practice, this would come from the request context or be validated earlier
+	// Convert codes to UUIDs for each item
+	for i := range req.Items {
+		// For now, we'll handle code conversion manually since the current interface is different
+		// TODO: Create a proper method for converting ItemQuantityRequest codes
+		if req.Items[i].Collection != nil && *req.Items[i].Collection != "" {
+			// Convert collection code to UUID
+			mapping, err := oc.deps.Repositories.Classifier.GetCodeToUUIDMapping(ctx, models.ClassifierCollection)
+			if err != nil {
+				return nil, errors.Wrapf(err, "failed to get collection mapping for item %d", i)
+			}
+			if collectionUUID, found := mapping[*req.Items[i].Collection]; found {
+				req.Items[i].CollectionID = &collectionUUID
+			} else {
+				return nil, errors.Errorf("unknown collection code: %s for item %d", *req.Items[i].Collection, i)
+			}
+		}
+
+		if req.Items[i].QualityLevel != nil && *req.Items[i].QualityLevel != "" {
+			// Convert quality level code to UUID
+			mapping, err := oc.deps.Repositories.Classifier.GetCodeToUUIDMapping(ctx, models.ClassifierQualityLevel)
+			if err != nil {
+				return nil, errors.Wrapf(err, "failed to get quality level mapping for item %d", i)
+			}
+			if qualityUUID, found := mapping[*req.Items[i].QualityLevel]; found {
+				req.Items[i].QualityLevelID = &qualityUUID
+			} else {
+				return nil, errors.Errorf("unknown quality level code: %s for item %d", *req.Items[i].QualityLevel, i)
+			}
+		}
+	}
+
+	// Get section IDs 
+	sectionMapping, err := oc.deps.Repositories.Classifier.GetCodeToUUIDMapping(ctx, models.ClassifierInventorySection)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get section mapping")
+	}
+
+	mainSectionID, found := sectionMapping["main"]
+	if !found {
+		return nil, errors.New("main inventory section not found")
+	}
+
+	factorySectionID, found := sectionMapping["factory"]
+	if !found {
+		return nil, errors.New("factory inventory section not found")
+	}
+
+	// Convert to ItemQuantityCheck format for balance checking
+	var itemChecks []ItemQuantityCheck
+	for _, item := range req.Items {
+		collectionID := oc.getDefaultCollectionID()
+		if item.CollectionID != nil {
+			collectionID = *item.CollectionID
+		}
+
+		qualityLevelID := oc.getDefaultQualityLevelID()
+		if item.QualityLevelID != nil {
+			qualityLevelID = *item.QualityLevelID
+		}
+
+		itemChecks = append(itemChecks, ItemQuantityCheck{
+			ItemID:         item.ItemID,
+			CollectionID:   collectionID,
+			QualityLevelID: qualityLevelID,
+			RequiredQty:    item.Quantity,
+		})
+	}
+
+	// Check sufficient balance in main inventory first
+	balanceReq := &SufficientBalanceRequest{
+		UserID:    req.UserID,
+		SectionID: mainSectionID,
+		Items:     itemChecks,
+	}
+	if err := oc.deps.BalanceChecker.CheckSufficientBalance(ctx, balanceReq); err != nil {
+		return nil, errors.Wrap(err, "insufficient balance for reservation")
+	}
 
 	// Get operation type ID for reservation
 	operationMapping, err := oc.deps.Repositories.Classifier.GetCodeToUUIDMapping(ctx, models.ClassifierOperationType)
@@ -169,24 +256,47 @@ func (oc *operationCreator) CreateReservationOperations(ctx context.Context, req
 		return nil, errors.New("reservation operation type not found")
 	}
 
-	// Create operations for each item (negative quantities for reservation)
+	// Create paired operations for each item (2 operations per item)
 	var operations []*models.Operation
 	for _, item := range req.Items {
-		// Convert item codes to UUIDs if necessary
-		// This is simplified - in practice you'd handle code conversion properly
-
-		op := &models.Operation{
-			UserID:          req.UserID,
-			SectionID:       uuid.New(), // Would be converted from section code
-			ItemID:          item.ItemID,
-			CollectionID:    uuid.New(), // Would be converted from collection code
-			QualityLevelID:  uuid.New(), // Would be converted from quality level code
-			QuantityChange:  -item.Quantity, // Negative for reservation
-			OperationTypeID: reservationTypeID,
-			OperationID:     &req.OperationID,
+		// Get collection and quality level IDs, using defaults if not provided
+		collectionID := oc.getDefaultCollectionID()
+		if item.CollectionID != nil {
+			collectionID = *item.CollectionID
 		}
 
-		operations = append(operations, op)
+		qualityLevelID := oc.getDefaultQualityLevelID()
+		if item.QualityLevelID != nil {
+			qualityLevelID = *item.QualityLevelID
+		}
+
+		// Operation 1: Debit from main inventory
+		debitOp := &models.Operation{
+			UserID:          req.UserID,
+			SectionID:       mainSectionID,
+			ItemID:          item.ItemID,
+			CollectionID:    collectionID,
+			QualityLevelID:  qualityLevelID,
+			QuantityChange:  -item.Quantity, // Negative for debit
+			OperationTypeID: reservationTypeID,
+			OperationID:     &req.OperationID,
+			Comment:         stringPtr("Factory reservation - debit from main"),
+		}
+
+		// Operation 2: Credit to factory inventory
+		creditOp := &models.Operation{
+			UserID:          req.UserID,
+			SectionID:       factorySectionID,
+			ItemID:          item.ItemID,
+			CollectionID:    collectionID,
+			QualityLevelID:  qualityLevelID,
+			QuantityChange:  item.Quantity, // Positive for credit
+			OperationTypeID: reservationTypeID,
+			OperationID:     &req.OperationID,
+			Comment:         stringPtr("Factory reservation - credit to factory"),
+		}
+
+		operations = append(operations, debitOp, creditOp)
 	}
 
 	return oc.CreateOperationsInTransaction(ctx, operations)
@@ -219,21 +329,56 @@ func (oc *operationCreator) CreateReturnOperations(ctx context.Context, req *mod
 		return errors.New("return operation type not found")
 	}
 
-	// Create return operations (opposite of reservation)
+	// Get section IDs for proper return operations
+	sectionMapping, err := oc.deps.Repositories.Classifier.GetCodeToUUIDMapping(ctx, models.ClassifierInventorySection)
+	if err != nil {
+		return errors.Wrap(err, "failed to get section mapping")
+	}
+
+	mainSectionID, found := sectionMapping["main"]
+	if !found {
+		return errors.New("main inventory section not found")
+	}
+
+	factorySectionID, found := sectionMapping["factory"]
+	if !found {
+		return errors.New("factory inventory section not found")
+	}
+
+	// Create paired return operations for each reserved item (2 operations per item)
+	// According to spec: debit from factory, credit to main
 	var returnOperations []*models.Operation
 	for _, reservedOp := range reservedOps {
-		returnOp := &models.Operation{
-			UserID:          reservedOp.UserID,
-			SectionID:       reservedOp.SectionID,
-			ItemID:          reservedOp.ItemID,
-			CollectionID:    reservedOp.CollectionID,
-			QualityLevelID:  reservedOp.QualityLevelID,
-			QuantityChange:  -reservedOp.QuantityChange, // Opposite of reservation
-			OperationTypeID: returnTypeID,
-			OperationID:     &req.OperationID,
-		}
+		// Only process factory credit operations from original reservation (skip main debits)
+		if reservedOp.SectionID == factorySectionID && reservedOp.QuantityChange > 0 {
+			// Operation 1: Debit from factory inventory
+			factoryDebitOp := &models.Operation{
+				UserID:          reservedOp.UserID,
+				SectionID:       factorySectionID,
+				ItemID:          reservedOp.ItemID,
+				CollectionID:    reservedOp.CollectionID,
+				QualityLevelID:  reservedOp.QualityLevelID,
+				QuantityChange:  -reservedOp.QuantityChange, // Negative to debit
+				OperationTypeID: returnTypeID,
+				OperationID:     &req.OperationID,
+				Comment:         stringPtr("Factory return - debit from factory"),
+			}
 
-		returnOperations = append(returnOperations, returnOp)
+			// Operation 2: Credit to main inventory
+			mainCreditOp := &models.Operation{
+				UserID:          reservedOp.UserID,
+				SectionID:       mainSectionID,
+				ItemID:          reservedOp.ItemID,
+				CollectionID:    reservedOp.CollectionID,
+				QualityLevelID:  reservedOp.QualityLevelID,
+				QuantityChange:  reservedOp.QuantityChange, // Positive to credit
+				OperationTypeID: returnTypeID,
+				OperationID:     &req.OperationID,
+				Comment:         stringPtr("Factory return - credit to main"),
+			}
+
+			returnOperations = append(returnOperations, factoryDebitOp, mainCreditOp)
+		}
 	}
 
 	_, err = oc.CreateOperationsInTransaction(ctx, returnOperations)
@@ -267,23 +412,37 @@ func (oc *operationCreator) CreateConsumptionOperations(ctx context.Context, req
 		return errors.New("consumption operation type not found")
 	}
 
-	// Create consumption operations (no quantity change since items were already reserved)
-	// This is more for audit trail
+	// Get factory section ID
+	sectionMapping, err := oc.deps.Repositories.Classifier.GetCodeToUUIDMapping(ctx, models.ClassifierInventorySection)
+	if err != nil {
+		return errors.Wrap(err, "failed to get section mapping")
+	}
+
+	factorySectionID, found := sectionMapping["factory"]
+	if !found {
+		return errors.New("factory inventory section not found")
+	}
+
+	// Create consumption operations (debit from factory inventory, destroying the items)
+	// According to spec: only creates operations for factory section debits
 	var consumeOperations []*models.Operation
 	for _, reservedOp := range reservedOps {
-		consumeOp := &models.Operation{
-			UserID:          reservedOp.UserID,
-			SectionID:       reservedOp.SectionID,
-			ItemID:          reservedOp.ItemID,
-			CollectionID:    reservedOp.CollectionID,
-			QualityLevelID:  reservedOp.QualityLevelID,
-			QuantityChange:  0, // No additional change, items already reserved
-			OperationTypeID: consumeTypeID,
-			OperationID:     &req.OperationID,
-			Comment:         stringPtr("Item consumption confirmed"),
-		}
+		// Only process factory credit operations (skip main debit operations)
+		if reservedOp.SectionID == factorySectionID && reservedOp.QuantityChange > 0 {
+			consumeOp := &models.Operation{
+				UserID:          reservedOp.UserID,
+				SectionID:       factorySectionID,
+				ItemID:          reservedOp.ItemID,
+				CollectionID:    reservedOp.CollectionID,
+				QualityLevelID:  reservedOp.QualityLevelID,
+				QuantityChange:  -reservedOp.QuantityChange, // Negative to debit from factory
+				OperationTypeID: consumeTypeID,
+				OperationID:     &req.OperationID,
+				Comment:         stringPtr("Factory consumption - items destroyed"),
+			}
 
-		consumeOperations = append(consumeOperations, consumeOp)
+			consumeOperations = append(consumeOperations, consumeOp)
+		}
 	}
 
 	_, err = oc.CreateOperationsInTransaction(ctx, consumeOperations)
@@ -293,4 +452,18 @@ func (oc *operationCreator) CreateConsumptionOperations(ctx context.Context, req
 // Helper function to create string pointer
 func stringPtr(s string) *string {
 	return &s
+}
+
+// getDefaultCollectionID returns the default collection UUID
+// In practice, this should retrieve the standard collection from config or constants
+func (oc *operationCreator) getDefaultCollectionID() uuid.UUID {
+	// Using predefined default UUIDs as per the inventory service design
+	return uuid.MustParse("00000000-0000-0000-0000-000000000001") // Default collection
+}
+
+// getDefaultQualityLevelID returns the default quality level UUID  
+// In practice, this should retrieve the standard quality level from config or constants
+func (oc *operationCreator) getDefaultQualityLevelID() uuid.UUID {
+	// Using predefined default UUIDs as per the inventory service design
+	return uuid.MustParse("00000000-0000-0000-0000-000000000002") // Default quality
 }

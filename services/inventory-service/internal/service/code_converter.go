@@ -193,8 +193,7 @@ func (cc *codeConverter) ConvertItemQuantityRequest(ctx context.Context, req *mo
 		}
 
 		if collectionUUID, found := mapping[*req.Collection]; found {
-			// Store the UUID (this would need to be added to the struct)
-			_ = collectionUUID // TODO: Add CollectionID field to ItemQuantityRequest
+			req.CollectionID = &collectionUUID
 		} else {
 			return errors.Errorf("unknown collection code: %s", *req.Collection)
 		}
@@ -208,8 +207,7 @@ func (cc *codeConverter) ConvertItemQuantityRequest(ctx context.Context, req *mo
 		}
 
 		if qualityUUID, found := mapping[*req.QualityLevel]; found {
-			// Store the UUID (this would need to be added to the struct)
-			_ = qualityUUID // TODO: Add QualityLevelID field to ItemQuantityRequest
+			req.QualityLevelID = &qualityUUID
 		} else {
 			return errors.Errorf("unknown quality level code: %s", *req.QualityLevel)
 		}

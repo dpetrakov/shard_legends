@@ -60,3 +60,81 @@ scrape_configs:
       # Output the message
       - output:
           source: message
+
+  # Inventory Service specific logs
+  - job_name: inventory-service
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: inventory-service
+          __path__: /var/lib/docker/containers/*/*.log
+    
+    pipeline_stages:
+      # Parse Docker JSON logs
+      - json:
+          expressions:
+            log: log
+            stream: stream
+            container_name: attrs.name
+      
+      # Filter for inventory-service container only
+      - match:
+          selector: '{container_name!~".*inventory-service.*"}'
+          action: drop
+      
+      # Parse the structured log message
+      - json:
+          expressions:
+            timestamp: time
+            level: level
+            service: service
+            version: version
+            request_id: request_id
+            user_id: user_id
+            method: method
+            path: path
+            status: status
+            latency: latency
+            latency_ms: latency_ms
+            operation_type: operation_type
+            section: section
+            error: error
+            message: msg
+          source: log
+      
+      # Use extracted timestamp
+      - timestamp:
+          source: timestamp
+          format: RFC3339Nano
+      
+      # Add labels
+      - labels:
+          level:
+          service:
+          request_id:
+          user_id:
+          method:
+          status:
+          operation_type:
+          section:
+      
+      # Template for nice output
+      - template:
+          source: output
+          template: |
+            {{if .level}}[{{.level | upper}}]{{end}}
+            {{if .request_id}}[{{.request_id}}]{{end}}
+            {{if .user_id}}[user:{{.user_id}}]{{end}}
+            {{if .method}}{{.method}}{{end}}
+            {{if .path}} {{.path}}{{end}}
+            {{if .status}} ({{.status}}){{end}}
+            {{if .latency_ms}} {{.latency_ms}}ms{{end}}
+            {{if .operation_type}} op:{{.operation_type}}{{end}}
+            {{if .section}} section:{{.section}}{{end}}
+            {{if .message}} - {{.message}}{{end}}
+            {{if .error}} ERROR: {{.error}}{{end}}
+      
+      # Output processed message
+      - output:
+          source: output

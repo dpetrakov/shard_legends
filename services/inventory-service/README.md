@@ -66,11 +66,15 @@ go run cmd/server/main.go
 - External: `https://dev.slcw.dimlight.online/api/inventory/*`
 - Internal: `http://localhost:9000/inventory/*`
 
+### Основные эндпоинты
+- `GET /api/inventory` - Получить инвентарь пользователя (требует JWT)
+- `POST /api/inventory/adjust` - Административная корректировка инвентаря (требует JWT + admin права)
+
 ### Health Check
-- `GET /inventory/health` - Проверка работоспособности (БД + Redis + общий статус)
+- `GET /health` - Проверка работоспособности (БД + Redis + общий статус)
 
 ### Метрики
-- `GET /inventory/metrics` - Метрики Prometheus (только внутренний доступ)
+- `GET /metrics` - Метрики Prometheus (только внутренний доступ)
 
 ## Конфигурация
 
@@ -119,10 +123,9 @@ inventory-service/
 - `inventory_redis_connections` - Количество соединений с Redis
 - `inventory_dependency_health` - Статус здоровья зависимостей
 
-### Health Checks
+### Health Check
 
-- **Liveness**: `/health/live` - проверяет, что процесс запущен
-- **Readiness**: `/health/ready` - проверяет готовность к обработке запросов
+- **Basic**: `/health` - проверяет работоспособность сервиса и его зависимостей
 
 ## Разработка
 

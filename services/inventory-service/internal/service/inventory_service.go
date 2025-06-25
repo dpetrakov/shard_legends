@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -76,6 +77,9 @@ func (is *inventoryService) GetUserInventory(ctx context.Context, userID, sectio
 	// Get all item keys for the user
 	itemKeys, err := is.deps.Repositories.Inventory.GetUserInventoryItems(ctx, userID, sectionID)
 	if err != nil {
+		if is.deps.Metrics != nil {
+			is.deps.Metrics.RecordInventoryOperation("get_inventory", sectionID.String(), "error")
+		}
 		return nil, errors.Wrap(err, "failed to get user inventory items")
 	}
 
@@ -132,57 +136,15 @@ func (is *inventoryService) GetUserInventory(ctx context.Context, userID, sectio
 		result = append(result, item)
 	}
 
+	// Record metrics
+	if is.deps.Metrics != nil {
+		is.deps.Metrics.RecordInventoryOperation("get_inventory", sectionID.String(), "success")
+		is.deps.Metrics.RecordItemsPerInventory(sectionID.String(), len(result))
+	}
+
 	return result, nil
 }
 
-// ReserveItems reserves items for a specific operation
-func (is *inventoryService) ReserveItems(ctx context.Context, req *models.ReserveItemsRequest) ([]uuid.UUID, error) {
-	if err := models.ValidateReserveItemsRequest(req); err != nil {
-		return nil, errors.Wrap(err, "reserve items request validation failed")
-	}
-
-	// Convert request to internal format and check sufficient balance
-	checkItems, err := is.convertToBalanceCheck(ctx, req.UserID, req.Items)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to convert items for balance check")
-	}
-
-	// Get section ID (assume main section for now)
-	sectionID, err := is.getSectionID(ctx, models.SectionMain)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get section ID")
-	}
-
-	balanceReq := &SufficientBalanceRequest{
-		UserID:    req.UserID,
-		SectionID: sectionID,
-		Items:     checkItems,
-	}
-
-	// Check if user has sufficient balance
-	if err := is.balanceChecker.CheckSufficientBalance(ctx, balanceReq); err != nil {
-		return nil, err // Return insufficient balance error directly
-	}
-
-	// Create reservation operations (placeholder - needs implementation)
-	// TODO: Implement reservation operations
-	_ = req
-	return nil, errors.New("reservation operations not yet implemented")
-}
-
-// ReturnReservedItems returns previously reserved items
-func (is *inventoryService) ReturnReservedItems(ctx context.Context, req *models.ReturnReserveRequest) error {
-	// TODO: Implement return operations
-	_ = req
-	return errors.New("return operations not yet implemented")
-}
-
-// ConsumeReservedItems consumes previously reserved items
-func (is *inventoryService) ConsumeReservedItems(ctx context.Context, req *models.ConsumeReserveRequest) error {
-	// TODO: Implement consumption operations
-	_ = req
-	return errors.New("consumption operations not yet implemented")
-}
 
 // AddItems adds items to user's inventory
 func (is *inventoryService) AddItems(ctx context.Context, req *models.AddItemsRequest) ([]uuid.UUID, error) {
@@ -335,4 +297,239 @@ func (is *inventoryService) getCodeFromUUID(ctx context.Context, classifierType 
 	}
 
 	return "", errors.Errorf("unknown UUID %s for classifier %s", id.String(), classifierType)
+}
+
+// AdjustInventory performs administrative inventory adjustments
+func (is *inventoryService) AdjustInventory(ctx context.Context, req *models.AdjustInventoryRequest) (*models.AdjustInventoryResponse, error) {
+	if err := models.ValidateAdjustInventoryRequest(req); err != nil {
+		return nil, errors.Wrap(err, "adjust inventory request validation failed")
+	}
+
+	// Convert section code to UUID
+	sectionMapping, err := is.deps.Repositories.Classifier.GetCodeToUUIDMapping(ctx, models.ClassifierInventorySection)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get section mapping")
+	}
+	sectionID, exists := sectionMapping[req.Section]
+	if !exists {
+		return nil, errors.Errorf("unknown section code: %s", req.Section)
+	}
+
+	// Get admin adjustment operation type UUID
+	operationTypeMapping, err := is.deps.Repositories.Classifier.GetCodeToUUIDMapping(ctx, models.ClassifierOperationType)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get operation type mapping")
+	}
+	operationTypeID, exists := operationTypeMapping[models.OperationTypeAdminAdjustment]
+	if !exists {
+		return nil, errors.Errorf("unknown operation type: %s", models.OperationTypeAdminAdjustment)
+	}
+
+	// Create operations for each item adjustment
+	var operations []*models.Operation
+	operationID := uuid.New() // Single operation ID for the whole adjustment
+
+	for _, itemReq := range req.Items {
+		// Convert collection and quality codes to UUIDs if provided
+		collectionID := uuid.Nil
+		qualityLevelID := uuid.Nil
+
+		if itemReq.Collection != nil && *itemReq.Collection != "" {
+			collectionMapping, err := is.deps.Repositories.Classifier.GetCodeToUUIDMapping(ctx, models.ClassifierCollection)
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to get collection mapping")
+			}
+			if id, exists := collectionMapping[*itemReq.Collection]; exists {
+				collectionID = id
+			} else {
+				return nil, errors.Errorf("unknown collection code: %s", *itemReq.Collection)
+			}
+		}
+
+		if itemReq.QualityLevel != nil && *itemReq.QualityLevel != "" {
+			qualityMapping, err := is.deps.Repositories.Classifier.GetCodeToUUIDMapping(ctx, models.ClassifierQualityLevel)
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to get quality level mapping")
+			}
+			if id, exists := qualityMapping[*itemReq.QualityLevel]; exists {
+				qualityLevelID = id
+			} else {
+				return nil, errors.Errorf("unknown quality level code: %s", *itemReq.QualityLevel)
+			}
+		}
+
+		// Create operation
+		operation := &models.Operation{
+			ID:              uuid.New(),
+			UserID:          req.UserID,
+			SectionID:       sectionID,
+			ItemID:          itemReq.ItemID,
+			CollectionID:    collectionID,
+			QualityLevelID:  qualityLevelID,
+			QuantityChange:  itemReq.QuantityChange,
+			OperationTypeID: operationTypeID,
+			OperationID:     &operationID,
+			Comment:         &req.Reason,
+			CreatedAt:       time.Now().UTC(),
+		}
+
+		operations = append(operations, operation)
+	}
+
+	// Create operations in transaction
+	operationIDs, err := is.CreateOperationsInTransaction(ctx, operations)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create adjustment operations")
+	}
+
+	// Calculate final balances for each adjusted item
+	var finalBalances []models.InventoryItemResponse
+	for _, itemReq := range req.Items {
+		// Get item details
+		itemDetails, err := is.deps.Repositories.Item.GetItemWithDetails(ctx, itemReq.ItemID)
+		if err != nil {
+			// Log error but continue with other items
+			continue
+		}
+
+		// Convert collection and quality UUIDs back to codes
+		var collectionCode, qualityCode *string
+
+		if itemReq.Collection != nil && *itemReq.Collection != "" {
+			collectionCode = itemReq.Collection
+		}
+
+		if itemReq.QualityLevel != nil && *itemReq.QualityLevel != "" {
+			qualityCode = itemReq.QualityLevel
+		}
+
+		// Calculate current balance after adjustment
+		collectionID := uuid.Nil
+		qualityLevelID := uuid.Nil
+
+		if collectionCode != nil {
+			if collectionMapping, err := is.deps.Repositories.Classifier.GetCodeToUUIDMapping(ctx, models.ClassifierCollection); err == nil {
+				if id, exists := collectionMapping[*collectionCode]; exists {
+					collectionID = id
+				}
+			}
+		}
+
+		if qualityCode != nil {
+			if qualityMapping, err := is.deps.Repositories.Classifier.GetCodeToUUIDMapping(ctx, models.ClassifierQualityLevel); err == nil {
+				if id, exists := qualityMapping[*qualityCode]; exists {
+					qualityLevelID = id
+				}
+			}
+		}
+
+		balanceReq := &BalanceRequest{
+			UserID:         req.UserID,
+			SectionID:      sectionID,
+			ItemID:         itemReq.ItemID,
+			CollectionID:   collectionID,
+			QualityLevelID: qualityLevelID,
+		}
+
+		currentBalance, err := is.balanceCalculator.CalculateCurrentBalance(ctx, balanceReq)
+		if err != nil {
+			currentBalance = 0 // Default to 0 if calculation fails
+		}
+
+		finalBalance := models.InventoryItemResponse{
+			ItemID:       itemReq.ItemID,
+			ItemClass:    itemDetails.ItemClass,
+			ItemType:     itemDetails.ItemType,
+			Collection:   collectionCode,
+			QualityLevel: qualityCode,
+			Quantity:     currentBalance,
+		}
+
+		finalBalances = append(finalBalances, finalBalance)
+	}
+
+	// Record metrics
+	if is.deps.Metrics != nil {
+		is.deps.Metrics.RecordInventoryOperation("adjust_inventory", req.Section, "success")
+	}
+
+	return &models.AdjustInventoryResponse{
+		Success:       true,
+		OperationIDs:  operationIDs,
+		FinalBalances: finalBalances,
+	}, nil
+}
+
+// Reservation operations
+
+// ReserveItems reserves items for factory production
+func (is *inventoryService) ReserveItems(ctx context.Context, req *models.ReserveItemsRequest) ([]uuid.UUID, error) {
+	if req == nil {
+		return nil, errors.New("reserve items request cannot be nil")
+	}
+
+	// Use operation creator to handle the reservation logic
+	operationIDs, err := is.operationCreator.CreateReservationOperations(ctx, req)
+	if err != nil {
+		// Record failure metrics
+		if is.deps.Metrics != nil {
+			is.deps.Metrics.RecordInventoryOperation("reserve_items", "main", "failure")
+		}
+		return nil, errors.Wrap(err, "failed to create reservation operations")
+	}
+
+	// Record success metrics
+	if is.deps.Metrics != nil {
+		is.deps.Metrics.RecordInventoryOperation("reserve_items", "main", "success")
+	}
+
+	return operationIDs, nil
+}
+
+// ReturnReservedItems returns reserved items back to main inventory
+func (is *inventoryService) ReturnReservedItems(ctx context.Context, req *models.ReturnReserveRequest) error {
+	if req == nil {
+		return errors.New("return reserve request cannot be nil")
+	}
+
+	// Use operation creator to handle the return logic
+	err := is.operationCreator.CreateReturnOperations(ctx, req)
+	if err != nil {
+		// Record failure metrics
+		if is.deps.Metrics != nil {
+			is.deps.Metrics.RecordInventoryOperation("return_reserved", "factory", "failure")
+		}
+		return errors.Wrap(err, "failed to create return operations")
+	}
+
+	// Record success metrics
+	if is.deps.Metrics != nil {
+		is.deps.Metrics.RecordInventoryOperation("return_reserved", "factory", "success")
+	}
+
+	return nil
+}
+
+// ConsumeReservedItems consumes reserved items (destroys them)
+func (is *inventoryService) ConsumeReservedItems(ctx context.Context, req *models.ConsumeReserveRequest) error {
+	if req == nil {
+		return errors.New("consume reserve request cannot be nil")
+	}
+
+	// Use operation creator to handle the consumption logic
+	err := is.operationCreator.CreateConsumptionOperations(ctx, req)
+	if err != nil {
+		// Record failure metrics
+		if is.deps.Metrics != nil {
+			is.deps.Metrics.RecordInventoryOperation("consume_reserved", "factory", "failure")
+		}
+		return errors.Wrap(err, "failed to create consumption operations")
+	}
+
+	// Record success metrics
+	if is.deps.Metrics != nil {
+		is.deps.Metrics.RecordInventoryOperation("consume_reserved", "factory", "success")
+	}
+
+	return nil
 }

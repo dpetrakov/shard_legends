@@ -6,10 +6,13 @@ import (
 
 // ItemQuantityRequest represents a request for item quantity (with codes)
 type ItemQuantityRequest struct {
-	ItemID       uuid.UUID `json:"item_id" validate:"required"`
-	Collection   *string   `json:"collection,omitempty"`
-	QualityLevel *string   `json:"quality_level,omitempty"`
-	Quantity     int64     `json:"quantity" validate:"required,min=1"`
+	ItemID         uuid.UUID  `json:"item_id" validate:"required"`
+	Collection     *string    `json:"collection,omitempty"`
+	QualityLevel   *string    `json:"quality_level,omitempty"`
+	Quantity       int64      `json:"quantity" validate:"required,min=1"`
+	// Internal fields populated by code converter
+	CollectionID   *uuid.UUID `json:"-"`
+	QualityLevelID *uuid.UUID `json:"-"`
 }
 
 // InventoryItemResponse represents an inventory item in API responses (with codes)
