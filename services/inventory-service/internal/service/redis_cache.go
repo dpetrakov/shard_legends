@@ -5,24 +5,24 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/redis/go-redis/v9"
+	"github.com/shard-legends/inventory-service/internal/database"
 )
 
 // redisCache implements CacheInterface
 type redisCache struct {
-	client *redis.Client
+	redis *database.RedisDB
 }
 
 // NewRedisCache creates a new Redis cache implementation
-func NewRedisCache(client *redis.Client) CacheInterface {
+func NewRedisCache(redis *database.RedisDB) CacheInterface {
 	return &redisCache{
-		client: client,
+		redis: redis,
 	}
 }
 
 // Get retrieves a value from cache
 func (c *redisCache) Get(ctx context.Context, key string, value interface{}) error {
-	result, err := c.client.Get(ctx, key).Result()
+	result, err := c.redis.Get(ctx, key)
 	if err != nil {
 		return err
 	}
@@ -37,23 +37,25 @@ func (c *redisCache) Set(ctx context.Context, key string, value interface{}, ttl
 		return err
 	}
 	
-	return c.client.Set(ctx, key, data, ttl).Err()
+	return c.redis.Set(ctx, key, data, ttl)
 }
 
 // Delete removes a value from cache
 func (c *redisCache) Delete(ctx context.Context, key string) error {
-	return c.client.Del(ctx, key).Err()
+	_, err := c.redis.Del(ctx, key)
+	return err
 }
 
 // DeletePattern removes all keys matching a pattern
 func (c *redisCache) DeletePattern(ctx context.Context, pattern string) error {
-	keys, err := c.client.Keys(ctx, pattern).Result()
+	keys, err := c.redis.Keys(ctx, pattern)
 	if err != nil {
 		return err
 	}
 	
 	if len(keys) > 0 {
-		return c.client.Del(ctx, keys...).Err()
+		_, err := c.redis.Del(ctx, keys...)
+		return err
 	}
 	
 	return nil

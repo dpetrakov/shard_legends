@@ -8,15 +8,15 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/redis/go-redis/v9"
 
+	"github.com/shard-legends/inventory-service/internal/database"
 	"github.com/shard-legends/inventory-service/internal/models"
 	"github.com/shard-legends/inventory-service/pkg/metrics"
 )
 
 type classifierStorage struct {
 	pool    *pgxpool.Pool
-	redis   *redis.Client
+	redis   *database.RedisDB
 	logger  *slog.Logger
 	metrics *metrics.Metrics
 }
@@ -61,7 +61,7 @@ func (s *classifierStorage) GetCodeToUUIDMapping(ctx context.Context, classifier
 	
 	// Try to get from cache first
 	cacheKey := "classifier:code_to_uuid:" + classifierCode
-	cachedData, err := s.redis.HGetAll(ctx, cacheKey).Result()
+	cachedData, err := s.redis.Client().HGetAll(ctx, cacheKey).Result()
 	if err == nil && len(cachedData) > 0 {
 		s.logger.Debug("Found mapping in cache", "classifier_code", classifierCode)
 		mapping := make(map[string]uuid.UUID)
@@ -109,7 +109,7 @@ func (s *classifierStorage) GetCodeToUUIDMapping(ctx context.Context, classifier
 	
 	// Cache the result for 1 hour
 	if len(cacheData) > 0 {
-		pipe := s.redis.Pipeline()
+		pipe := s.redis.Client().Pipeline()
 		pipe.HMSet(ctx, cacheKey, cacheData)
 		pipe.Expire(ctx, cacheKey, time.Hour)
 		_, err = pipe.Exec(ctx)
@@ -127,7 +127,7 @@ func (s *classifierStorage) GetUUIDToCodeMapping(ctx context.Context, classifier
 	
 	// Try to get from cache first
 	cacheKey := "classifier:uuid_to_code:" + classifierCode
-	cachedData, err := s.redis.HGetAll(ctx, cacheKey).Result()
+	cachedData, err := s.redis.Client().HGetAll(ctx, cacheKey).Result()
 	if err == nil && len(cachedData) > 0 {
 		s.logger.Debug("Found reverse mapping in cache", "classifier_code", classifierCode)
 		mapping := make(map[uuid.UUID]string)
@@ -175,7 +175,7 @@ func (s *classifierStorage) GetUUIDToCodeMapping(ctx context.Context, classifier
 	
 	// Cache the result for 1 hour
 	if len(cacheData) > 0 {
-		pipe := s.redis.Pipeline()
+		pipe := s.redis.Client().Pipeline()
 		pipe.HMSet(ctx, cacheKey, cacheData)
 		pipe.Expire(ctx, cacheKey, time.Hour)
 		_, err = pipe.Exec(ctx)
@@ -197,7 +197,7 @@ func (s *classifierStorage) InvalidateCache(ctx context.Context, classifierCode 
 		"classifier:uuid_to_code:" + classifierCode,
 	}
 	
-	pipe := s.redis.Pipeline()
+	pipe := s.redis.Client().Pipeline()
 	for _, key := range cacheKeys {
 		pipe.Del(ctx, key)
 	}

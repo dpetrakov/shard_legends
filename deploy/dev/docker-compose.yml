@@ -177,7 +177,8 @@ services:
       context: ../../services/inventory-service
       dockerfile: Dockerfile
     container_name: slcw-inventory-service-dev
-    # No external ports - accessed via API Gateway
+    ports:
+      - "127.0.0.1:22003:8080"  # Single API endpoint for external nginx
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-slcw_user}:${POSTGRES_PASSWORD:-dev_password_2024}@postgres:5432/${POSTGRES_DB:-shard_legends_dev}?sslmode=disable
       - REDIS_URL=redis://redis:6379/1

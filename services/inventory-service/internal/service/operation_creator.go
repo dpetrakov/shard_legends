@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -82,8 +83,8 @@ func (oc *operationCreator) CreateOperationsInTransaction(ctx context.Context, o
 	err = oc.invalidateCacheForOperations(ctx, operations)
 	if err != nil {
 		// Log the error but don't fail the operation since data is already committed
-		// In a real application, you might want to use structured logging here
-		_ = err
+		// This is critical for cache consistency!
+		fmt.Printf("CRITICAL: Failed to invalidate cache after operations: %v\n", err)
 	}
 
 	// Record metrics
@@ -165,6 +166,15 @@ func (oc *operationCreator) CreateReservationOperations(ctx context.Context, req
 
 	if err := models.ValidateReserveItemsRequest(req); err != nil {
 		return nil, errors.Wrap(err, "reserve items request validation failed")
+	}
+
+	// Check if operation_id is already used (prevent duplicate reservations)
+	existingOps, err := oc.deps.Repositories.Inventory.GetOperationsByExternalID(ctx, req.OperationID)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to check existing operations")
+	}
+	if len(existingOps) > 0 {
+		return nil, errors.Errorf("operation_id %s is already used", req.OperationID.String())
 	}
 
 	// Convert codes to UUIDs for each item
@@ -318,7 +328,7 @@ func (oc *operationCreator) CreateReturnOperations(ctx context.Context, req *mod
 		return errors.New("no reservation found for the given operation ID")
 	}
 
-	// Get operation type ID for return
+	// Get operation type ID for return and validation
 	operationMapping, err := oc.deps.Repositories.Classifier.GetCodeToUUIDMapping(ctx, models.ClassifierOperationType)
 	if err != nil {
 		return errors.Wrap(err, "failed to get operation type mapping")
@@ -327,6 +337,16 @@ func (oc *operationCreator) CreateReturnOperations(ctx context.Context, req *mod
 	returnTypeID, found := operationMapping[models.OperationTypeFactoryReturn]
 	if !found {
 		return errors.New("return operation type not found")
+	}
+
+	consumeTypeID, consumeFound := operationMapping[models.OperationTypeFactoryConsumption]
+
+	// Check if this reservation has already been returned or consumed
+	for _, op := range reservedOps {
+		if op.OperationTypeID == returnTypeID || 
+		   (consumeFound && op.OperationTypeID == consumeTypeID) {
+			return errors.Errorf("operation_id %s has already been returned or consumed", req.OperationID.String())
+		}
 	}
 
 	// Get section IDs for proper return operations
@@ -410,6 +430,16 @@ func (oc *operationCreator) CreateConsumptionOperations(ctx context.Context, req
 	consumeTypeID, found := operationMapping[models.OperationTypeFactoryConsumption]
 	if !found {
 		return errors.New("consumption operation type not found")
+	}
+
+	returnTypeID, returnFound := operationMapping[models.OperationTypeFactoryReturn]
+
+	// Check if this reservation has already been returned or consumed
+	for _, op := range reservedOps {
+		if op.OperationTypeID == consumeTypeID || 
+		   (returnFound && op.OperationTypeID == returnTypeID) {
+			return errors.Errorf("operation_id %s has already been returned or consumed", req.OperationID.String())
+		}
 	}
 
 	// Get factory section ID

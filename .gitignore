@@ -43,3 +43,7 @@ services/auth-service/bin/auth-service
 services/auth-service/auth-service
 services/ping-service/ping-service
 services/inventory-service/inventory-service
+
+scripts/jwt_gen/private_key
+scripts/jwt_gen/token.jwt
+scripts/jwt_gen/user_id

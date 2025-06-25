@@ -9,8 +9,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/redis/go-redis/v9"
 
+	"github.com/shard-legends/inventory-service/internal/database"
 	"github.com/shard-legends/inventory-service/internal/models"
 	"github.com/shard-legends/inventory-service/pkg/metrics"
 )
@@ -18,7 +18,7 @@ import (
 // InventoryStorage implements inventory data access using PostgreSQL and Redis
 type InventoryStorage struct {
 	pool    *pgxpool.Pool
-	redis   *redis.Client
+	redis   *database.RedisDB
 	logger  *slog.Logger
 	metrics *metrics.Metrics
 }
@@ -59,7 +59,7 @@ type ItemRepository interface {
 }
 
 // NewInventoryStorage creates a new inventory storage instance
-func NewInventoryStorage(pool *pgxpool.Pool, redis *redis.Client, logger *slog.Logger, metrics *metrics.Metrics) InventoryRepository {
+func NewInventoryStorage(pool *pgxpool.Pool, redis *database.RedisDB, logger *slog.Logger, metrics *metrics.Metrics) InventoryRepository {
 	return &InventoryStorage{
 		pool:    pool,
 		redis:   redis,
@@ -69,7 +69,7 @@ func NewInventoryStorage(pool *pgxpool.Pool, redis *redis.Client, logger *slog.L
 }
 
 // NewClassifierStorage creates a new classifier storage instance
-func NewClassifierStorage(pool *pgxpool.Pool, redis *redis.Client, logger *slog.Logger, metrics *metrics.Metrics) ClassifierRepository {
+func NewClassifierStorage(pool *pgxpool.Pool, redis *database.RedisDB, logger *slog.Logger, metrics *metrics.Metrics) ClassifierRepository {
 	return &classifierStorage{
 		pool:    pool,
 		redis:   redis,
