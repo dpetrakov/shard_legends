@@ -31,7 +31,7 @@ func NewRecipeHandler(recipeService service.RecipeService, logger *zap.Logger) *
 // GetRecipes обрабатывает GET /recipes
 func (h *RecipeHandler) GetRecipes(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	
+
 	// Получаем информацию о пользователе из JWT
 	userContext, err := auth.GetUser(ctx)
 	if err != nil {
@@ -52,12 +52,12 @@ func (h *RecipeHandler) GetRecipes(w http.ResponseWriter, r *http.Request) {
 
 	// Парсим фильтры из query параметров
 	filters := &models.RecipeFilters{}
-	
+
 	// Фильтр по классу операции
 	if operationClass := r.URL.Query().Get("operation_class"); operationClass != "" {
 		// Валидируем класс операции
 		if !isValidOperationClass(operationClass) {
-			h.writeErrorResponse(w, http.StatusBadRequest, models.ErrorCodeValidation, 
+			h.writeErrorResponse(w, http.StatusBadRequest, models.ErrorCodeValidation,
 				"Invalid operation class", map[string]interface{}{
 					"allowed_values": []string{
 						models.OperationClassCrafting,
@@ -83,7 +83,7 @@ func (h *RecipeHandler) GetRecipes(w http.ResponseWriter, r *http.Request) {
 			zap.String("user_id", userContext.UserID),
 			zap.String("request_id", getRequestID(r)),
 		)
-		h.writeErrorResponse(w, http.StatusInternalServerError, models.ErrorCodeInternalError, 
+		h.writeErrorResponse(w, http.StatusInternalServerError, models.ErrorCodeInternalError,
 			"Failed to get recipes", nil)
 		return
 	}
@@ -94,7 +94,7 @@ func (h *RecipeHandler) GetRecipes(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.writeJSONResponse(w, http.StatusOK, response)
-	
+
 	h.logger.Info("Recipes retrieved successfully",
 		zap.String("user_id", userContext.UserID),
 		zap.Int("recipes_count", len(recipes)),
@@ -105,11 +105,11 @@ func (h *RecipeHandler) GetRecipes(w http.ResponseWriter, r *http.Request) {
 // isValidOperationClass проверяет валидность класса операции
 func isValidOperationClass(operationClass string) bool {
 	validClasses := map[string]bool{
-		models.OperationClassCrafting:         true,
-		models.OperationClassSmelting:         true,
-		models.OperationClassChestOpening:     true,
+		models.OperationClassCrafting:          true,
+		models.OperationClassSmelting:          true,
+		models.OperationClassChestOpening:      true,
 		models.OperationClassResourceGathering: true,
-		models.OperationClassSpecial:          true,
+		models.OperationClassSpecial:           true,
 	}
 	return validClasses[operationClass]
 }
@@ -118,7 +118,7 @@ func isValidOperationClass(operationClass string) bool {
 func (h *RecipeHandler) writeJSONResponse(w http.ResponseWriter, statusCode int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	
+
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		h.logger.Error("Failed to encode JSON response", zap.Error(err))
 	}
@@ -131,7 +131,7 @@ func (h *RecipeHandler) writeErrorResponse(w http.ResponseWriter, statusCode int
 		Message: message,
 		Details: details,
 	}
-	
+
 	h.writeJSONResponse(w, statusCode, errorResponse)
 }
 
@@ -141,7 +141,7 @@ func getRequestID(r *http.Request) string {
 	if requestID := r.Header.Get("X-Request-ID"); requestID != "" {
 		return requestID
 	}
-	
+
 	// Fallback - генерируем новый
 	return "unknown"
 }

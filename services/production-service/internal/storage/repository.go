@@ -12,16 +12,16 @@ import (
 type RecipeRepository interface {
 	// GetActiveRecipes возвращает список активных рецептов с возможностью фильтрации
 	GetActiveRecipes(ctx context.Context, filters *models.RecipeFilters) ([]models.ProductionRecipe, error)
-	
+
 	// GetRecipeByID возвращает рецепт по ID с полной информацией
 	GetRecipeByID(ctx context.Context, recipeID uuid.UUID) (*models.ProductionRecipe, error)
-	
+
 	// GetRecipeLimits возвращает все лимиты для рецепта
 	GetRecipeLimits(ctx context.Context, recipeID uuid.UUID) ([]models.RecipeLimit, error)
-	
+
 	// GetRecipeUsageStats возвращает статистику использования рецепта пользователем
 	GetRecipeUsageStats(ctx context.Context, userID uuid.UUID, recipeID uuid.UUID, limitType string, limitObject string, targetItemID *uuid.UUID, periodStart, periodEnd time.Time) (*models.RecipeUsageStats, error)
-	
+
 	// CheckRecipeLimits проверяет все лимиты рецепта для пользователя
 	CheckRecipeLimits(ctx context.Context, userID uuid.UUID, recipeID uuid.UUID, requestedExecutions int) ([]models.UserRecipeLimit, error)
 }
@@ -30,16 +30,16 @@ type RecipeRepository interface {
 type TaskRepository interface {
 	// CreateTask создает новое производственное задание
 	CreateTask(ctx context.Context, task *models.ProductionTask) error
-	
+
 	// GetTaskByID возвращает задание по ID
 	GetTaskByID(ctx context.Context, taskID uuid.UUID) (*models.ProductionTask, error)
-	
+
 	// GetUserTasks возвращает задания пользователя с фильтрацией
 	GetUserTasks(ctx context.Context, userID uuid.UUID, statuses []string) ([]models.ProductionTask, error)
-	
+
 	// UpdateTaskStatus обновляет статус задания
 	UpdateTaskStatus(ctx context.Context, taskID uuid.UUID, status string) error
-	
+
 	// GetTasksStats возвращает статистику заданий для административной панели
 	GetTasksStats(ctx context.Context, filters map[string]interface{}, page, limit int) (*models.TasksStatsResponse, error)
 }
@@ -48,13 +48,13 @@ type TaskRepository interface {
 type ClassifierRepository interface {
 	// GetClassifierMapping возвращает маппинг код -> UUID для классификатора
 	GetClassifierMapping(ctx context.Context, classifierName string) (map[string]uuid.UUID, error)
-	
+
 	// GetReverseClassifierMapping возвращает маппинг UUID -> код для классификатора
 	GetReverseClassifierMapping(ctx context.Context, classifierName string) (map[uuid.UUID]string, error)
-	
+
 	// ConvertCodeToUUID преобразует код в UUID через классификатор
 	ConvertCodeToUUID(ctx context.Context, classifierName, code string) (*uuid.UUID, error)
-	
+
 	// ConvertUUIDToCode преобразует UUID в код через классификатор
 	ConvertUUIDToCode(ctx context.Context, classifierName string, id uuid.UUID) (*string, error)
 }
@@ -68,8 +68,8 @@ type Repository struct {
 
 // RepositoryDependencies содержит зависимости для создания репозиториев
 type RepositoryDependencies struct {
-	DB           DatabaseInterface
-	Cache        CacheInterface
+	DB               DatabaseInterface
+	Cache            CacheInterface
 	MetricsCollector MetricsInterface
 }
 

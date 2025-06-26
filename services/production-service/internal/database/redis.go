@@ -75,23 +75,23 @@ func (r *RedisClient) Client() *redis.Client {
 
 func (r *RedisClient) Close() error {
 	var errs []error
-	
+
 	if r.client != nil {
 		if err := r.client.Close(); err != nil {
 			errs = append(errs, fmt.Errorf("failed to close redis cache connection: %w", err))
 		}
 	}
-	
+
 	if r.authClient != nil {
 		if err := r.authClient.Close(); err != nil {
 			errs = append(errs, fmt.Errorf("failed to close redis auth connection: %w", err))
 		}
 	}
-	
+
 	if len(errs) > 0 {
 		return fmt.Errorf("redis close errors: %v", errs)
 	}
-	
+
 	logger.Info("Redis connections closed")
 	return nil
 }

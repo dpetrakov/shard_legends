@@ -30,7 +30,7 @@ func (s *codeConverterService) ConvertRecipeFromCodes(ctx context.Context, recip
 	// Преобразуем входные предметы
 	for i := range recipe.InputItems {
 		input := &recipe.InputItems[i]
-		
+
 		// Преобразуем коллекцию
 		if input.CollectionCode != nil {
 			collectionID, err := s.ConvertCodeToUUID(ctx, storage.ClassifierCollection, *input.CollectionCode)
@@ -53,7 +53,7 @@ func (s *codeConverterService) ConvertRecipeFromCodes(ctx context.Context, recip
 	// Преобразуем выходные предметы
 	for i := range recipe.OutputItems {
 		output := &recipe.OutputItems[i]
-		
+
 		// Преобразуем фиксированную коллекцию
 		if output.FixedCollectionCode != nil {
 			collectionID, err := s.ConvertCodeToUUID(ctx, storage.ClassifierCollection, *output.FixedCollectionCode)
@@ -81,7 +81,7 @@ func (s *codeConverterService) ConvertRecipeToCodes(ctx context.Context, recipe 
 	// Преобразуем входные предметы
 	for i := range recipe.InputItems {
 		input := &recipe.InputItems[i]
-		
+
 		// Преобразуем коллекцию
 		if input.CollectionID != nil {
 			collectionCode, err := s.ConvertUUIDToCode(ctx, storage.ClassifierCollection, *input.CollectionID)
@@ -104,7 +104,7 @@ func (s *codeConverterService) ConvertRecipeToCodes(ctx context.Context, recipe 
 	// Преобразуем выходные предметы
 	for i := range recipe.OutputItems {
 		output := &recipe.OutputItems[i]
-		
+
 		// Преобразуем фиксированную коллекцию
 		if output.FixedCollectionID != nil {
 			collectionCode, err := s.ConvertUUIDToCode(ctx, storage.ClassifierCollection, *output.FixedCollectionID)

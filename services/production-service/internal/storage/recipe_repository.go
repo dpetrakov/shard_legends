@@ -305,7 +305,7 @@ func (r *recipeRepository) GetRecipeUsageStats(ctx context.Context, userID uuid.
 		WHERE recipe_id = $1 AND limit_type = $2 AND limit_object = $3
 	`
 	limitArgs := []interface{}{recipeID, limitType, limitObject}
-	
+
 	if targetItemID != nil {
 		limitQuery += " AND target_item_id = $4"
 		limitArgs = append(limitArgs, *targetItemID)
@@ -401,7 +401,7 @@ func (r *recipeRepository) calculateLimitPeriod(now time.Time, limitType string)
 		if weekday == 0 { // Sunday
 			weekday = 7
 		}
-		start = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, -(weekday-1))
+		start = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, -(weekday - 1))
 		end = start.AddDate(0, 0, 7)
 
 	case models.LimitTypeMonthly:

@@ -10,12 +10,13 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
-	Redis    RedisConfig
-	Auth     AuthConfig
-	Logging  LoggingConfig
-	Services ServicesConfig
+	Server           ServerConfig
+	Database         DatabaseConfig
+	Redis            RedisConfig
+	Auth             AuthConfig
+	Logging          LoggingConfig
+	Services         ServicesConfig
+	ExternalServices ExternalServicesConfig
 }
 
 type ServerConfig struct {
@@ -54,6 +55,15 @@ type ServicesConfig struct {
 	AuthServiceURL      string
 }
 
+type ExternalServicesConfig struct {
+	InventoryService ExternalServiceConfig
+	UserService      ExternalServiceConfig
+}
+
+type ExternalServiceConfig struct {
+	BaseURL string
+}
+
 func Load() (*Config, error) {
 	_ = godotenv.Load()
 
@@ -87,6 +97,14 @@ func Load() (*Config, error) {
 		Services: ServicesConfig{
 			InventoryServiceURL: getEnv("INVENTORY_SERVICE_URL", "http://inventory-service:8081"),
 			AuthServiceURL:      getEnv("AUTH_SERVICE_URL", "http://auth-service:8080"),
+		},
+		ExternalServices: ExternalServicesConfig{
+			InventoryService: ExternalServiceConfig{
+				BaseURL: getEnv("INVENTORY_SERVICE_URL", "http://inventory-service:8081"),
+			},
+			UserService: ExternalServiceConfig{
+				BaseURL: getEnv("USER_SERVICE_URL", "http://user-service:8080"),
+			},
 		},
 	}
 

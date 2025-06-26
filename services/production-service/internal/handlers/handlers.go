@@ -15,10 +15,10 @@ type Handlers struct {
 
 // HandlerDependencies содержит зависимости для создания handlers
 type HandlerDependencies struct {
-	Service   *service.Service
-	DB        *database.DB
-	Redis     *database.RedisClient
-	Logger    *zap.Logger
+	Service *service.Service
+	DB      *database.DB
+	Redis   *database.RedisClient
+	Logger  *zap.Logger
 }
 
 // NewHandlers создает новый экземпляр Handlers со всеми обработчиками

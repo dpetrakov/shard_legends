@@ -17,6 +17,7 @@ import (
 	"github.com/shard-legends/production-service/internal/config"
 	"github.com/shard-legends/production-service/internal/database"
 	"github.com/shard-legends/production-service/internal/handlers"
+	"github.com/shard-legends/production-service/internal/handlers/public"
 	customMiddleware "github.com/shard-legends/production-service/internal/middleware"
 	"github.com/shard-legends/production-service/internal/service"
 	"github.com/shard-legends/production-service/internal/storage"
@@ -110,8 +111,23 @@ func main() {
 		Metrics:    metricsAdapter,
 	}
 
-	// Initialize service
+	// Initialize service layer
 	serviceLayer := service.NewService(serviceDeps)
+
+	// Initialize external service clients
+	inventoryClient := service.NewHTTPInventoryClient(cfg.ExternalServices.InventoryService.BaseURL, logger.Get())
+	userClient := service.NewHTTPUserClient(cfg.ExternalServices.UserService.BaseURL, logger.Get())
+
+	// Initialize task service
+	taskService := service.NewTaskService(
+		repository.Task,
+		repository.Recipe,
+		repository.Classifier,
+		serviceLayer.CodeConverter,
+		inventoryClient,
+		userClient,
+		logger.Get(),
+	)
 
 	// Initialize handlers
 	handlerDeps := &handlers.HandlerDependencies{
@@ -121,6 +137,9 @@ func main() {
 		Logger:  logger.Get(),
 	}
 	allHandlers := handlers.NewHandlers(handlerDeps)
+
+	// Initialize additional handlers
+	factoryHandler := public.NewFactoryHandler(taskService, logger.Get())
 
 	// Setup router
 	r := chi.NewRouter()
@@ -155,22 +174,15 @@ func main() {
 		// Public endpoints (require JWT)
 		r.Group(func(r chi.Router) {
 			r.Use(customMiddleware.Auth(jwtValidator))
-			
+
 			r.Get("/recipes", allHandlers.Recipe.GetRecipes)
 
 			r.Route("/factory", func(r chi.Router) {
-				r.Get("/queue", func(w http.ResponseWriter, r *http.Request) {
-					w.Header().Set("Content-Type", "application/json")
-					w.Write([]byte(`{"message":"Queue endpoint not implemented yet"}`))
-				})
-				r.Post("/start", func(w http.ResponseWriter, r *http.Request) {
-					w.Header().Set("Content-Type", "application/json")
-					w.Write([]byte(`{"message":"Start endpoint not implemented yet"}`))
-				})
-				r.Post("/claim", func(w http.ResponseWriter, r *http.Request) {
-					w.Header().Set("Content-Type", "application/json")
-					w.Write([]byte(`{"message":"Claim endpoint not implemented yet"}`))
-				})
+				r.Get("/queue", factoryHandler.GetQueue)
+				r.Get("/completed", factoryHandler.GetCompleted)
+				r.Post("/start", factoryHandler.StartProduction)
+				r.Post("/claim", factoryHandler.Claim)
+				r.Post("/cancel", factoryHandler.Cancel)
 			})
 		})
 
@@ -189,7 +201,7 @@ func main() {
 		// Admin endpoints (require JWT with admin role)
 		r.Route("/admin", func(r chi.Router) {
 			r.Use(customMiddleware.AdminAuth(jwtValidator))
-			
+
 			r.Get("/tasks", func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				w.Write([]byte(`{"message":"Admin tasks endpoint not implemented yet"}`))

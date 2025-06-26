@@ -181,10 +181,10 @@ func (r *classifierRepository) getCachedMapping(ctx context.Context, cacheKey st
 		if len(parts) != 2 {
 			continue
 		}
-		
+
 		code := parts[0]
 		uuidStr := parts[1]
-		
+
 		if id, err := uuid.Parse(uuidStr); err == nil {
 			mapping[code] = id
 		}
@@ -204,7 +204,7 @@ func (r *classifierRepository) setCachedMapping(ctx context.Context, cacheKey st
 	for code, id := range mapping {
 		pairs = append(pairs, fmt.Sprintf("%s:%s", code, id.String()))
 	}
-	
+
 	data := joinStrings(pairs, ",")
 	return r.cache.Set(ctx, cacheKey, data, ttl)
 }
@@ -228,10 +228,10 @@ func (r *classifierRepository) getCachedReverseMapping(ctx context.Context, cach
 		if len(parts) != 2 {
 			continue
 		}
-		
+
 		uuidStr := parts[0]
 		code := parts[1]
-		
+
 		if id, err := uuid.Parse(uuidStr); err == nil {
 			mapping[id] = code
 		}
@@ -251,7 +251,7 @@ func (r *classifierRepository) setCachedReverseMapping(ctx context.Context, cach
 	for id, code := range mapping {
 		pairs = append(pairs, fmt.Sprintf("%s:%s", id.String(), code))
 	}
-	
+
 	data := joinStrings(pairs, ",")
 	return r.cache.Set(ctx, cacheKey, data, ttl)
 }
@@ -261,7 +261,7 @@ func splitString(s, sep string) []string {
 	if s == "" {
 		return []string{}
 	}
-	
+
 	var result []string
 	start := 0
 	for i := 0; i < len(s); {
@@ -284,12 +284,12 @@ func joinStrings(strs []string, sep string) string {
 	if len(strs) == 1 {
 		return strs[0]
 	}
-	
+
 	totalLen := len(sep) * (len(strs) - 1)
 	for _, s := range strs {
 		totalLen += len(s)
 	}
-	
+
 	result := make([]byte, 0, totalLen)
 	result = append(result, strs[0]...)
 	for _, s := range strs[1:] {

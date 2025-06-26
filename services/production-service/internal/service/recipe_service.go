@@ -21,9 +21,9 @@ type recipeService struct {
 // NewRecipeService создает новый экземпляр сервиса рецептов
 func NewRecipeService(deps *ServiceDependencies) RecipeService {
 	return &recipeService{
-		repository: deps.Repository,
-		cache:      deps.Cache,
-		metrics:    deps.Metrics,
+		repository:    deps.Repository,
+		cache:         deps.Cache,
+		metrics:       deps.Metrics,
 		codeConverter: NewCodeConverterService(deps),
 	}
 }
@@ -141,7 +141,7 @@ type RecipeLimitExceededError struct {
 }
 
 func (e *RecipeLimitExceededError) Error() string {
-	return fmt.Sprintf("recipe limit exceeded for %s: %s %s (%d/%d)", 
+	return fmt.Sprintf("recipe limit exceeded for %s: %s %s (%d/%d)",
 		e.RecipeID, e.LimitType, e.LimitObject, e.CurrentUsage, e.MaxAllowed)
 }
 

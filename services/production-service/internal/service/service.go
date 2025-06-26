@@ -12,10 +12,10 @@ import (
 type RecipeService interface {
 	// GetRecipesForUser возвращает рецепты доступные пользователю с учетом лимитов
 	GetRecipesForUser(ctx context.Context, userID uuid.UUID, filters *models.RecipeFilters) ([]models.ProductionRecipeWithLimits, error)
-	
+
 	// GetRecipeByID возвращает рецепт по ID с информацией о лимитах для пользователя
 	GetRecipeByID(ctx context.Context, recipeID uuid.UUID, userID *uuid.UUID) (*models.ProductionRecipeWithLimits, error)
-	
+
 	// ValidateRecipeAccess проверяет доступность рецепта для пользователя
 	ValidateRecipeAccess(ctx context.Context, userID uuid.UUID, recipeID uuid.UUID, requestedExecutions int) error
 }
@@ -24,13 +24,13 @@ type RecipeService interface {
 type CodeConverterService interface {
 	// ConvertRecipeFromCodes преобразует коды в UUID для рецепта
 	ConvertRecipeFromCodes(ctx context.Context, recipe *models.ProductionRecipe) error
-	
+
 	// ConvertRecipeToCodes преобразует UUID в коды для рецепта
 	ConvertRecipeToCodes(ctx context.Context, recipe *models.ProductionRecipe) error
-	
+
 	// ConvertCodeToUUID преобразует код в UUID
 	ConvertCodeToUUID(ctx context.Context, classifierName, code string) (*uuid.UUID, error)
-	
+
 	// ConvertUUIDToCode преобразует UUID в код
 	ConvertUUIDToCode(ctx context.Context, classifierName string, id uuid.UUID) (*string, error)
 }

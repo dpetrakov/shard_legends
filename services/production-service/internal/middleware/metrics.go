@@ -19,7 +19,7 @@ func Metrics() func(http.Handler) http.Handler {
 			defer func() {
 				duration := time.Since(start).Seconds()
 				status := strconv.Itoa(ww.Status())
-				
+
 				rctx := chi.RouteContext(r.Context())
 				routePattern := r.URL.Path
 				if rctx != nil && rctx.RoutePattern() != "" {

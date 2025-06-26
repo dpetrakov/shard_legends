@@ -3,6 +3,8 @@ package auth
 import (
 	"context"
 	"fmt"
+
+	"github.com/google/uuid"
 )
 
 type contextKey string
@@ -49,4 +51,18 @@ func IsAdmin(ctx context.Context) bool {
 		return false
 	}
 	return user.IsAdmin
+}
+
+func GetUserIDFromContext(ctx context.Context) (uuid.UUID, error) {
+	userIDStr, err := GetUserID(ctx)
+	if err != nil {
+		return uuid.Nil, err
+	}
+
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("invalid user ID format: %w", err)
+	}
+
+	return userID, nil
 }
