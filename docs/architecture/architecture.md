@@ -35,6 +35,8 @@ graph TB
     Gateway --> BotService[Telegram Bot Service<br/>Golang]
     Gateway --> PingService[Ping Service<br/>Golang]
     Gateway --> InventoryService[Inventory Service<br/>Golang]
+    Gateway --> ProductionService[Production Service<br/>Golang]
+    Gateway --> UserService[User Service<br/>Golang - temporary]
     Gateway --> GameAPI[Game API<br/>планируется]
     
     AuthService --> DB[(PostgreSQL 17)]
@@ -42,14 +44,17 @@ graph TB
     BotService --> DB
     InventoryService --> DB
     InventoryService --> Cache
+    ProductionService --> DB
+    ProductionService --> Cache
+    UserService --> Cache
     GameAPI --> DB
     GameAPI --> Cache
     
-    subgraph "Проверка токенов"
-        GameAPI -.->|JWT validation| Cache
-        BotService -.->|JWT validation| Cache
-        InventoryService -.->|JWT validation| Cache
-    end
+    GameAPI -.->|JWT validation| Cache
+    BotService -.->|JWT validation| Cache
+    InventoryService -.->|JWT validation| Cache
+    ProductionService -.->|JWT validation| Cache
+    UserService -.->|JWT validation| Cache
     
     subgraph "Docker Compose Environment"
         Gateway
@@ -57,6 +62,8 @@ graph TB
         BotService
         PingService
         InventoryService
+        ProductionService
+        UserService
         GameAPI
         DB
         Cache
@@ -73,7 +80,13 @@ graph TB
 
 **Конфигурация:**
 - Порт: 8080 (внутри контейнера), 9000 (внешний)
-- Маршруты: `/api/ping` → ping-service, `/api/webhook` → telegram-bot-service, `/api/auth` → auth-service, `/api/inventory` → inventory-service
+- Маршруты: 
+  - `/api/ping` → ping-service:8080/ping
+  - `/api/webhook` → telegram-bot-service:8080/webhook
+  - `/api/auth` → auth-service:8080/auth
+  - `/api/inventory` → inventory-service:8080/api/inventory
+  - `/api/production` → production-service:8080/production
+  - `/api/user` → user-service:8080/user
 - Health check: `/health` (внутренний)
 
 ### 2. Telegram Bot Service (Golang)
@@ -135,9 +148,65 @@ graph TB
 - Поддержка атомарных операций с инвентарем
 - Раздельный учет предметов по разделам инвентаря
 - Протоколирование всех операций с предметами
-- Интеграция с Factory Service для резервирования материалов
+- Интеграция с Production Service для резервирования материалов
 
-### 6. Telegram Mini App (Frontend)
+### 6. Production Service (Golang)
+
+**Назначение:**
+- Управление производственными рецептами и заданиями
+- Система фабрики с очередями производства
+- Применение модификаторов и ускорителей
+- Предрасчет результатов производства
+
+**API эндпоинты:**
+- `GET /recipes` → Получение производственных рецептов
+- `GET /factory/queue` → Очередь производственных заданий
+- `GET /factory/completed` → Завершенные задания для Claim
+- `POST /factory/start` → Запуск нового производственного задания
+- `POST /factory/claim` → Получение результатов производства
+- `POST /factory/cancel` → Отмена задания
+- `GET /health` → Проверка состояния сервиса
+
+**Ключевые возможности:**
+- Система производственных рецептов с входными/выходными предметами
+- Управление производственными слотами через User Service
+- Атомарное резервирование материалов через Inventory Service
+- Предрасчет результатов с применением модификаторов
+- Система лимитов производства (дневные, событийные)
+- Интеграция с Event Service для событийных модификаторов (планируется)
+
+**Технические характеристики:**
+- Порт: 8080 (стандартный)
+- База данных: PostgreSQL схема `production`
+- Кеширование: Redis DB 2 + проверка JWT в DB 0
+
+### 7. User Service (Golang) - временная версия
+
+**Назначение:**
+- Управление пользовательскими данными и профилями
+- Предоставление информации о производственных слотах
+- Модификаторы пользователя (VIP, уровень, достижения)
+
+**API эндпоинты:**
+- `GET /profile` → Профиль пользователя
+- `GET /production-slots` → Производственные слоты пользователя
+- `GET /internal/users/{user_id}/production-slots` → Слоты для Production Service
+- `GET /internal/users/{user_id}/production-modifiers` → Модификаторы для Production Service
+- `GET /health` → Проверка состояния сервиса
+
+**Особенности временной версии:**
+- Отсутствует собственная база данных
+- Возвращает моковые данные для интеграции
+- VIP статус генерируется случайно (30% вероятность)
+- Фиксированные значения: 2 универсальных производственных слота
+- Нулевые модификаторы для всех пользователей
+
+**Технические характеристики:**
+- Порт: 8080 (стандартный)
+- База данных: отсутствует (временная версия)
+- Кеширование: Redis DB 3 + проверка JWT в DB 0
+
+### 8. Telegram Mini App (Frontend)
 
 **Ключевые возможности:**
 - Интеграция с Telegram через Web App SDK
@@ -146,7 +215,7 @@ graph TB
 - Клановая система
 - Responsive дизайн для мобильных устройств
 
-### 7. Game API (Golang) - планируется
+### 9. Game API (Golang) - планируется
 
 **Основная функциональность:**
 - RESTful API для всех игровых операций
@@ -167,7 +236,9 @@ https://domain.com/api/* → nginx → API Gateway:9000/* → микросерв
 - `/api/ping` → ping-service:8080/ping  
 - `/api/webhook` → telegram-bot-service:8080/webhook
 - `/api/auth` → auth-service:8080/auth
-- `/api/inventory` → inventory-service:8080/inventory
+- `/api/inventory` → inventory-service:8080/api/inventory
+- `/api/production` → production-service:8080/production
+- `/api/user` → user-service:8080/user
 
 ### Добавление новых сервисов
 1. Создать новый микросервис на порту 8080
@@ -184,10 +255,12 @@ https://domain.com/api/* → nginx → API Gateway:9000/* → микросерв
 - Управление игровыми сессиями
 - Валидация ходов игроков
 
-#### User Service  
+#### User Service (полная версия)
+- Расширение текущей временной версии с добавлением PostgreSQL
 - Профили игроков (расширенные данные сверх базовой авторизации)
-- Статистика и достижения
-- История игр и прогресс
+- Реальная система VIP, уровней и достижений
+- История игр и прогресс пользователей
+- Система производственных слотов с возможностью улучшения
 
 #### Clan Service
 - Создание и управление кланами
@@ -204,23 +277,24 @@ https://domain.com/api/* → nginx → API Gateway:9000/* → микросерв
 - Магазин и покупки
 - Система наград
 
-#### Factory Service
-- Управление производственными рецептами
-- Система фабрики и производственных заданий
-- Интеграция с Inventory Service для резервирования материалов
-- Планировщик и очереди производства
+#### Event Service
+- Управление событийными модификаторами для производства
+- Сезонные события и временные бонусы
+- Система лунных циклов и серверных бафов
+- Интеграция с Production Service для применения модификаторов
 
 ### 7. Хранилище данных
 
 #### PostgreSQL 17
-Основная база данных для хранения:
-- **Пользователи** (базовые данные авторизации в auth-service)
-- **Инвентарь и предметы** (inventory-service: предметы, остатки, операции)
-- **Классификаторы** (общие справочные данные для всех сервисов)
-- Профили игроков (расширенные данные в user-service)
-- Клановые данные
-- История игр и достижения
-- Экономические транзакции
+Основная база данных с разделением по схемам:
+- **auth.*** - Пользователи (базовые данные авторизации в auth-service)
+- **inventory.*** - Инвентарь и предметы (inventory-service: предметы, остатки, операции)
+- **production.*** - Производственные данные (production-service: рецепты, задания, результаты)
+- **classifiers.*** - Общие справочные данные для всех сервисов
+- **users.*** - Профили игроков (расширенные данные в user-service, планируется)
+- **clans.*** - Клановые данные (планируется)
+- **games.*** - История игр и достижения (планируется)
+- **economy.*** - Экономические транзакции (планируется)
 
 **Новые возможности PostgreSQL 17:**
 - Улучшенная производительность JSON операций
@@ -229,10 +303,16 @@ https://domain.com/api/* → nginx → API Gateway:9000/* → микросерв
 - Улучшенные возможности партиционирования
 
 #### Redis 8.0.2
-Кеширование и временные данные:
-- **JWT токены** (активные и отозванные)
-- **Справочные данные** (классификаторы и каталог предметов)
-- **Актуальные остатки инвентаря** (краткосрочное кеширование)
+Кеширование и временные данные с разделением по базам:
+
+**Распределение Redis баз по сервисам:**
+- **DB 0 (Auth Service)**: JWT токены (активные и отозванные), проверка токенов для всех сервисов
+- **DB 1 (Inventory Service)**: Справочные данные (классификаторы и каталог предметов), актуальные остатки инвентаря
+- **DB 2 (Production Service)**: Кеширование рецептов, производственные очереди, временные данные заданий
+- **DB 3 (User Service)**: Пользовательские профили, модификаторы, слоты (временная версия)
+- **DB 4-15**: Зарезервированы для будущих сервисов
+
+**Общие данные:**
 - Сессии пользователей
 - Активные игровые состояния
 - Очереди матчмейкинга
@@ -266,6 +346,9 @@ graph TB
             AUTH[Auth Service<br/>Golang Container]
             BOT[Telegram Bot Service<br/>Golang Container]
             PING[Ping Service<br/>Golang Container]
+            INVENTORY[Inventory Service<br/>Golang Container]
+            PRODUCTION[Production Service<br/>Golang Container]
+            USER[User Service<br/>Golang Container - temp]
             GAME[Game API<br/>Planned]
             DB[(PostgreSQL 17<br/>Container)]
             CACHE[(Redis 8.0.2<br/>Container)]
@@ -274,10 +357,18 @@ graph TB
             GATEWAY --> AUTH
             GATEWAY --> BOT
             GATEWAY --> PING
+            GATEWAY --> INVENTORY
+            GATEWAY --> PRODUCTION
+            GATEWAY --> USER
             GATEWAY --> GAME
             AUTH --> DB
             AUTH --> CACHE
             BOT --> DB
+            INVENTORY --> DB
+            INVENTORY --> CACHE
+            PRODUCTION --> DB
+            PRODUCTION --> CACHE
+            USER --> CACHE
             GAME --> DB
             GAME --> CACHE
         end
