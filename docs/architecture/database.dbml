@@ -1,3 +1,93 @@
+// ============================================================================
+// PRODUCTION SERVICE SCHEMA - Сервис производства
+// ============================================================================
+
+Table production.recipes {
+  id uuid [primary key, note: 'UUID рецепта']
+  name varchar(255) [unique, not null, note: 'Название рецепта']
+  operation_class_id uuid [not null, ref: > inventory.classifier_items.id, note: 'Класс операции']
+  description text [note: 'Описание процесса']
+  is_active boolean [default: true, note: 'Активность рецепта']
+  production_time_seconds int [not null, note: 'Базовая длительность выполнения']
+  created_at timestamptz [default: `now()`, note: 'Время создания']
+  updated_at timestamptz [default: `now()`, note: 'Время последнего обновления']
+
+  indexes {
+    name [unique, name: 'idx_recipes_name', note: 'Поиск рецептов по названию']
+  }
+}
+
+Table production.recipe_input_items {
+  recipe_id uuid [not null, ref: > production.recipes.id, note: 'Ссылка на рецепт']
+  item_id uuid [not null, ref: > inventory.items.id, note: 'UUID предмета']
+  collection_code varchar(50) [null, note: 'Код коллекции']
+  quality_level_code varchar(50) [null, note: 'Код уровня качества']
+  quantity int [not null, note: 'Требуемое количество предмета']
+
+  indexes {
+    recipe_id [name: 'idx_recipe_input_items_recipe', note: 'Поиск входных предметов по рецепту']
+  }
+}
+
+Table production.recipe_output_items {
+  recipe_id uuid [not null, ref: > production.recipes.id, note: 'Ссылка на рецепт']
+  item_id uuid [not null, ref: > inventory.items.id, note: 'UUID создаваемого предмета']
+  min_quantity int [not null, note: 'Минимальное количество при выпадении']
+  max_quantity int [not null, note: 'Максимальное количество при выпадении']
+  probability_percent float [not null, note: 'Шанс получения предмета']
+  output_group varchar(50) [null, note: 'Группа взаимоисключающих предметов']
+  collection_source_input_index int [null, note: 'Индекс входного предмета для наследования коллекции']
+  quality_source_input_index int [null, note: 'Индекс входного предмета для наследования качества']
+  fixed_collection_code varchar(50) [null, note: 'Явно указанная коллекция']
+  fixed_quality_level_code varchar(50) [null, note: 'Явно указанное качество']
+
+  indexes {
+    recipe_id [name: 'idx_recipe_output_items_recipe', note: 'Поиск выходных предметов по рецепту']
+  }
+}
+
+Table production.production_tasks {
+  id uuid [primary key, note: 'UUID задания']
+  user_id uuid [not null, ref: > auth.users.id, note: 'UUID пользователя']
+  recipe_id uuid [not null, ref: > production.recipes.id, note: 'UUID рецепта']
+  operation_class_id uuid [not null, ref: > inventory.classifier_items.id, note: 'Класс операции']
+  status varchar(50) [not null, note: 'Текущее состояние задания']
+  production_time_seconds int [not null, note: 'Итоговое время выполнения']
+  created_at timestamptz [default: `now()`, note: 'Время создания задания']
+  started_at timestamptz [null, note: 'Время начала выполнения']
+  completed_at timestamptz [null, note: 'Расчетное время завершения']
+  applied_modifiers jsonb [note: 'Применённые модификаторы для аудита']
+
+  indexes {
+    user_id [name: 'idx_production_tasks_user', note: 'Поиск заданий по пользователю']
+    status [name: 'idx_production_tasks_status', note: 'Поиск заданий по статусу']
+  }
+}
+
+Table production.task_output_items {
+  task_id uuid [not null, ref: > production.production_tasks.id, note: 'Ссылка на задание']
+  item_id uuid [not null, ref: > inventory.items.id, note: 'Ссылка на полученный предмет']
+  collection_id uuid [not null, ref: > inventory.classifier_items.id, note: 'Коллекция предмета']
+  quality_level_id uuid [not null, ref: > inventory.classifier_items.id, note: 'Уровень качества предмета']
+  quantity int [not null, note: 'Фактическое количество']
+
+  indexes {
+    task_id [name: 'idx_task_output_items_task', note: 'Поиск выходных предметов по заданию']
+  }
+}
+
+Table production.recipe_limits {
+  recipe_id uuid [not null, ref: > production.recipes.id, note: 'Ссылка на рецепт']
+  limit_type_id uuid [not null, ref: > inventory.classifier_items.id, note: 'Тип лимита']
+  limit_object_id uuid [not null, ref: > inventory.classifier_items.id, note: 'Объект лимита']
+  target_item_id uuid [null, ref: > inventory.items.id, note: 'Конкретный предмет (для лимита предмета)']
+  limit_quantity int [not null, note: 'Максимальное количество использований']
+
+  indexes {
+    recipe_id [name: 'idx_recipe_limits_recipe', note: 'Поиск лимитов по рецепту']
+  }
+}
+
 // Схема базы данных Shard Legends: Clan Wars
 // Микросервисная архитектура с отдельными схемами для каждого сервиса
 

@@ -5,17 +5,172 @@
 ## Высокий приоритет
 <!-- Критически важные задачи, блокирующие другие -->
 
-*Нет задач высокого приоритета*
+### D-1: Разработка базовой инфраструктуры и аутентификации
+**Роль:** Backend Developer
+**Приоритет:** Высокий
+**Статус:** [ ] Готов к выполнению
+
+**Описание:**
+Настроить JWT аутентификацию, подключения к базе данных и Redis, написать миграции для базы данных для Production Service. 
+
+**Критерии выполнения:**
+- Вся инфраструктура развертывается в dev, JWT токены проверяются с помощью Auth Service, база и Redis успешно подключены.
+
+**Файлы для изучения:**
+- [docs/specs/production-service.md](docs/specs/production-service.md)
+- [docs/specs/production-service-openapi.yml](docs/specs/production-service-openapi.yml)
+
+
+**D-2: Реализация эндпоинтов для управления рецептами**
+**Роль:** Backend Developer
+**Приоритет:** Высокий
+**Статус:** [ ] Готов к выполнению
+
+**Описание:**
+Реализовать создание, получение и управление рецептами производства.
+
+**Критерии выполнения:**
+- Эндпоинты `/recipes` и поддержка фильтрации по классам операций.
+
+**Файлы для изучения:**
+- [docs/specs/production-service.md](docs/specs/production-service.md)
+- [docs/specs/production-service-openapi.yml](docs/specs/production-service-openapi.yml)
+
+
+**D-3: Поддержка очереди производственных заданий**
+**Роль:** Backend Developer
+**Приоритет:** Высокий
+**Статус:** [ ] Готов к выполнению
+
+**Описание:**
+Реализовать систему очередей для производственных заданий, включая создание и мониторинг заданий.
+
+**Критерии выполнения:**
+- Рабочая очередь, эндпоинты `/factory/queue` и `/factory/start`.
+
+**Файлы для изучения:**
+- [docs/specs/production-service.md](docs/specs/production-service.md)
+- [docs/specs/production-service-openapi.yml](docs/specs/production-service-openapi.yml)
+
+
+**D-4: Реализация системы модификаторов и предрасчета результатов**
+**Роль:** Backend Developer
+**Приоритет:** Высокий
+**Статус:** [ ] Готов к выполнению
+
+**Описание:**
+Внедрить систему модификаторов, поддержку автоматических, событийных и пользовательских модификаторов.
+
+**Критерии выполнения:**
+- Корректное применение модификаторов и расчет результатов.
+
+**Файлы для изучения:**
+- [docs/specs/production-service.md](docs/specs/production-service.md)
+- [docs/specs/production-service-openapi.yml](docs/specs/production-service-openapi.yml)
+
+
+**D-5: Исполнение Claim и завершение процессов**
+**Роль:** Backend Developer
+**Приоритет:** Высокий
+**Статус:** [ ] Готов к выполнению
+
+**Описание:**
+Реализовать эндпоинты для Claim завершенных задач, с сохранением результатов в инвентаре.
+
+**Критерии выполнения:**
+- Эндпоинты `/factory/claim` и обработка завершения заданий.
+
+**Файлы для изучения:**
+- [docs/specs/production-service.md](docs/specs/production-service.md)
+- [docs/specs/production-service-openapi.yml](docs/specs/production-service-openapi.yml)
 
 ---
 
 ## Средний приоритет  
 <!-- Важные задачи для текущего спринта/итерации -->
 
+## A-3: Создание технической спецификации для производственного сервиса
+**Роль:** Аналитик
+**Приоритет:** Средний
+**Статус:** [x] Выполнено
+
+**Описание:**
+Создать детальную техническую спецификацию для отдельного микросервиса, который будет обрабатывать бизнес-требования из docs/requirements/production-recipes-business-requirements.md и docs/requirements/factory-business-requirements.md. Спецификация должна определить архитектуру сервиса, API эндпоинты, модель данных и взаимодействие с другими сервисами.
+
+**Файлы для изучения:**
+- `docs/requirements/production-recipes-business-requirements.md` - бизнес-требования к производственным рецептам
+- `docs/requirements/factory-business-requirements.md` - бизнес-требования к фабрике и производственным заданиям  
+- `docs/specs/inventory-service.md` - пример структуры спецификации
+- `docs/architecture/architecture.md` - архитектурные принципы проекта
+
+**Критерии готовности:**
+
+**Структура спецификации (как в inventory-service.md):**
+- [x] Обзор сервиса и его назначение в экосистеме
+- [x] Технические характеристики (язык, порт, БД, кеширование)
+- [x] JWT аутентификация (аналогично inventory-service)
+- [x] API Endpoints с детальным описанием:
+  - [x] Публичные эндпоинты для фронтенда
+  - [x] Внутренние эндпоинты для других сервисов
+  - [x] Административные эндпоинты
+- [x] Модель данных с основными сущностями
+- [x] Бизнес-логика и алгоритмы
+- [x] Производительность (кеширование, индексы)
+- [x] Безопасность и мониторинг
+- [x] Зависимости от других сервисов
+
+**Ключевые аспекты для описания:**
+- [x] Управление производственными рецептами (CRUD операции)
+- [x] Система фабрики и производственных заданий
+- [x] Интеграция с Inventory Service для резервирования материалов
+- [x] Система производственных слотов и очередей
+- [x] Модификаторы и ускорители производства
+- [x] Система Claim результатов
+- [x] Лимиты использования рецептов
+
+**Результат:**
+- [x] Файл `docs/specs/production-service.md` - полная техническая спецификация
+- [x] Спецификация НЕ содержит примеры кода или описания OpenAPI
+- [x] Документ готов для передачи разработчику на реализацию
+
+**Зависимости:** 
+- ✅ Бизнес-требования (production-recipes, factory)
+- ✅ Архитектура проекта
+- ✅ Пример спецификации (inventory-service)
+
+**Оценка:** 1-2 дня
 
 
+### D-6: Обзор и тестирование архитектуры и бизнес-логики
+**Роль:** QA Engineer
+**Приоритет:** Средний
+**Статус:** [ ] Готов к выполнению
+
+**Описание:**
+Написать юнит-тесты на все ключевые компоненты системы после реализации бизнес-логики.
+
+**Критерии выполнения:**
+- Юнит-тесты покрывают не менее 80% бизнеса-логики.
+
+**Файлы для изучения:**
+- [docs/specs/production-service.md](docs/specs/production-service.md)
+- [docs/specs/production-service-openapi.yml](docs/specs/production-service-openapi.yml)
 
 
+### D-7: Внедрение метрик и мониторинга
+**Роль:** DevOps/Backend Developer
+**Приоритет:** Средний
+**Статус:** [ ] Готов к выполнению
+
+**Описание:**
+Интеграция мониторинга и метрик для наблюдения за работой сервиса.
+
+**Критерии выполнения:**
+- Поддержка метрик в ключевых эндпоинтах и процессы, дашборды в Prometheus и Grafana.
+
+**Файлы для изучения:**
+- [docs/specs/production-service.md](docs/specs/production-service.md)
+- [docs/specs/production-service-openapi.yml](docs/specs/production-service-openapi.yml)
 
 
 ## Низкий приоритет
@@ -48,18 +203,20 @@
 - [ ] `inventory_service_start_time_seconds` - время запуска для uptime
 
 **Grafana дашборд (аналогично auth-service):**
-- [ ] `deploy/monitoring/grafana/dashboards/inventory-service-metrics.json` - основной дашборд
-- [ ] 7 групп панелей: Service Overview, HTTP Metrics, Inventory Business Metrics, Cache Performance, Database Metrics, Dependencies Health, Admin Operations
-- [ ] Панели: Service Status, Uptime, Memory Usage, Goroutines, HTTP rates/latency, Balance calculation performance, Cache hit ratios, DB/Redis operations
+- [x] `deploy/monitoring/grafana/dashboards/inventory-service-metrics.json` - основной дашборд
+- [x] 7 групп панелей: Service Overview, HTTP Metrics, Inventory Business Metrics, Cache Performance, Database Metrics, Dependencies Health, Admin Operations
+- [x] Панели: Service Status, Uptime, Memory Usage, Goroutines, HTTP rates/latency, Balance calculation performance, Cache hit ratios, DB/Redis operations
 
 **Prometheus алерты:**
-- [ ] `deploy/monitoring/prometheus/rules/inventory-service.yml` - правила алертов
-- [ ] InventoryServiceDown - сервис недоступен >1 мин
-- [ ] InventoryHighErrorRate - error rate >10% за 5 мин  
-- [ ] InventoryHighLatency - p95 latency >2s за 5 мин
-- [ ] InventoryDatabaseIssues - DB queries >5s или errors >5%
-- [ ] InventoryCacheProblems - cache hit ratio <70% за 10 мин
-- [ ] InventoryBalanceCalculationSlow - balance calculation >1s за 5 мин
+- [x] `deploy/monitoring/alerts.yml` - правила алертов для inventory-service реализованы
+- [x] InventoryServiceDown - сервис недоступен >2 мин
+- [x] InventoryHighErrorRate - error rate >5% за 5 мин  
+- [x] InventoryHighResponseTime - p95 latency >0.5s за 5 мин
+- [x] InventoryDatabaseDown - PostgreSQL health check failing
+- [x] InventoryRedisDown - Redis health check failing
+- [x] InventoryLowCacheHitRate - cache hit ratio <50% за 10 мин
+- [x] InventorySlowBalanceCalculation - balance calculation >2s за 5 мин
+- [x] InventoryHighTransactionFailureRate - transaction failures >5%
 
 **Интеграция в middleware:**
 - [ ] Обновить `internal/middleware/metrics.go` для новых метрик
@@ -67,13 +224,14 @@
 
 **Зависимости:** ✅ M-3 (HTTP API), ✅ M-4 (auth-service как референс), ✅ M-2 (бизнес-логика)
 
-**Прогресс реализации:**
-- ✅ Базовые метрики: HTTP, DB, Redis, начальные inventory operations
-- ❌ Специфичные inventory метрики: balance calculation, cache hit ratio, daily balance creation
-- ❌ Grafana дашборд: нет `inventory-service-metrics.json`
-- ❌ Prometheus алерты: нет rules для inventory-service
-- ❌ Интеграция: метрики не подключены к бизнес-алгоритмам
-**Оценка:** 2-3 дня
+**Прогресс реализации (~70% выполнено):**
+- ✅ Базовые метрики: HTTP, DB, Redis, inventory operations полностью реализованы
+- ✅ Grafana дашборд: `inventory-service-metrics.json` создан с 7 группами панелей
+- ✅ Prometheus алерты: 8 алертов реализованы в `alerts.yml` (Service Down, Errors, Latency, DB/Redis health)
+- ✅ HTTP middleware интеграция: `internal/middleware/metrics.go` работает
+- ❌ Специфичные inventory метрики: balance calculation, cache hit ratio, daily balance creation (7 метрик)
+- ❌ Интеграция в бизнес-логику: метрики не подключены к repositories/services
+**Оценка:** 1-1.5 дня (доработка)
 
 ---
 

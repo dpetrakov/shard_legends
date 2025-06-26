@@ -1,0 +1,956 @@
+openapi: 3.0.3
+info:
+  title: Production Service API
+  description: |
+    API для управления производственными процессами в игре Shard Legends: Clan Wars.
+    
+    Сервис обеспечивает:
+    - Управление производственными рецептами
+    - Очереди производственных заданий
+    - Системы модификаторов и ускорителей
+    - Предрасчет результатов производства
+    - Claim результатов производства
+    
+    Все эндпоинты требуют JWT токен для аутентификации.
+    
+    ## JWT Аутентификация
+    
+    ### Процесс валидации токена:
+    
+    1. **Проверка формата токена** - Bearer prefix в Authorization header
+    2. **Валидация RS256 подписи** - используя публичный ключ от Auth Service
+    3. **Проверка времени действия** - проверка exp claim
+    4. **Проверка отзыва в Redis** - проверка что токен не отозван
+    5. **Извлечение user_id** - из sub claim для авторизации
+    
+    ### Заголовок запроса:
+    ```
+    Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
+    ```
+    
+    ### Возможные ошибки аутентификации:
+    - `missing_token` - отсутствует Authorization header
+    - `invalid_token_format` - неправильный формат Bearer токена  
+    - `invalid_token_signature` - неверная RS256 подпись
+    - `token_revoked` - токен отозван в Redis
+    - `missing_user_id` - отсутствует user_id в токене
+  version: 1.0.0
+  contact:
+    name: Shard Legends Team
+
+servers:
+  - url: http://localhost:8080/api/production
+    description: Локальный сервер разработки
+  - url: https://api.shardlegends.com/api/production
+    description: Продуктивный сервер
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Public
+    description: Публичные эндпоинты для фронтенда
+  - name: Internal
+    description: Внутренние эндпоинты для других сервисов
+  - name: Admin
+    description: Административные эндпоинты
+
+paths:
+  /recipes:
+    get:
+      tags:
+        - Public
+      summary: Получение рецептов
+      description: |
+        Возвращает список активных производственных рецептов для пользователя с
+        учетом лимитов и ограничений.
+      operationId: getRecipes
+      parameters:
+        - name: operation_class
+          in: query
+          description: Класс операции для фильтрации рецептов
+          required: false
+          schema:
+            type: string
+            enum: [crafting, smelting, chest_opening, resource_gathering, special]
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecipesResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /factory/queue:
+    get:
+      tags:
+        - Public
+      summary: Получение очереди производства
+      description: |
+        Возвращает текущую очередь производственных заданий пользователя
+        со статусами и временем завершения.
+      operationId: getFactoryQueue
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueueResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /factory/completed:
+    get:
+      tags:
+        - Public
+      summary: Получение завершенных заданий
+      description: |
+        Возвращает список завершенных заданий, готовых к Claim.
+      operationId: getCompletedTasks
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompletedTasksResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /factory/start:
+    post:
+      tags:
+        - Public
+      summary: Запуск производства
+      description: |
+        Создает новое производственное задание и добавляет его в очередь.
+        
+        Процесс включает:
+        1. Проверку доступности рецепта и лимитов
+        2. Применение модификаторов (автоматических и предметов)
+        3. Предрасчет результата с фиксацией
+        4. Атомарное резервирование предметов через Inventory Service
+        5. Постановку в очередь или немедленный запуск
+      operationId: startProduction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartProductionRequest'
+      responses:
+        '200':
+          description: Задание создано успешно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartProductionResponse'
+        '400':
+          description: Ошибка валидации или недостаточно предметов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Превышены лимиты рецепта
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LimitExceededError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /factory/claim:
+    post:
+      tags:
+        - Public
+      summary: Claim результатов
+      description: |
+        Получает результаты завершенного производственного задания.
+        
+        Процесс включает:
+        1. Проверку статуса задания (completed)
+        2. Уничтожение зарезервированных материалов
+        3. Добавление результатов в инвентарь
+        4. Обновление статуса задания на "claimed"
+        5. Освобождение слота для следующего задания
+      operationId: claimResults
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClaimRequest'
+      responses:
+        '200':
+          description: Результаты получены успешно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+        '400':
+          description: Задание еще не завершено или уже получено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Задание не найдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /factory/cancel:
+    post:
+      tags:
+        - Public
+      summary: Отмена задания
+      description: |
+        Отменяет задание в статусе "pending" с возвратом материалов.
+        Применимо только к заданиям в очереди ожидания.
+      operationId: cancelTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelRequest'
+      responses:
+        '200':
+          description: Задание успешно отменено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '400':
+          description: Задание нельзя отменить (статус не pending)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Задание не найдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /internal/user-slots/{user_id}:
+    get:
+      tags:
+        - Internal
+      summary: Получение слотов пользователя
+      description: |
+        Возвращает информацию о доступных производственных слотах пользователя.
+        Используется User Service для предоставления информации о слотах.
+      operationId: getUserSlots
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            description: UUID пользователя
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSlotsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /admin/tasks:
+    get:
+      tags:
+        - Admin
+      summary: Мониторинг заданий
+      description: |
+        Возвращает статистику и мониторинг производственных заданий.
+        Требует административные права доступа.
+      operationId: getTasksStats
+      parameters:
+        - name: user_id
+          in: query
+          description: Фильтр по пользователю
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          description: Фильтр по статусу задания
+          required: false
+          schema:
+            type: string
+            enum: [pending, in_progress, completed, claimed, cancelled, failed]
+        - name: from_date
+          in: query
+          description: Начальная дата периода
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: to_date
+          in: query
+          description: Конечная дата периода
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: page
+          in: query
+          description: Номер страницы для пагинации
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Количество элементов на странице
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TasksStatsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT токен с RS256 подписью от Auth Service.
+        
+        Процесс валидации:
+        1. Проверка Bearer формата
+        2. Валидация RS256 подписи (публичный ключ от auth-service:8080/public-key.pem)
+        3. Проверка времени действия (exp claim)  
+        4. Проверка отзыва в Redis (EXISTS revoked:{jti})
+        5. Извлечение user_id из sub claim
+        
+        Формат: Authorization: Bearer <jwt_token>
+
+  schemas:
+    # Базовые типы
+    ProductionRecipe:
+      type: object
+      required:
+        - id
+        - name
+        - operation_class_code
+        - is_active
+        - production_time_seconds
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: UUID рецепта
+        name:
+          type: string
+          description: Уникальное название рецепта
+        operation_class_code:
+          type: string
+          description: Код класса операции
+          enum: [crafting, smelting, chest_opening, resource_gathering, special]
+        description:
+          type: string
+          description: Текстовое описание процесса
+        is_active:
+          type: boolean
+          description: Доступен ли рецепт для использования
+        production_time_seconds:
+          type: integer
+          minimum: 1
+          description: Базовая длительность выполнения рецепта в секундах
+        input_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecipeInputItem'
+        output_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecipeOutputItem'
+        limits:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecipeLimit'
+
+    RecipeInputItem:
+      type: object
+      required:
+        - item_id
+        - quantity
+      properties:
+        item_id:
+          type: string
+          format: uuid
+          description: UUID предмета из inventory.items
+        collection_code:
+          type: string
+          description: Код коллекции (опционально, null для стандартной)
+        quality_level_code:
+          type: string
+          description: Код уровня качества (опционально, null для стандартного)
+        quantity:
+          type: integer
+          minimum: 1
+          description: Требуемое количество предмета
+
+    RecipeOutputItem:
+      type: object
+      required:
+        - item_id
+        - min_quantity
+        - max_quantity
+        - probability_percent
+      properties:
+        item_id:
+          type: string
+          format: uuid
+          description: UUID создаваемого предмета
+        min_quantity:
+          type: integer
+          minimum: 1
+          description: Наименьшее количество при выпадении
+        max_quantity:
+          type: integer
+          minimum: 1
+          description: Наибольшее количество при выпадении
+        probability_percent:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Шанс получения этого предмета (в процентах)
+        output_group:
+          type: string
+          description: Принадлежность к группе взаимоисключающих предметов
+        collection_source_input_index:
+          type: integer
+          description: Индекс входного предмета для наследования коллекции
+        quality_source_input_index:
+          type: integer
+          description: Индекс входного предмета для наследования качества
+        fixed_collection_code:
+          type: string
+          description: Явно указанная коллекция
+        fixed_quality_level_code:
+          type: string
+          description: Явно указанное качество
+
+    RecipeLimit:
+      type: object
+      required:
+        - limit_type
+        - limit_object
+        - limit_quantity
+      properties:
+        limit_type:
+          type: string
+          description: Тип лимита
+          enum: [total, daily, weekly, monthly, seasonal, per_event]
+        limit_object:
+          type: string
+          description: Объект лимита
+          enum: [recipe_execution, item_reward]
+        target_item_id:
+          type: string
+          format: uuid
+          description: Конкретный предмет (для лимитов на получение)
+        limit_quantity:
+          type: integer
+          minimum: 1
+          description: Максимальное количество использований
+
+    ProductionTask:
+      type: object
+      required:
+        - id
+        - user_id
+        - recipe_id
+        - operation_class_code
+        - status
+        - production_time_seconds
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: UUID задания
+        user_id:
+          type: string
+          format: uuid
+          description: UUID пользователя
+        recipe_id:
+          type: string
+          format: uuid
+          description: UUID исходного рецепта
+        operation_class_code:
+          type: string
+          description: Код класса операции
+        status:
+          type: string
+          enum: [pending, in_progress, completed, claimed, cancelled, failed]
+          description: Текущее состояние задания
+        production_time_seconds:
+          type: integer
+          description: Итоговое время выполнения с учетом модификаторов
+        created_at:
+          type: string
+          format: date-time
+          description: Когда задание было создано
+        started_at:
+          type: string
+          format: date-time
+          description: Когда началось выполнение
+        completed_at:
+          type: string
+          format: date-time
+          description: Расчетное время завершения
+        applied_modifiers:
+          type: object
+          description: JSON список примененных модификаторов
+        output_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskOutputItem'
+
+    TaskOutputItem:
+      type: object
+      required:
+        - item_id
+        - quantity
+      properties:
+        item_id:
+          type: string
+          format: uuid
+          description: UUID полученного предмета
+        collection_code:
+          type: string
+          description: Код коллекции предмета
+        quality_level_code:
+          type: string
+          description: Код уровня качества
+        quantity:
+          type: integer
+          minimum: 1
+          description: Фактическое количество
+
+    # Ответы
+    RecipesResponse:
+      type: object
+      required:
+        - recipes
+      properties:
+        recipes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductionRecipe'
+
+    QueueResponse:
+      type: object
+      required:
+        - tasks
+        - available_slots
+      properties:
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductionTask'
+        available_slots:
+          type: object
+          description: Информация о доступных слотах
+          properties:
+            total:
+              type: integer
+              description: Общее количество слотов
+            used:
+              type: integer
+              description: Количество занятых слотов
+            free:
+              type: integer
+              description: Количество свободных слотов
+
+    CompletedTasksResponse:
+      type: object
+      required:
+        - tasks
+      properties:
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductionTask'
+          description: Список заданий в статусе completed
+
+    StartProductionResponse:
+      type: object
+      required:
+        - success
+        - task_id
+        - status
+        - expected_completion_time
+      properties:
+        success:
+          type: boolean
+        task_id:
+          type: string
+          format: uuid
+          description: UUID созданного задания
+        status:
+          type: string
+          enum: [pending, in_progress]
+          description: Статус задания после создания
+        expected_completion_time:
+          type: string
+          format: date-time
+          description: Ожидаемое время завершения
+
+    ClaimResponse:
+      type: object
+      required:
+        - success
+        - items_received
+        - updated_queue_status
+      properties:
+        success:
+          type: boolean
+        items_received:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskOutputItem'
+          description: Список полученных предметов
+        updated_queue_status:
+          $ref: '#/components/schemas/QueueResponse'
+
+    UserSlotsResponse:
+      type: object
+      required:
+        - user_id
+        - slots
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        slots:
+          type: array
+          items:
+            type: object
+            required:
+              - slot_type
+              - supported_operations
+              - count
+            properties:
+              slot_type:
+                type: string
+                description: Тип слота
+                enum: [universal, specialized]
+              supported_operations:
+                type: array
+                items:
+                  type: string
+                  enum: [crafting, smelting, chest_opening, resource_gathering, special]
+                description: Поддерживаемые операции
+              count:
+                type: integer
+                minimum: 0
+                description: Количество слотов этого типа
+
+    TasksStatsResponse:
+      type: object
+      required:
+        - tasks
+        - stats
+        - pagination
+      properties:
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductionTask'
+        stats:
+          type: object
+          properties:
+            total_tasks:
+              type: integer
+              description: Общее количество заданий
+            by_status:
+              type: object
+              description: Статистика по статусам
+              additionalProperties:
+                type: integer
+            by_operation_class:
+              type: object
+              description: Статистика по классам операций
+              additionalProperties:
+                type: integer
+            system_load:
+              type: object
+              properties:
+                average_queue_length:
+                  type: number
+                  description: Средняя длина очереди
+                slot_utilization_percent:
+                  type: number
+                  description: Процент использования слотов
+        pagination:
+          type: object
+          properties:
+            page:
+              type: integer
+            limit:
+              type: integer
+            total_pages:
+              type: integer
+            total_items:
+              type: integer
+
+    # Запросы
+    StartProductionRequest:
+      type: object
+      required:
+        - recipe_id
+        - executions
+      properties:
+        recipe_id:
+          type: string
+          format: uuid
+          description: UUID рецепта для выполнения
+        executions:
+          type: integer
+          minimum: 1
+          description: Количество исполнений рецепта
+        boosters:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: UUID предметов-ускорителей из инвентаря пользователя
+
+    ClaimRequest:
+      type: object
+      properties:
+        task_id:
+          type: string
+          format: uuid
+          description: UUID задания для получения результатов (если не указано - все готовые)
+
+    CancelRequest:
+      type: object
+      required:
+        - task_id
+      properties:
+        task_id:
+          type: string
+          format: uuid
+          description: UUID задания для отмены
+
+    # Общие типы
+    OperationResponse:
+      type: object
+      required:
+        - success
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+          description: Дополнительная информация
+
+    # Ошибки
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Код ошибки
+        message:
+          type: string
+          description: Описание ошибки
+        details:
+          type: object
+          description: Дополнительная информация об ошибке
+
+    ValidationError:
+      type: object
+      required:
+        - error
+        - message
+        - validation_errors
+      properties:
+        error:
+          type: string
+          enum: [validation_error, insufficient_items]
+        message:
+          type: string
+        validation_errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              error:
+                type: string
+        missing_items:
+          type: array
+          items:
+            type: object
+            properties:
+              item_id:
+                type: string
+                format: uuid
+              collection_code:
+                type: string
+              quality_level_code:
+                type: string
+              required:
+                type: integer
+              available:
+                type: integer
+
+    LimitExceededError:
+      type: object
+      required:
+        - error
+        - message
+        - limit_info
+      properties:
+        error:
+          type: string
+          enum: [limit_exceeded]
+        message:
+          type: string
+        limit_info:
+          type: object
+          properties:
+            limit_type:
+              type: string
+            current_usage:
+              type: integer
+            max_allowed:
+              type: integer
+            reset_time:
+              type: string
+              format: date-time
+
+  responses:
+    Unauthorized:
+      description: Отсутствует или недействительный JWT токен
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            missing_token:
+              summary: Отсутствует токен
+              value:
+                error: missing_token
+                message: Missing Authorization header
+            invalid_token_format:
+              summary: Неправильный формат
+              value:
+                error: invalid_token_format  
+                message: Invalid Bearer token format
+            invalid_token_signature:
+              summary: Неверная подпись
+              value:
+                error: invalid_token_signature
+                message: Invalid JWT signature
+            token_revoked:
+              summary: Токен отозван
+              value:
+                error: token_revoked
+                message: Token has been revoked
+            missing_user_id:
+              summary: Отсутствует user_id
+              value:
+                error: missing_user_id
+                message: Missing user_id in token claims
+
+    Forbidden:
+      description: Недостаточно прав доступа
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: forbidden
+            message: Insufficient permissions
+
+    NotFound:
+      description: Ресурс не найден
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: not_found
+            message: Resource not found
+
+    BadRequest:
+      description: Некорректный запрос
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: bad_request
+            message: Invalid request parameters
+
+    InternalError:
+      description: Внутренняя ошибка сервера
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: internal_error
+            message: An unexpected error occurred

@@ -8,22 +8,22 @@ import (
 
 // Classifier represents a classifier type in the system
 type Classifier struct {
-	ID          uuid.UUID  `json:"id" db:"id"`
-	Code        string     `json:"code" db:"code"`
-	Description *string    `json:"description,omitempty" db:"description"`
-	CreatedAt   time.Time  `json:"created_at" db:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at" db:"updated_at"`
+	ID          uuid.UUID `json:"id" db:"id"`
+	Code        string    `json:"code" db:"code"`
+	Description *string   `json:"description,omitempty" db:"description"`
+	CreatedAt   time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
 }
 
 // ClassifierItem represents an item within a classifier
 type ClassifierItem struct {
-	ID           uuid.UUID  `json:"id" db:"id"`
-	ClassifierID uuid.UUID  `json:"classifier_id" db:"classifier_id"`
-	Code         string     `json:"code" db:"code"`
-	Description  *string    `json:"description,omitempty" db:"description"`
-	IsActive     bool       `json:"is_active" db:"is_active"`
-	CreatedAt    time.Time  `json:"created_at" db:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at" db:"updated_at"`
+	ID           uuid.UUID `json:"id" db:"id"`
+	ClassifierID uuid.UUID `json:"classifier_id" db:"classifier_id"`
+	Code         string    `json:"code" db:"code"`
+	Description  *string   `json:"description,omitempty" db:"description"`
+	IsActive     bool      `json:"is_active" db:"is_active"`
+	CreatedAt    time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
 }
 
 // Common classifier codes used across the system
@@ -46,22 +46,24 @@ const (
 // Common classifier item codes
 const (
 	// Item classes
-	ItemClassResources   = "resources"
-	ItemClassReagents    = "reagents"
-	ItemClassBoosters    = "boosters"
-	ItemClassBlueprints  = "blueprints"
-	ItemClassTools       = "tools"
-	ItemClassKeys        = "keys"
-	ItemClassCurrencies  = "currencies"
+	ItemClassResources  = "resources"
+	ItemClassReagents   = "reagents"
+	ItemClassBoosters   = "boosters"
+	ItemClassBlueprints = "blueprints"
+	ItemClassTools      = "tools"
+	ItemClassKeys       = "keys"
+	ItemClassCurrencies = "currencies"
+	ItemClassChests     = "chests"
 
 	// Quality levels
-	QualityLevelWooden   = "wooden"
-	QualityLevelStone    = "stone"
-	QualityLevelMetal    = "metal"
-	QualityLevelDiamond  = "diamond"
-	QualityLevelSmall    = "small"
-	QualityLevelMedium   = "medium"
-	QualityLevelLarge    = "large"
+	QualityLevelBase    = "base"
+	QualityLevelWooden  = "wooden"
+	QualityLevelStone   = "stone"
+	QualityLevelMetal   = "metal"
+	QualityLevelDiamond = "diamond"
+	QualityLevelSmall   = "small"
+	QualityLevelMedium  = "medium"
+	QualityLevelLarge   = "large"
 
 	// Inventory sections
 	SectionMain    = "main"

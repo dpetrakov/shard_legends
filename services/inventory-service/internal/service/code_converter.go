@@ -65,10 +65,18 @@ func (cc *codeConverter) convertCodesToUUIDs(ctx context.Context, data map[strin
 	fieldMappings := map[string]string{
 		"section":         models.ClassifierInventorySection,
 		"item_class":      models.ClassifierItemClass,
-		"item_type":       models.ClassifierResourceType, // This would need to be determined dynamically
 		"collection":      models.ClassifierCollection,
 		"quality_level":   models.ClassifierQualityLevel,
 		"operation_type":  models.ClassifierOperationType,
+	}
+
+	// Handle item_type dynamically based on item_class
+	if itemClassValue, exists := data["item_class"]; exists && itemClassValue != nil {
+		if itemClassStr, ok := itemClassValue.(string); ok && itemClassStr != "" {
+			if itemTypeClassifier, err := cc.getItemTypeClassifier(itemClassStr); err == nil && itemTypeClassifier != "" {
+				fieldMappings["item_type"] = itemTypeClassifier
+			}
+		}
 	}
 
 	for fieldName, classifierType := range fieldMappings {
@@ -115,10 +123,18 @@ func (cc *codeConverter) convertUUIDsToCodes(ctx context.Context, data map[strin
 	fieldMappings := map[string]string{
 		"section_id":         models.ClassifierInventorySection,
 		"item_class_id":      models.ClassifierItemClass,
-		"item_type_id":       models.ClassifierResourceType, // This would need to be determined dynamically
 		"collection_id":      models.ClassifierCollection,
 		"quality_level_id":   models.ClassifierQualityLevel,
 		"operation_type_id":  models.ClassifierOperationType,
+	}
+
+	// Handle item_type_id dynamically based on item_class if available
+	if itemClassValue, exists := data["item_class"]; exists && itemClassValue != nil {
+		if itemClassStr, ok := itemClassValue.(string); ok && itemClassStr != "" {
+			if itemTypeClassifier, err := cc.getItemTypeClassifier(itemClassStr); err == nil && itemTypeClassifier != "" {
+				fieldMappings["item_type_id"] = itemTypeClassifier
+			}
+		}
 	}
 
 	for fieldName, classifierType := range fieldMappings {
@@ -162,6 +178,32 @@ func (cc *codeConverter) convertUUIDsToCodes(ctx context.Context, data map[strin
 	}
 
 	return nil
+}
+
+// getItemTypeClassifier returns the appropriate classifier type based on item class
+func (cc *codeConverter) getItemTypeClassifier(itemClass string) (string, error) {
+	switch itemClass {
+	case models.ItemClassResources:
+		return models.ClassifierResourceType, nil
+	case models.ItemClassReagents:
+		return models.ClassifierReagentType, nil
+	case models.ItemClassTools:
+		return models.ClassifierToolType, nil
+	case models.ItemClassKeys:
+		return models.ClassifierKeyType, nil
+	case models.ItemClassCurrencies:
+		return models.ClassifierCurrencyType, nil
+	case models.ItemClassBoosters:
+		return models.ClassifierBoosterType, nil
+	case models.ItemClassBlueprints:
+		// Blueprints don't have subtypes, return empty
+		return "", nil
+	case models.ItemClassChests:
+		// Chests would have chest_type when implemented
+		return "", nil
+	default:
+		return "", errors.Errorf("unknown item class: %s", itemClass)
+	}
 }
 
 // getDefaultUUID returns a default UUID for unknown codes based on classifier type

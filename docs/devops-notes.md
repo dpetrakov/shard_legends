@@ -47,9 +47,14 @@ go test ./...
 ```
 
 # Создание токена dpetrkov78
-```
+```bash
 cd scripts/jwt_gen
 go run .
+```
+
+Запуск Gemini
+```bash
+npx https://github.com/google-gemini/gemini-cli
 ```
 
   1. Откройте Grafana: http://localhost:15000
