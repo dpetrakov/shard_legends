@@ -31,6 +31,7 @@ services:
       - telegram-bot-service
       - auth-service
       - inventory-service
+      - production-service
 
   # Frontend service
   frontend:
@@ -182,6 +183,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-slcw_user}:${POSTGRES_PASSWORD:-dev_password_2024}@postgres:5432/${POSTGRES_DB:-shard_legends_dev}?sslmode=disable
       - REDIS_URL=redis://redis:6379/1
+      - REDIS_AUTH_URL=redis://redis:6379/0
       - INVENTORY_SERVICE_HOST=0.0.0.0
       - INVENTORY_SERVICE_PORT=8080
       - DATABASE_MAX_CONNECTIONS=10
@@ -211,6 +213,55 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+
+  # Production Service - Production recipes and manufacturing
+  production-service:
+    build:
+      context: ../../services/production-service
+      dockerfile: Dockerfile
+    container_name: slcw-production-service-dev
+    ports:
+      - "127.0.0.1:8082:8082"  # Expose port for development
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-slcw_user}:${POSTGRES_PASSWORD:-dev_password_2024}@postgres:5432/${POSTGRES_DB:-shard_legends_dev}?sslmode=disable
+      - REDIS_URL=redis://redis:6379/2
+      - REDIS_AUTH_URL=redis://redis:6379/0
+      - PRODUCTION_SERVICE_HOST=0.0.0.0
+      - PRODUCTION_SERVICE_PORT=8082
+      - DATABASE_MAX_CONNECTIONS=25
+      - REDIS_MAX_CONNECTIONS=10
+      - LOG_LEVEL=debug
+      - AUTH_PUBLIC_KEY_URL=http://auth-service:8080/public-key.pem
+      - INVENTORY_SERVICE_URL=http://inventory-service:8080
+      - AUTH_SERVICE_URL=http://auth-service:8080
+    networks:
+      - slcw-dev
+      - slcw-monitoring
+    restart: unless-stopped
+    labels:
+      - "logging.service=production-service"
+      - "logging.environment=dev"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "logging.service,logging.environment"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8082/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      inventory-service:
         condition: service_healthy
 
   # Database Migrations - All Services

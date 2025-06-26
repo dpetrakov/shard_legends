@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	
+
 	"github.com/shard-legends/inventory-service/internal/models"
 )
 
@@ -71,7 +71,7 @@ func createFullTestDeps() (*ServiceDependencies, *MockCache, *MockClassifierRepo
 	classifierRepo := new(MockClassifierRepo)
 	itemRepo := new(MockItemRepo)
 	inventoryRepo := new(MockInventoryRepo)
-	
+
 	deps := &ServiceDependencies{
 		Cache: cache,
 		Repositories: &RepositoryInterfaces{
@@ -80,10 +80,10 @@ func createFullTestDeps() (*ServiceDependencies, *MockCache, *MockClassifierRepo
 			Inventory:  inventoryRepo,
 		},
 	}
-	
+
 	// Initialize BalanceChecker to avoid nil pointer issues
 	deps.BalanceChecker = NewBalanceChecker(deps)
-	
+
 	return deps, cache, classifierRepo, itemRepo, inventoryRepo
 }
 
@@ -92,7 +92,7 @@ func TestInventoryService_CalculateCurrentBalance(t *testing.T) {
 	ctx := context.Background()
 	deps, cache, _, _, inventoryRepo := createFullTestDeps()
 	service := NewInventoryService(deps)
-	
+
 	req := &BalanceRequest{
 		UserID:         uuid.New(),
 		SectionID:      uuid.New(),
@@ -100,20 +100,20 @@ func TestInventoryService_CalculateCurrentBalance(t *testing.T) {
 		CollectionID:   uuid.New(),
 		QualityLevelID: uuid.New(),
 	}
-	
+
 	expectedBalance := int64(100)
-	cacheKey := "inventory:" + req.UserID.String() + ":" + req.SectionID.String() + ":" + 
+	cacheKey := "inventory:" + req.UserID.String() + ":" + req.SectionID.String() + ":" +
 		req.ItemID.String() + ":" + req.CollectionID.String() + ":" + req.QualityLevelID.String()
-	
+
 	// Mock cache hit
 	cache.On("Get", ctx, cacheKey, mock.AnythingOfType("*int64")).Return(nil).Run(func(args mock.Arguments) {
 		balance := args.Get(2).(*int64)
 		*balance = expectedBalance
 	})
-	
+
 	// Act
 	result, err := service.CalculateCurrentBalance(ctx, req)
-	
+
 	// Assert
 	assert.NoError(t, err)
 	assert.Equal(t, expectedBalance, result)
@@ -126,13 +126,13 @@ func TestInventoryService_GetUserInventory(t *testing.T) {
 	ctx := context.Background()
 	deps, cache, classifierRepo, itemRepo, inventoryRepo := createFullTestDeps()
 	service := NewInventoryService(deps)
-	
+
 	userID := uuid.New()
 	sectionID := uuid.New()
 	itemID := uuid.New()
 	collectionID := uuid.New()
 	qualityLevelID := uuid.New()
-	
+
 	// Mock inventory items
 	itemKeys := []*models.ItemKey{
 		{
@@ -143,19 +143,19 @@ func TestInventoryService_GetUserInventory(t *testing.T) {
 			QualityLevelID: qualityLevelID,
 		},
 	}
-	
+
 	inventoryRepo.On("GetUserInventoryItems", ctx, userID, sectionID).Return(itemKeys, nil)
-	
+
 	// Mock balance calculation (cache miss, then database)
-	cacheKey := "inventory:" + userID.String() + ":" + sectionID.String() + ":" + 
+	cacheKey := "inventory:" + userID.String() + ":" + sectionID.String() + ":" +
 		itemID.String() + ":" + collectionID.String() + ":" + qualityLevelID.String()
-	
+
 	cache.On("Get", ctx, cacheKey, mock.AnythingOfType("*int64")).Return(assert.AnError)
 	inventoryRepo.On("GetLatestDailyBalance", ctx, userID, sectionID, itemID, collectionID, qualityLevelID, mock.AnythingOfType("time.Time")).Return(nil, assert.AnError).Maybe()
-	
+
 	// Mock GetDailyBalance call from CreateDailyBalance
 	inventoryRepo.On("GetDailyBalance", ctx, userID, sectionID, itemID, collectionID, qualityLevelID, mock.AnythingOfType("time.Time")).Return(nil, assert.AnError).Maybe()
-	
+
 	operations := []*models.Operation{
 		{
 			ID:              uuid.New(),
@@ -168,18 +168,18 @@ func TestInventoryService_GetUserInventory(t *testing.T) {
 			OperationTypeID: uuid.New(),
 		},
 	}
-	
+
 	// Mock operations for CreateDailyBalance (called first)
 	inventoryRepo.On("GetOperations", ctx, userID, sectionID, itemID, collectionID, qualityLevelID, time.Time{}).Return(operations, nil).Maybe()
-	
+
 	// Mock CreateDailyBalance call
 	inventoryRepo.On("CreateDailyBalance", ctx, mock.AnythingOfType("*models.DailyBalance")).Return(nil).Maybe()
-	
+
 	// Mock operations for balance calculation (called second)
 	inventoryRepo.On("GetOperations", ctx, userID, sectionID, itemID, collectionID, qualityLevelID, mock.AnythingOfType("time.Time")).Return(operations, nil).Maybe()
-	
+
 	cache.On("Set", ctx, cacheKey, mock.AnythingOfType("int64"), mock.AnythingOfType("time.Duration")).Return(nil).Maybe()
-	
+
 	// Mock item details
 	itemDetails := &models.ItemWithDetails{
 		Item: models.Item{
@@ -193,7 +193,7 @@ func TestInventoryService_GetUserInventory(t *testing.T) {
 		ItemType:  "stone",
 	}
 	itemRepo.On("GetItemWithDetails", ctx, itemID).Return(itemDetails, nil)
-	
+
 	// Mock classifier mappings
 	collectionMapping := map[uuid.UUID]string{
 		collectionID: "common",
@@ -201,17 +201,17 @@ func TestInventoryService_GetUserInventory(t *testing.T) {
 	qualityMapping := map[uuid.UUID]string{
 		qualityLevelID: "basic",
 	}
-	
+
 	classifierRepo.On("GetUUIDToCodeMapping", ctx, models.ClassifierCollection).Return(collectionMapping, nil)
 	classifierRepo.On("GetUUIDToCodeMapping", ctx, models.ClassifierQualityLevel).Return(qualityMapping, nil)
-	
+
 	// Act
 	result, err := service.GetUserInventory(ctx, userID, sectionID)
-	
+
 	// Assert
 	assert.NoError(t, err)
 	assert.Len(t, result, 1)
-	
+
 	item := result[0]
 	assert.Equal(t, itemID, item.ItemID)
 	assert.Equal(t, "resources", item.ItemClass)
@@ -219,7 +219,7 @@ func TestInventoryService_GetUserInventory(t *testing.T) {
 	assert.Equal(t, "common", *item.Collection)
 	assert.Equal(t, "basic", *item.QualityLevel)
 	assert.Equal(t, int64(100), item.Quantity) // Double due to multiple balance calculations
-	
+
 	// Verify all mocks
 	inventoryRepo.AssertExpectations(t)
 	itemRepo.AssertExpectations(t)
@@ -232,14 +232,14 @@ func TestInventoryService_AddItems(t *testing.T) {
 	ctx := context.Background()
 	deps, cache, classifierRepo, _, inventoryRepo := createFullTestDeps()
 	service := NewInventoryService(deps)
-	
+
 	userID := uuid.New()
 	operationID := uuid.New()
 	itemID := uuid.New()
-	
+
 	collection := "common"
 	qualityLevel := "basic"
-	
+
 	req := &models.AddItemsRequest{
 		UserID:        userID,
 		Section:       models.SectionMain,
@@ -254,31 +254,31 @@ func TestInventoryService_AddItems(t *testing.T) {
 			},
 		},
 	}
-	
+
 	// Mock section mapping
 	sectionMapping := map[string]uuid.UUID{
 		models.SectionMain: uuid.New(),
 	}
 	classifierRepo.On("GetCodeToUUIDMapping", ctx, models.ClassifierInventorySection).Return(sectionMapping, nil)
-	
+
 	// Mock operation type mapping
 	operationMapping := map[string]uuid.UUID{
 		models.OperationTypeChestReward: uuid.New(),
 	}
 	classifierRepo.On("GetCodeToUUIDMapping", ctx, models.ClassifierOperationType).Return(operationMapping, nil)
-	
+
 	// Mock collection mapping
 	collectionMapping := map[string]uuid.UUID{
 		collection: uuid.New(),
 	}
 	classifierRepo.On("GetCodeToUUIDMapping", ctx, models.ClassifierCollection).Return(collectionMapping, nil)
-	
+
 	// Mock quality level mapping
 	qualityMapping := map[string]uuid.UUID{
 		qualityLevel: uuid.New(),
 	}
 	classifierRepo.On("GetCodeToUUIDMapping", ctx, models.ClassifierQualityLevel).Return(qualityMapping, nil)
-	
+
 	// Mock transaction
 	tx := &struct{}{}
 	inventoryRepo.On("BeginTransaction", ctx).Return(tx, nil)
@@ -286,17 +286,17 @@ func TestInventoryService_AddItems(t *testing.T) {
 		return len(ops) == 1 && ops[0].QuantityChange == 50 && ops[0].UserID == userID
 	})).Return(nil)
 	inventoryRepo.On("CommitTransaction", tx).Return(nil)
-	
+
 	// Mock cache invalidation
 	cache.On("DeletePattern", ctx, "inventory:"+userID.String()+":*").Return(nil)
-	
+
 	// Act
 	result, err := service.AddItems(ctx, req)
-	
+
 	// Assert
 	assert.NoError(t, err)
 	assert.Len(t, result, 1)
-	
+
 	inventoryRepo.AssertExpectations(t)
 	classifierRepo.AssertExpectations(t)
 }
@@ -306,7 +306,7 @@ func TestInventoryService_ReserveItems_InsufficientBalance(t *testing.T) {
 	ctx := context.Background()
 	deps, cache, classifierRepo, _, inventoryRepo := createFullTestDeps()
 	service := NewInventoryService(deps)
-	
+
 	userID := uuid.New()
 	operationID := uuid.New()
 	itemID := uuid.New()
@@ -314,7 +314,7 @@ func TestInventoryService_ReserveItems_InsufficientBalance(t *testing.T) {
 	factorySectionID := uuid.New()
 	defaultCollectionID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
 	defaultQualityID := uuid.MustParse("00000000-0000-0000-0000-000000000002")
-	
+
 	req := &models.ReserveItemsRequest{
 		UserID:      userID,
 		OperationID: operationID,
@@ -325,36 +325,36 @@ func TestInventoryService_ReserveItems_InsufficientBalance(t *testing.T) {
 			},
 		},
 	}
-	
+
 	// Mock section mapping
 	sectionMapping := map[string]uuid.UUID{
 		models.SectionMain:    mainSectionID,
 		models.SectionFactory: factorySectionID,
 	}
 	classifierRepo.On("GetCodeToUUIDMapping", ctx, models.ClassifierInventorySection).Return(sectionMapping, nil)
-	
+
 	// Mock operation type mapping - may not be called if balance check fails early
 	operationMapping := map[string]uuid.UUID{
 		models.OperationTypeFactoryReservation: uuid.New(),
 	}
 	classifierRepo.On("GetCodeToUUIDMapping", ctx, models.ClassifierOperationType).Return(operationMapping, nil).Maybe()
-	
+
 	// Mock collection and quality level mappings (using defaults) - these may not be called if balance check fails
 	collectionMapping := map[string]uuid.UUID{}
 	qualityMapping := map[string]uuid.UUID{}
 	classifierRepo.On("GetCodeToUUIDMapping", ctx, models.ClassifierCollection).Return(collectionMapping, nil).Maybe()
 	classifierRepo.On("GetCodeToUUIDMapping", ctx, models.ClassifierQualityLevel).Return(qualityMapping, nil).Maybe()
-	
+
 	// Mock balance calculation - insufficient balance (available = 50, required = 100)
-	cacheKey := "inventory:" + userID.String() + ":" + mainSectionID.String() + ":" + 
+	cacheKey := "inventory:" + userID.String() + ":" + mainSectionID.String() + ":" +
 		itemID.String() + ":" + defaultCollectionID.String() + ":" + defaultQualityID.String()
-	
+
 	cache.On("Get", ctx, cacheKey, mock.AnythingOfType("*int64")).Return(assert.AnError)
 	inventoryRepo.On("GetLatestDailyBalance", ctx, userID, mainSectionID, itemID, defaultCollectionID, defaultQualityID, mock.AnythingOfType("time.Time")).Return(nil, assert.AnError).Maybe()
-	
+
 	// Mock GetDailyBalance call from CreateDailyBalance
 	inventoryRepo.On("GetDailyBalance", ctx, userID, mainSectionID, itemID, defaultCollectionID, defaultQualityID, mock.AnythingOfType("time.Time")).Return(nil, assert.AnError).Maybe()
-	
+
 	// Mock operations that give us a balance of 25 (less than required 100)
 	operations := []*models.Operation{
 		{
@@ -369,26 +369,29 @@ func TestInventoryService_ReserveItems_InsufficientBalance(t *testing.T) {
 			CreatedAt:       time.Now().UTC().AddDate(0, 0, -1),
 		},
 	}
-	
+
 	// Mock operations for CreateDailyBalance (called first)
 	inventoryRepo.On("GetOperations", ctx, userID, mainSectionID, itemID, defaultCollectionID, defaultQualityID, time.Time{}).Return(operations, nil).Maybe()
-	
+
 	// Mock CreateDailyBalance call
 	inventoryRepo.On("CreateDailyBalance", ctx, mock.AnythingOfType("*models.DailyBalance")).Return(nil).Maybe()
-	
+
 	// Mock operations for balance calculation (called second)
 	inventoryRepo.On("GetOperations", ctx, userID, mainSectionID, itemID, defaultCollectionID, defaultQualityID, mock.AnythingOfType("time.Time")).Return(operations, nil).Maybe()
-	
+
+	// Mock GetOperationsByExternalID that's called in CreateReservationOperations
+	inventoryRepo.On("GetOperationsByExternalID", ctx, operationID).Return([]*models.Operation{}, nil).Maybe()
+
 	cache.On("Set", ctx, cacheKey, mock.AnythingOfType("int64"), mock.AnythingOfType("time.Duration")).Return(nil).Maybe()
-	
+
 	// Act
 	result, err := service.ReserveItems(ctx, req)
-	
+
 	// Assert
 	assert.Error(t, err)
 	assert.Nil(t, result)
 	assert.True(t, IsInsufficientBalanceError(err))
-	
+
 	missingItems, exists := GetMissingItemsFromError(err)
 	assert.True(t, exists)
 	if len(missingItems) > 0 {
@@ -398,7 +401,7 @@ func TestInventoryService_ReserveItems_InsufficientBalance(t *testing.T) {
 	} else {
 		t.Logf("No missing items found")
 	}
-	
+
 	inventoryRepo.AssertExpectations(t)
 	classifierRepo.AssertExpectations(t)
 	cache.AssertExpectations(t)
@@ -409,15 +412,15 @@ func TestInventoryService_InvalidateUserCache(t *testing.T) {
 	ctx := context.Background()
 	deps, cache, _, _, _ := createFullTestDeps()
 	service := NewInventoryService(deps)
-	
+
 	userID := uuid.New()
 	pattern := "inventory:" + userID.String() + ":*"
-	
+
 	cache.On("DeletePattern", ctx, pattern).Return(nil)
-	
+
 	// Act
 	err := service.InvalidateUserCache(ctx, userID)
-	
+
 	// Assert
 	assert.NoError(t, err)
 	cache.AssertExpectations(t)
@@ -428,30 +431,30 @@ func TestInventoryService_ConvertClassifierCodes(t *testing.T) {
 	ctx := context.Background()
 	deps, _, classifierRepo, _, _ := createFullTestDeps()
 	service := NewInventoryService(deps)
-	
+
 	req := &CodeConversionRequest{
 		Direction: "toUUID",
 		Data: map[string]interface{}{
 			"section": models.SectionMain,
 		},
 	}
-	
+
 	// Mock section mapping
 	sectionMapping := map[string]uuid.UUID{
 		models.SectionMain: uuid.New(),
 	}
 	classifierRepo.On("GetCodeToUUIDMapping", ctx, models.ClassifierInventorySection).Return(sectionMapping, nil)
-	
+
 	// Act
 	result, err := service.ConvertClassifierCodes(ctx, req)
-	
+
 	// Assert
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.Contains(t, result.Data, "section_id")
 	assert.Equal(t, sectionMapping[models.SectionMain], result.Data["section_id"])
 	assert.NotContains(t, result.Data, "section")
-	
+
 	classifierRepo.AssertExpectations(t)
 }
 
@@ -460,7 +463,7 @@ func TestInventoryService_CreateDailyBalance(t *testing.T) {
 	ctx := context.Background()
 	deps, _, _, _, inventoryRepo := createFullTestDeps()
 	service := NewInventoryService(deps)
-	
+
 	req := &DailyBalanceRequest{
 		UserID:         uuid.New(),
 		SectionID:      uuid.New(),
@@ -469,24 +472,24 @@ func TestInventoryService_CreateDailyBalance(t *testing.T) {
 		QualityLevelID: uuid.New(),
 		TargetDate:     time.Now().UTC().AddDate(0, 0, -1),
 	}
-	
+
 	expectedBalance := &models.DailyBalance{
 		UserID:         req.UserID,
 		SectionID:      req.SectionID,
 		ItemID:         req.ItemID,
 		CollectionID:   req.CollectionID,
 		QualityLevelID: req.QualityLevelID,
-		BalanceDate:    req.TargetDate.UTC().Truncate(24*time.Hour).Add(24*time.Hour - time.Second),
+		BalanceDate:    req.TargetDate.UTC().Truncate(24 * time.Hour).Add(24*time.Hour - time.Second),
 		Quantity:       75,
 		CreatedAt:      time.Now().UTC(),
 	}
-	
+
 	// Mock daily balance doesn't exist
 	inventoryRepo.On("GetDailyBalance", ctx, req.UserID, req.SectionID, req.ItemID, req.CollectionID, req.QualityLevelID, mock.AnythingOfType("time.Time")).Return(nil, assert.AnError)
-	
+
 	// Mock no previous balance
 	inventoryRepo.On("GetLatestDailyBalance", ctx, req.UserID, req.SectionID, req.ItemID, req.CollectionID, req.QualityLevelID, mock.AnythingOfType("time.Time")).Return(nil, assert.AnError)
-	
+
 	// Mock operations
 	inventoryRepo.On("GetOperations", ctx, req.UserID, req.SectionID, req.ItemID, req.CollectionID, req.QualityLevelID, time.Time{}).Return([]*models.Operation{
 		{
@@ -501,19 +504,19 @@ func TestInventoryService_CreateDailyBalance(t *testing.T) {
 			CreatedAt:       req.TargetDate.Add(-1 * time.Hour),
 		},
 	}, nil)
-	
+
 	// Mock create balance
 	inventoryRepo.On("CreateDailyBalance", ctx, mock.MatchedBy(func(balance *models.DailyBalance) bool {
 		return balance.Quantity == 75
 	})).Return(nil)
-	
+
 	// Act
 	result, err := service.CreateDailyBalance(ctx, req)
-	
+
 	// Assert
 	assert.NoError(t, err)
 	assert.Equal(t, expectedBalance.Quantity, result.Quantity)
 	assert.Equal(t, req.UserID, result.UserID)
-	
+
 	inventoryRepo.AssertExpectations(t)
 }

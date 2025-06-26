@@ -18,6 +18,7 @@ type Config struct {
 
 	// Redis configuration
 	RedisURL      string
+	RedisAuthURL  string // URL для JWT revocation (база 0)
 	RedisMaxConns int
 
 	// Logging configuration
@@ -66,6 +67,11 @@ func Load() (*Config, error) {
 	cfg.RedisURL = os.Getenv("REDIS_URL")
 	if cfg.RedisURL == "" {
 		return nil, fmt.Errorf("REDIS_URL is required")
+	}
+
+	cfg.RedisAuthURL = os.Getenv("REDIS_AUTH_URL")
+	if cfg.RedisAuthURL == "" {
+		cfg.RedisAuthURL = "redis://redis:6379/0" // По умолчанию база 0 для JWT
 	}
 
 	redisMaxConnStr := os.Getenv("REDIS_MAX_CONNECTIONS")

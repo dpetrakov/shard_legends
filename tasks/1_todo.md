@@ -14,11 +14,34 @@
 Настроить JWT аутентификацию, подключения к базе данных и Redis, написать миграции для базы данных для Production Service. 
 
 **Критерии выполнения:**
-- Вся инфраструктура развертывается в dev, JWT токены проверяются с помощью Auth Service, база и Redis успешно подключены.
+- [x] **Сборка**: Production Service успешно собирается (`go build ./cmd/server`)
+- [x] **Базовая структура**: Настроена архитектура сервиса с пакетами `config`, `database`, `middleware`, `handlers`
+- [x] **База данных**: Подключение к PostgreSQL настроено через `internal/database/postgres.go`
+- [x] **Redis**: Подключение к Redis настроено через `internal/database/redis.go`
+- [x] **JWT аутентификация**: Middleware для валидации JWT токенов от Auth Service
+  - Получение публичного ключа RSA от auth-service
+  - Валидация RS256 подписи токена
+  - Проверка отзыва токена через Redis (`EXISTS revoked:{jti}`)
+  - Извлечение user_id и telegram_id из claims
+- [x] **Конфигурация**: Настройка через переменные окружения и `internal/config/config.go`
+- [x] **Миграции**: Базовая схема БД в `migrations/005_create_production_schema.up.sql`
+- [x] **Health check**: Эндпоинт `/health` для проверки состояния сервиса
+- [x] **Docker**: Сервис готов к развертыванию в dev окружении
+- [x] **Тесты**: Сервис проходит `go test ./...` без ошибок
+- [ ] **API эндпоинты**: Базовые endpoints реализованы (в D-2)
+- [ ] **Интеграционное тестирование**: JWT аутентификация работает с Auth Service
+
+**Критерии качества:**
+- [x] Код соответствует стандартам проекта (package structure, naming conventions)
+- [x] Конфигурация через environment variables
+- [x] Graceful shutdown и error handling
+- [x] Логирование в structured формате (JSON)
+- [x] Метрики для мониторинга (базовые HTTP метрики)
 
 **Файлы для изучения:**
 - [docs/specs/production-service.md](docs/specs/production-service.md)
 - [docs/specs/production-service-openapi.yml](docs/specs/production-service-openapi.yml)
+- [services/inventory-service/](services/inventory-service/) - референс архитектуры и JWT middleware
 
 
 **D-2: Реализация эндпоинтов для управления рецептами**

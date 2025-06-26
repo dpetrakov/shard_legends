@@ -62,7 +62,7 @@ func main() {
 	defer postgres.Close()
 
 	// Initialize Redis
-	redis, err := database.NewRedisDB(cfg.RedisURL, cfg.RedisMaxConns, log, metricsCollector)
+	redis, err := database.NewRedisDB(cfg.RedisURL, cfg.RedisAuthURL, cfg.RedisMaxConns, log, metricsCollector)
 	if err != nil {
 		log.Error("Failed to initialize Redis", "error", err)
 		os.Exit(1)
@@ -223,7 +223,7 @@ func setupAPIWithJWT(router *gin.Engine, postgres *database.PostgresDB, redis *d
 	// Initialize JWT middleware
 	var jwtMiddleware *middleware.JWTAuthMiddleware
 	if publicKey != nil {
-		jwtMiddleware = middleware.NewJWTAuthMiddleware(publicKey, redis.Client(), logger)
+		jwtMiddleware = middleware.NewJWTAuthMiddleware(publicKey, redis, logger)
 	}
 
 	// Initialize handlers

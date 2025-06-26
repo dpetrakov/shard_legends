@@ -11,19 +11,23 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/redis/go-redis/v9"
 	"github.com/shard-legends/inventory-service/internal/auth"
 )
+
+// RedisInterface defines the methods needed from Redis for JWT operations
+type RedisInterface interface {
+	IsJWTRevoked(ctx context.Context, jti string) (bool, error)
+}
 
 // JWTAuthMiddleware provides JWT authentication for inventory service
 type JWTAuthMiddleware struct {
 	publicKey   *rsa.PublicKey
-	redisClient *redis.Client
+	redisClient RedisInterface
 	logger      *slog.Logger
 }
 
 // NewJWTAuthMiddleware creates a new JWT authentication middleware
-func NewJWTAuthMiddleware(publicKey *rsa.PublicKey, redisClient *redis.Client, logger *slog.Logger) *JWTAuthMiddleware {
+func NewJWTAuthMiddleware(publicKey *rsa.PublicKey, redisClient RedisInterface, logger *slog.Logger) *JWTAuthMiddleware {
 	return &JWTAuthMiddleware{
 		publicKey:   publicKey,
 		redisClient: redisClient,
@@ -116,11 +120,11 @@ func (m *JWTAuthMiddleware) AuthenticateJWT() gin.HandlerFunc {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
-		isRevoked, err := m.redisClient.Exists(ctx, fmt.Sprintf("revoked:%s", jti)).Result()
+		isRevoked, err := m.redisClient.IsJWTRevoked(ctx, jti)
 		if err != nil {
 			m.logger.Warn("Failed to check token revocation in Redis", "jti", jti, "error", err)
 			// Don't fail the request if Redis is unavailable, just log the warning
-		} else if isRevoked > 0 {
+		} else if isRevoked {
 			m.logger.Error("Token has been revoked", "jti", jti)
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error":   "token_revoked",

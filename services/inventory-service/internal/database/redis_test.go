@@ -14,21 +14,21 @@ func TestNewRedisDB_InvalidURL(t *testing.T) {
 	logger := slog.Default()
 
 	t.Run("invalid redis URL", func(t *testing.T) {
-		db, err := NewRedisDB("invalid-url", 10, logger, nil)
+		db, err := NewRedisDB("invalid-url", "redis://localhost:6379/0", 10, logger, nil)
 		assert.Error(t, err)
 		assert.Nil(t, db)
 		assert.Contains(t, err.Error(), "failed to parse Redis URL")
 	})
 
 	t.Run("empty redis URL", func(t *testing.T) {
-		db, err := NewRedisDB("", 10, logger, nil)
+		db, err := NewRedisDB("", "redis://localhost:6379/0", 10, logger, nil)
 		assert.Error(t, err)
 		assert.Nil(t, db)
 		assert.Contains(t, err.Error(), "failed to parse Redis URL")
 	})
 
 	t.Run("wrong scheme", func(t *testing.T) {
-		db, err := NewRedisDB("postgresql://localhost:5432", 10, logger, nil)
+		db, err := NewRedisDB("postgresql://localhost:5432", "redis://localhost:6379/0", 10, logger, nil)
 		assert.Error(t, err)
 		assert.Nil(t, db)
 		assert.Contains(t, err.Error(), "failed to parse Redis URL")
@@ -42,7 +42,7 @@ func TestNewRedisDB_ConnectionFail(t *testing.T) {
 		// Use localhost with wrong port for immediate connection refused
 		invalidURL := "redis://localhost:1"
 
-		db, err := NewRedisDB(invalidURL, 10, logger, nil)
+		db, err := NewRedisDB(invalidURL, "redis://localhost:6379/0", 10, logger, nil)
 		assert.Error(t, err)
 		assert.Nil(t, db)
 		assert.Contains(t, err.Error(), "failed to ping Redis")
@@ -138,10 +138,10 @@ func TestRedisDB_ConfigValidation(t *testing.T) {
 
 				if tc.panics {
 					assert.Panics(t, func() {
-						NewRedisDB(url, tc.maxConns, logger, nil)
+						NewRedisDB(url, "redis://localhost:6379/0", tc.maxConns, logger, nil)
 					})
 				} else {
-					_, err := NewRedisDB(url, tc.maxConns, logger, nil)
+					_, err := NewRedisDB(url, "redis://localhost:6379/0", tc.maxConns, logger, nil)
 					if tc.wantErr {
 						assert.Error(t, err)
 						// Should not be a parse error
@@ -241,7 +241,7 @@ func TestRedisDB_URLParsing(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			db, err := NewRedisDB(tc.url, 10, logger, nil)
+			db, err := NewRedisDB(tc.url, "redis://localhost:6379/0", 10, logger, nil)
 
 			if tc.wantErr {
 				assert.Error(t, err)
@@ -260,7 +260,7 @@ func TestRedisDB_EdgeCases(t *testing.T) {
 	t.Run("nil logger", func(t *testing.T) {
 		// Should not panic with nil logger
 		assert.NotPanics(t, func() {
-			_, _ = NewRedisDB("redis://localhost:1", 10, nil, nil)
+			_, _ = NewRedisDB("redis://localhost:1", "redis://localhost:6379/0", 10, nil, nil)
 		})
 	})
 
@@ -352,7 +352,7 @@ func TestRedisDB_MetricsIntegration(t *testing.T) {
 		// But we can test that metrics are handled safely with nil metrics
 
 		invalidURL := "redis://localhost:1"
-		db, err := NewRedisDB(invalidURL, 10, logger, nil)
+		db, err := NewRedisDB(invalidURL, "redis://localhost:6379/0", 10, logger, nil)
 
 		assert.Error(t, err)
 		assert.Nil(t, db)
@@ -374,7 +374,7 @@ func TestRedisDB_MetricsIntegration(t *testing.T) {
 		for _, url := range testURLs {
 			t.Run(url, func(t *testing.T) {
 				// All should parse successfully but fail to connect
-				db, err := NewRedisDB(url, 10, logger, nil)
+				db, err := NewRedisDB(url, "redis://localhost:6379/0", 10, logger, nil)
 				assert.Error(t, err)
 				assert.Nil(t, db)
 
