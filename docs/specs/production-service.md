@@ -629,7 +629,7 @@ Redis используется для кэширования временных 
 
 ## Требования к доработке смежных сервисов
 
-### User Service (планируемый)
+### User Service (реализуется)
 
 **Требуемые внутренние эндпоинты:**
 
@@ -644,20 +644,20 @@ GET /internal/users/{user_id}/production-slots
 ```json
 {
   "user_id": "uuid",
+  "total_slots": 2,
   "slots": [
     {
       "slot_type": "universal",
       "supported_operations": ["crafting", "smelting", "chest_opening"],
       "count": 2
-    },
-    {
-      "slot_type": "mining",
-      "supported_operations": ["resource_gathering"],
-      "count": 1
     }
   ]
 }
 ```
+
+**Статус реализации:** ✅ Реализовано в User Service (временная версия)
+- Возвращает фиксированное значение: 2 универсальных слота
+- Поддерживает основные операции: crafting, smelting, chest_opening
 
 **Обоснование:** Production Service должен знать какие слоты доступны пользователю для корректного распределения заданий по очередям.
 
@@ -674,27 +674,27 @@ GET /internal/users/{user_id}/production-modifiers
   "user_id": "uuid",
   "modifiers": {
     "vip_status": {
-      "level": "premium",
-      "production_speed_bonus": 0.2,
-      "quality_bonus": 0.1
+      "level": "none",
+      "production_speed_bonus": 0.0,
+      "quality_bonus": 0.0
     },
     "character_level": {
-      "level": 15,
-      "crafting_bonus": 0.05
+      "level": 1,
+      "crafting_bonus": 0.0
     },
-    "achievements": [
-      {
-        "id": "master_crafter",
-        "bonus_type": "crafting_speed",
-        "bonus_value": 0.1
-      }
-    ],
+    "achievements": [],
     "clan_bonuses": {
-      "production_speed": 0.05
+      "production_speed": 0.0
     }
   }
 }
 ```
+
+**Статус реализации:** ✅ Реализовано в User Service (временная версия)
+- Возвращает нулевые модификаторы для всех пользователей
+- Минимальный уровень персонажа (1)
+- Отсутствие VIP бонусов и достижений
+- Нулевые клановые бонусы
 
 **Обоснование:** Для применения пользовательских модификаторов производству необходима информация о статусе, уровне и достижениях пользователя.
 

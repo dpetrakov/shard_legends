@@ -13,10 +13,13 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/shard-legends/production-service/internal/adapters"
 	"github.com/shard-legends/production-service/internal/config"
 	"github.com/shard-legends/production-service/internal/database"
 	"github.com/shard-legends/production-service/internal/handlers"
 	customMiddleware "github.com/shard-legends/production-service/internal/middleware"
+	"github.com/shard-legends/production-service/internal/service"
+	"github.com/shard-legends/production-service/internal/storage"
 	"github.com/shard-legends/production-service/pkg/jwt"
 	"github.com/shard-legends/production-service/pkg/logger"
 	"github.com/shard-legends/production-service/pkg/metrics"
@@ -86,8 +89,38 @@ func main() {
 		}
 	}()
 
+	// Initialize repository dependencies
+	dbAdapter := adapters.NewDatabaseAdapter(db)
+	cacheAdapter := adapters.NewCacheAdapter(redis)
+	metricsAdapter := adapters.NewMetricsAdapter()
+
+	repositoryDeps := &storage.RepositoryDependencies{
+		DB:               dbAdapter,
+		Cache:            cacheAdapter,
+		MetricsCollector: metricsAdapter,
+	}
+
+	// Initialize repository
+	repository := storage.NewRepository(repositoryDeps)
+
+	// Initialize service dependencies
+	serviceDeps := &service.ServiceDependencies{
+		Repository: repository,
+		Cache:      cacheAdapter,
+		Metrics:    metricsAdapter,
+	}
+
+	// Initialize service
+	serviceLayer := service.NewService(serviceDeps)
+
 	// Initialize handlers
-	healthHandler := handlers.NewHealthHandler(db, redis)
+	handlerDeps := &handlers.HandlerDependencies{
+		Service: serviceLayer,
+		DB:      db,
+		Redis:   redis,
+		Logger:  logger.Get(),
+	}
+	allHandlers := handlers.NewHandlers(handlerDeps)
 
 	// Setup router
 	r := chi.NewRouter()
@@ -111,8 +144,8 @@ func main() {
 	}))
 
 	// Health check endpoints
-	r.Get("/health", healthHandler.Health)
-	r.Get("/ready", healthHandler.Ready)
+	r.Get("/health", allHandlers.Health.Health)
+	r.Get("/ready", allHandlers.Health.Ready)
 
 	// Metrics endpoint
 	r.Handle("/metrics", promhttp.Handler())
@@ -123,10 +156,7 @@ func main() {
 		r.Group(func(r chi.Router) {
 			r.Use(customMiddleware.Auth(jwtValidator))
 			
-			r.Get("/recipes", func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", "application/json")
-				w.Write([]byte(`{"message":"Recipes endpoint not implemented yet"}`))
-			})
+			r.Get("/recipes", allHandlers.Recipe.GetRecipes)
 
 			r.Route("/factory", func(r chi.Router) {
 				r.Get("/queue", func(w http.ResponseWriter, r *http.Request) {
