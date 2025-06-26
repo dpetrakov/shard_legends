@@ -30,7 +30,6 @@
 | Сервис | Контейнер | Внутренний порт | Health Check |
 |--------|-----------|----------------|-------------|
 | auth-service | slcw-auth-service-dev | 8080 | GET /health |
-| ping-service | slcw-ping-service-dev | 8080 | GET /health |
 | telegram-bot-service | slcw-telegram-bot-dev | 8080 | GET /health |
 | inventory-service | slcw-inventory-service-dev | 8080 | GET /health |
 | production-service | slcw-production-service-dev | 8080 | GET /health |

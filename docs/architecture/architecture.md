@@ -33,11 +33,9 @@ graph TB
     TMA --> Gateway
     Gateway --> AuthService[Auth Service<br/>Golang]
     Gateway --> BotService[Telegram Bot Service<br/>Golang]
-    Gateway --> PingService[Ping Service<br/>Golang]
     Gateway --> InventoryService[Inventory Service<br/>Golang]
     Gateway --> ProductionService[Production Service<br/>Golang]
     Gateway --> UserService[User Service<br/>Golang - temporary]
-    Gateway --> GameAPI[Game API<br/>планируется]
     
     AuthService --> DB[(PostgreSQL 17)]
     AuthService --> Cache[(Redis 8.0.2)]
@@ -47,10 +45,7 @@ graph TB
     ProductionService --> DB
     ProductionService --> Cache
     UserService --> Cache
-    GameAPI --> DB
-    GameAPI --> Cache
     
-    GameAPI -.->|JWT validation| Cache
     BotService -.->|JWT validation| Cache
     InventoryService -.->|JWT validation| Cache
     ProductionService -.->|JWT validation| Cache
@@ -60,11 +55,9 @@ graph TB
         Gateway
         AuthService
         BotService
-        PingService
         InventoryService
         ProductionService
         UserService
-        GameAPI
         DB
         Cache
     end
@@ -81,7 +74,6 @@ graph TB
 **Конфигурация:**
 - Порт: 8080 (внутри контейнера), 9000 (внешний)
 - Маршруты: 
-  - `/api/ping` → ping-service:8080/ping
   - `/api/webhook` → telegram-bot-service:8080/webhook
   - `/api/auth` → auth-service:8080/auth
   - `/api/inventory` → inventory-service:8080/api/inventory
@@ -117,17 +109,7 @@ graph TB
 - Управление активными/отозванными токенами в Redis
 - Rate limiting для защиты от злоупотреблений
 
-### 4. Ping Service (Golang)
-
-**Назначение:**
-- Тестовый микросервис для проверки работоспособности
-- Демонстрация архитектуры микросервисов
-- Health check эндпоинт для мониторинга
-
-**API эндпоинты:**
-- `GET /ping` → `{"message": "pong"}`
-
-### 5. Inventory Service (Golang)
+### 4. Inventory Service (Golang)
 
 **Назначение:**
 - Управление инвентарем пользователей и игровыми предметами
@@ -150,7 +132,7 @@ graph TB
 - Протоколирование всех операций с предметами
 - Интеграция с Production Service для резервирования материалов
 
-### 6. Production Service (Golang)
+### 5. Production Service (Golang)
 
 **Назначение:**
 - Управление производственными рецептами и заданиями
@@ -180,7 +162,7 @@ graph TB
 - База данных: PostgreSQL схема `production`
 - Кеширование: Redis DB 2 + проверка JWT в DB 0
 
-### 7. User Service (Golang) - временная версия
+### 6. User Service (Golang) - временная версия
 
 **Назначение:**
 - Управление пользовательскими данными и профилями
@@ -206,7 +188,7 @@ graph TB
 - База данных: отсутствует (временная версия)
 - Кеширование: Redis DB 3 + проверка JWT в DB 0
 
-### 8. Telegram Mini App (Frontend)
+### 7. Telegram Mini App (Frontend)
 
 **Ключевые возможности:**
 - Интеграция с Telegram через Web App SDK
@@ -215,7 +197,7 @@ graph TB
 - Клановая система
 - Responsive дизайн для мобильных устройств
 
-### 9. Game API (Golang) - планируется
+### 8. Game API (Golang) - планируется
 
 **Основная функциональность:**
 - RESTful API для всех игровых операций
@@ -233,7 +215,6 @@ https://domain.com/api/* → nginx → API Gateway:9000/* → микросерв
 ```
 
 ### Текущие маршруты
-- `/api/ping` → ping-service:8080/ping  
 - `/api/webhook` → telegram-bot-service:8080/webhook
 - `/api/auth` → auth-service:8080/auth
 - `/api/inventory` → inventory-service:8080/api/inventory
@@ -283,7 +264,7 @@ https://domain.com/api/* → nginx → API Gateway:9000/* → микросерв
 - Система лунных циклов и серверных бафов
 - Интеграция с Production Service для применения модификаторов
 
-### 7. Хранилище данных
+### 9. Хранилище данных
 
 #### PostgreSQL 17
 Основная база данных с разделением по схемам:
@@ -345,22 +326,18 @@ graph TB
             GATEWAY[API Gateway<br/>nginx Container<br/>Port: 9000]
             AUTH[Auth Service<br/>Golang Container]
             BOT[Telegram Bot Service<br/>Golang Container]
-            PING[Ping Service<br/>Golang Container]
             INVENTORY[Inventory Service<br/>Golang Container]
             PRODUCTION[Production Service<br/>Golang Container]
             USER[User Service<br/>Golang Container - temp]
-            GAME[Game API<br/>Planned]
             DB[(PostgreSQL 17<br/>Container)]
             CACHE[(Redis 8.0.2<br/>Container)]
             
             NGINX --> GATEWAY
             GATEWAY --> AUTH
             GATEWAY --> BOT
-            GATEWAY --> PING
             GATEWAY --> INVENTORY
             GATEWAY --> PRODUCTION
             GATEWAY --> USER
-            GATEWAY --> GAME
             AUTH --> DB
             AUTH --> CACHE
             BOT --> DB
@@ -369,8 +346,6 @@ graph TB
             PRODUCTION --> DB
             PRODUCTION --> CACHE
             USER --> CACHE
-            GAME --> DB
-            GAME --> CACHE
         end
     end
     

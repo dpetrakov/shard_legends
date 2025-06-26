@@ -27,7 +27,6 @@ services:
       retries: 3
       start_period: 10s
     depends_on:
-      - ping-service
       - telegram-bot-service
       - auth-service
       - inventory-service
@@ -64,28 +63,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-
-  # Ping service (test microservice)
-  ping-service:
-    build:
-      context: ../../services/ping-service
-      dockerfile: Dockerfile
-    container_name: slcw-ping-service-dev
-    # No external ports - accessed via API Gateway
-    networks:
-      - slcw-dev
-      - slcw-monitoring
-    restart: unless-stopped
-    labels:
-      - "logging.service=ping-service"
-      - "logging.environment=dev"
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-        labels: "logging.service,logging.environment"
-    # Health check is defined in Dockerfile
 
   # Telegram Bot Service
   telegram-bot-service:
