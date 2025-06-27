@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -18,7 +19,11 @@ func LoadPublicKeyFromAuthService(authServiceURL string) (*rsa.PublicKey, error)
 		authServiceURL = "http://auth-service:8080"
 	}
 	
-	endpoint := authServiceURL + "/public-key.pem"
+	// Check if the URL already contains the endpoint path
+	endpoint := authServiceURL
+	if !strings.HasSuffix(authServiceURL, "/public-key.pem") {
+		endpoint = authServiceURL + "/public-key.pem"
+	}
 	
 	// Create HTTP client with timeout
 	client := &http.Client{

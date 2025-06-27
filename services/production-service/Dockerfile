@@ -29,7 +29,6 @@ WORKDIR /root/
 
 # Copy the binary from builder
 COPY --from=builder /app/production-service .
-COPY --from=builder /app/migrations ./migrations
 
 # Expose port
 EXPOSE 8082
