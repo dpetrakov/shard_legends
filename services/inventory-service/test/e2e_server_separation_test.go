@@ -514,3 +514,110 @@ func TestCrossServerIsolation(t *testing.T) {
 		}
 	})
 }
+
+// TestGetReservationStatusIntegration performs integration testing for the reservation status endpoint
+func TestGetReservationStatusIntegration(t *testing.T) {
+	// Skip if integration tests are not enabled
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	internalBaseURL := "http://localhost:8090"
+	
+	tests := []struct {
+		name           string
+		operationID    string
+		expectedStatus int
+		expectError    bool
+	}{
+		{
+			name:           "Valid UUID format but non-existent reservation",
+			operationID:    "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+			expectedStatus: http.StatusNotFound,
+			expectError:    false,
+		},
+		{
+			name:           "Invalid UUID format",
+			operationID:    "invalid-uuid",
+			expectedStatus: http.StatusBadRequest,
+			expectError:    true,
+		},
+		{
+			name:           "Empty operation ID",
+			operationID:    "",
+			expectedStatus: http.StatusNotFound, // Route not found
+			expectError:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			endpoint := "/api/inventory/reservation/" + tt.operationID
+			url := internalBaseURL + endpoint
+
+			resp, err := http.Get(url)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, tt.expectedStatus, resp.StatusCode)
+
+			// Parse response based on expected status
+			if tt.expectedStatus == http.StatusNotFound && !tt.expectError {
+				// Valid UUID but reservation not found
+				var reservationResp map[string]interface{}
+				err = json.NewDecoder(resp.Body).Decode(&reservationResp)
+				require.NoError(t, err)
+				
+				assert.False(t, reservationResp["reservation_exists"].(bool))
+				assert.NotNil(t, reservationResp["error"])
+			} else if tt.expectedStatus == http.StatusBadRequest {
+				// Invalid input
+				var errorResp map[string]interface{}
+				err = json.NewDecoder(resp.Body).Decode(&errorResp)
+				require.NoError(t, err)
+				
+				assert.NotEmpty(t, errorResp["error"])
+				assert.NotEmpty(t, errorResp["message"])
+			}
+		})
+	}
+}
+
+// TestGetReservationStatusWithRealData tests the endpoint with actual reservation data
+func TestGetReservationStatusWithRealData(t *testing.T) {
+	// Skip if integration tests are not enabled
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	internalBaseURL := "http://localhost:8090"
+
+	// This test requires a real reservation to exist in the database
+	// In a real integration test environment, you would:
+	// 1. Create a test reservation
+	// 2. Call the status endpoint
+	// 3. Verify the response
+	// 4. Clean up the test data
+
+	t.Run("Check endpoint availability", func(t *testing.T) {
+		// Just verify the endpoint is accessible and responds appropriately
+		// to a valid UUID that doesn't exist
+		operationID := "12345678-1234-1234-1234-123456789012"
+		endpoint := "/api/inventory/reservation/" + operationID
+		url := internalBaseURL + endpoint
+
+		resp, err := http.Get(url)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		// Should return 404 for non-existent reservation
+		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+
+		var reservationResp map[string]interface{}
+		err = json.NewDecoder(resp.Body).Decode(&reservationResp)
+		require.NoError(t, err)
+		
+		assert.False(t, reservationResp["reservation_exists"].(bool))
+		assert.Equal(t, "Reservation not found", reservationResp["error"])
+	})
+}

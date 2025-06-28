@@ -679,3 +679,198 @@ func (is *inventoryService) GetItemsDetails(ctx context.Context, req *models.Ite
 func (is *inventoryService) GetDefaultLanguage(ctx context.Context) (*models.Language, error) {
 	return is.deps.Repositories.Item.GetDefaultLanguage(ctx)
 }
+
+// GetReservationStatus checks the status of a reservation by operation ID
+func (is *inventoryService) GetReservationStatus(ctx context.Context, operationID uuid.UUID) (*models.ReservationStatusResponse, error) {
+	// Get all operations for this reservation operation ID
+	operations, err := is.deps.Repositories.Inventory.GetOperationsByExternalID(ctx, operationID)
+	if err != nil {
+		// Record failure metrics
+		if is.deps.Metrics != nil {
+			is.deps.Metrics.RecordInventoryOperation("get_reservation_status", "factory", "error")
+		}
+		return nil, errors.Wrap(err, "failed to get operations by external ID")
+	}
+
+	// If no operations found, return reservation not found
+	if len(operations) == 0 {
+		response := &models.ReservationStatusResponse{
+			ReservationExists: false,
+			Error:             stringPtr("Reservation not found"),
+		}
+		
+		// Record metrics
+		if is.deps.Metrics != nil {
+			is.deps.Metrics.RecordInventoryOperation("get_reservation_status", "factory", "not_found")
+		}
+		
+		return response, nil
+	}
+
+	// Filter operations to get only factory reservation operations
+	var reservationOps []*models.Operation
+	var userID uuid.UUID
+	var reservationDate *string
+	
+	for _, op := range operations {
+		// Get operation type code to determine if it's a reservation
+		operationTypeCode, err := is.getOperationTypeCode(ctx, op.OperationTypeID)
+		if err != nil {
+			continue // Skip operations we can't identify
+		}
+		
+		if operationTypeCode == models.OperationTypeFactoryReservation {
+			reservationOps = append(reservationOps, op)
+			if userID == uuid.Nil {
+				userID = op.UserID
+			}
+			if reservationDate == nil {
+				dateStr := op.CreatedAt.Format("2006-01-02T15:04:05Z")
+				reservationDate = &dateStr
+			}
+		}
+	}
+
+	// If no reservation operations found, return not found
+	if len(reservationOps) == 0 {
+		response := &models.ReservationStatusResponse{
+			ReservationExists: false,
+			Error:             stringPtr("Reservation not found"),
+		}
+		return response, nil
+	}
+
+	// Determine reservation status by checking for consumption or return operations
+	status := "active" // Default status
+	
+	// Check for consumption operations (factory_consumption)
+	for _, op := range operations {
+		operationTypeCode, err := is.getOperationTypeCode(ctx, op.OperationTypeID)
+		if err != nil {
+			continue
+		}
+		if operationTypeCode == models.OperationTypeFactoryConsumption {
+			status = "consumed"
+			break
+		}
+	}
+	
+	// Check for return operations (factory_return) - only if not consumed
+	if status == "active" {
+		for _, op := range operations {
+			operationTypeCode, err := is.getOperationTypeCode(ctx, op.OperationTypeID)
+			if err != nil {
+				continue
+			}
+			if operationTypeCode == models.OperationTypeFactoryReturn {
+				status = "returned"
+				break
+			}
+		}
+	}
+
+	// Group reservation operations by item to calculate totals
+	itemQuantities := make(map[string]int64)
+	itemDetails := make(map[string]models.ReservationItemResponse)
+
+	for _, op := range reservationOps {
+		// Only count positive quantity changes (items going into factory inventory)
+		if op.QuantityChange <= 0 {
+			continue
+		}
+
+		// Get section code to verify this is moving items TO factory
+		sectionCode, err := is.getSectionCode(ctx, op.SectionID)
+		if err != nil || sectionCode != "factory" {
+			continue // Skip if not factory section
+		}
+
+		// Get item details for response
+		item, err := is.deps.Repositories.Item.GetItemWithDetails(ctx, op.ItemID)
+		if err != nil {
+			continue // Skip items we can't get details for
+		}
+
+		// Get collection and quality level codes
+		collectionCode, err := is.getCodeFromUUID(ctx, models.ClassifierCollection, op.CollectionID)
+		if err != nil {
+			collectionCode = "basic" // Default fallback
+		}
+
+		qualityLevelCode, err := is.getCodeFromUUID(ctx, models.ClassifierQualityLevel, op.QualityLevelID)
+		if err != nil {
+			qualityLevelCode = "common" // Default fallback
+		}
+
+		// Create unique key for this item combination
+		itemKey := op.ItemID.String() + "_" + collectionCode + "_" + qualityLevelCode
+		
+		// Add to quantities
+		itemQuantities[itemKey] += op.QuantityChange
+		
+		// Store item details (will be overwritten for same items, but that's fine)
+		itemDetails[itemKey] = models.ReservationItemResponse{
+			ItemCode:         item.ItemType,
+			CollectionCode:   collectionCode,
+			QualityLevelCode: qualityLevelCode,
+			Quantity:         0, // Will be filled below
+		}
+	}
+
+	// Build reserved items list
+	var reservedItems []models.ReservationItemResponse
+	for itemKey, quantity := range itemQuantities {
+		if detail, exists := itemDetails[itemKey]; exists {
+			detail.Quantity = quantity
+			reservedItems = append(reservedItems, detail)
+		}
+	}
+
+	// Create successful response
+	response := &models.ReservationStatusResponse{
+		ReservationExists: true,
+		OperationID:       &operationID,
+		UserID:            &userID,
+		ReservedItems:     reservedItems,
+		ReservationDate:   reservationDate,
+		Status:            &status,
+	}
+
+	// Record success metrics
+	if is.deps.Metrics != nil {
+		is.deps.Metrics.RecordInventoryOperation("get_reservation_status", "factory", "success")
+	}
+
+	return response, nil
+}
+
+// Helper functions
+
+// getOperationTypeCode gets operation type code from UUID
+func (is *inventoryService) getOperationTypeCode(ctx context.Context, operationTypeID uuid.UUID) (string, error) {
+	mapping, err := is.deps.Repositories.Classifier.GetUUIDToCodeMapping(ctx, models.ClassifierOperationType)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to get operation type mapping")
+	}
+
+	if code, found := mapping[operationTypeID]; found {
+		return code, nil
+	}
+
+	return "", errors.Errorf("unknown operation type UUID: %s", operationTypeID.String())
+}
+
+// getSectionCode gets section code from UUID
+func (is *inventoryService) getSectionCode(ctx context.Context, sectionID uuid.UUID) (string, error) {
+	mapping, err := is.deps.Repositories.Classifier.GetUUIDToCodeMapping(ctx, models.ClassifierInventorySection)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to get section mapping")
+	}
+
+	if code, found := mapping[sectionID]; found {
+		return code, nil
+	}
+
+	return "", errors.Errorf("unknown section UUID: %s", sectionID.String())
+}
+

@@ -32,6 +32,7 @@ type InventoryService interface {
 	ReserveItems(ctx context.Context, req *models.ReserveItemsRequest) ([]uuid.UUID, error)
 	ReturnReservedItems(ctx context.Context, req *models.ReturnReserveRequest) error
 	ConsumeReservedItems(ctx context.Context, req *models.ConsumeReserveRequest) error
+	GetReservationStatus(ctx context.Context, operationID uuid.UUID) (*models.ReservationStatusResponse, error)
 
 	// Item details with i18n
 	GetItemsDetails(ctx context.Context, req *models.ItemDetailsRequest, languageCode string) (*models.ItemDetailsResponse, error)

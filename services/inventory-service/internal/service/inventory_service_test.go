@@ -732,3 +732,503 @@ func TestInventoryService_GetItemsDetails_NilRequest(t *testing.T) {
 	assert.Nil(t, result)
 	assert.Contains(t, err.Error(), "item details request cannot be nil")
 }
+
+// Tests for GetReservationStatus
+
+func TestInventoryService_GetReservationStatus_Success_ActiveReservation(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	deps, mockInventoryRepo, mockClassifierRepo, mockItemRepo, mockMetrics := createFullTestDeps()
+	service := NewInventoryService(deps)
+
+	operationID := uuid.New()
+	userID := uuid.New()
+	itemID := uuid.New()
+	sectionID := uuid.New()
+	collectionID := uuid.New()
+	qualityLevelID := uuid.New()
+	operationTypeID := uuid.New()
+
+	// Mock reservation operations
+	reservationOps := []*models.Operation{
+		{
+			ID:              uuid.New(),
+			UserID:          userID,
+			SectionID:       sectionID,
+			ItemID:          itemID,
+			CollectionID:    collectionID,
+			QualityLevelID:  qualityLevelID,
+			QuantityChange:  5,
+			OperationTypeID: operationTypeID,
+			OperationID:     &operationID,
+			CreatedAt:       time.Now(),
+		},
+	}
+
+	// Setup mocks
+	mockInventoryRepo.On("GetOperationsByExternalID", ctx, operationID).Return(reservationOps, nil)
+	
+	// Mock operation type mapping
+	operationTypeMapping := map[uuid.UUID]string{
+		operationTypeID: models.OperationTypeFactoryReservation,
+	}
+	mockClassifierRepo.On("GetUUIDToCodeMapping", ctx, models.ClassifierOperationType).Return(operationTypeMapping, nil)
+
+	// Mock section mapping
+	sectionMapping := map[uuid.UUID]string{
+		sectionID: models.SectionFactory,
+	}
+	mockClassifierRepo.On("GetUUIDToCodeMapping", ctx, models.ClassifierInventorySection).Return(sectionMapping, nil)
+
+	// Mock item details
+	itemDetails := &models.ItemWithDetails{
+		Item: models.Item{
+			ID: itemID,
+		},
+		ItemClass: "resources",
+		ItemType:  "wood_plank",
+	}
+	mockItemRepo.On("GetItemWithDetails", ctx, itemID).Return(itemDetails, nil)
+
+	// Mock collection and quality level mappings
+	collectionMapping := map[uuid.UUID]string{
+		collectionID: "basic",
+	}
+	qualityMapping := map[uuid.UUID]string{
+		qualityLevelID: "common",
+	}
+	mockClassifierRepo.On("GetUUIDToCodeMapping", ctx, models.ClassifierCollection).Return(collectionMapping, nil)
+	mockClassifierRepo.On("GetUUIDToCodeMapping", ctx, models.ClassifierQualityLevel).Return(qualityMapping, nil)
+
+	// Mock metrics
+	mockMetrics.On("RecordInventoryOperation", "get_reservation_status", "factory", "success").Return()
+
+	// Act
+	result, err := service.GetReservationStatus(ctx, operationID)
+
+	// Assert
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.True(t, result.ReservationExists)
+	assert.Equal(t, operationID, *result.OperationID)
+	assert.Equal(t, userID, *result.UserID)
+	assert.Equal(t, "active", *result.Status)
+	assert.Len(t, result.ReservedItems, 1)
+	assert.Equal(t, "wood_plank", result.ReservedItems[0].ItemCode)
+	assert.Equal(t, "basic", result.ReservedItems[0].CollectionCode)
+	assert.Equal(t, "common", result.ReservedItems[0].QualityLevelCode)
+	assert.Equal(t, int64(5), result.ReservedItems[0].Quantity)
+
+	mockInventoryRepo.AssertExpectations(t)
+	mockClassifierRepo.AssertExpectations(t)
+	mockItemRepo.AssertExpectations(t)
+}
+
+func TestInventoryService_GetReservationStatus_Success_ConsumedReservation(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	deps, mockInventoryRepo, mockClassifierRepo, mockItemRepo, mockMetrics := createFullTestDeps()
+	service := NewInventoryService(deps)
+
+	operationID := uuid.New()
+	userID := uuid.New()
+	itemID := uuid.New()
+	sectionID := uuid.New()
+	collectionID := uuid.New()
+	qualityLevelID := uuid.New()
+	reservationTypeID := uuid.New()
+	consumptionTypeID := uuid.New()
+
+	// Mock reservation and consumption operations
+	operations := []*models.Operation{
+		{
+			ID:              uuid.New(),
+			UserID:          userID,
+			SectionID:       sectionID,
+			ItemID:          itemID,
+			CollectionID:    collectionID,
+			QualityLevelID:  qualityLevelID,
+			QuantityChange:  10,
+			OperationTypeID: reservationTypeID,
+			OperationID:     &operationID,
+			CreatedAt:       time.Now(),
+		},
+		{
+			ID:              uuid.New(),
+			UserID:          userID,
+			SectionID:       sectionID,
+			ItemID:          itemID,
+			CollectionID:    collectionID,
+			QualityLevelID:  qualityLevelID,
+			QuantityChange:  -10,
+			OperationTypeID: consumptionTypeID,
+			OperationID:     &operationID,
+			CreatedAt:       time.Now().Add(time.Hour),
+		},
+	}
+
+	// Setup mocks
+	mockInventoryRepo.On("GetOperationsByExternalID", ctx, operationID).Return(operations, nil)
+	
+	// Mock operation type mapping
+	operationTypeMapping := map[uuid.UUID]string{
+		reservationTypeID: models.OperationTypeFactoryReservation,
+		consumptionTypeID: models.OperationTypeFactoryConsumption,
+	}
+	mockClassifierRepo.On("GetUUIDToCodeMapping", ctx, models.ClassifierOperationType).Return(operationTypeMapping, nil)
+
+	// Mock section mapping
+	sectionMapping := map[uuid.UUID]string{
+		sectionID: models.SectionFactory,
+	}
+	mockClassifierRepo.On("GetUUIDToCodeMapping", ctx, models.ClassifierInventorySection).Return(sectionMapping, nil)
+
+	// Mock item details
+	itemDetails := &models.ItemWithDetails{
+		Item: models.Item{
+			ID: itemID,
+		},
+		ItemClass: "resources",
+		ItemType:  "stone",
+	}
+	mockItemRepo.On("GetItemWithDetails", ctx, itemID).Return(itemDetails, nil)
+
+	// Mock collection and quality level mappings
+	collectionMapping := map[uuid.UUID]string{
+		collectionID: "winter_2025",
+	}
+	qualityMapping := map[uuid.UUID]string{
+		qualityLevelID: "stone",
+	}
+	mockClassifierRepo.On("GetUUIDToCodeMapping", ctx, models.ClassifierCollection).Return(collectionMapping, nil)
+	mockClassifierRepo.On("GetUUIDToCodeMapping", ctx, models.ClassifierQualityLevel).Return(qualityMapping, nil)
+
+	// Mock metrics
+	mockMetrics.On("RecordInventoryOperation", "get_reservation_status", "factory", "success").Return()
+
+	// Act
+	result, err := service.GetReservationStatus(ctx, operationID)
+
+	// Assert
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.True(t, result.ReservationExists)
+	assert.Equal(t, "consumed", *result.Status)
+
+	mockInventoryRepo.AssertExpectations(t)
+	mockClassifierRepo.AssertExpectations(t)
+	mockItemRepo.AssertExpectations(t)
+}
+
+func TestInventoryService_GetReservationStatus_Success_ReturnedReservation(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	deps, mockInventoryRepo, mockClassifierRepo, mockItemRepo, mockMetrics := createFullTestDeps()
+	service := NewInventoryService(deps)
+
+	operationID := uuid.New()
+	userID := uuid.New()
+	itemID := uuid.New()
+	sectionID := uuid.New()
+	collectionID := uuid.New()
+	qualityLevelID := uuid.New()
+	reservationTypeID := uuid.New()
+	returnTypeID := uuid.New()
+
+	// Mock reservation and return operations
+	operations := []*models.Operation{
+		{
+			ID:              uuid.New(),
+			UserID:          userID,
+			SectionID:       sectionID,
+			ItemID:          itemID,
+			CollectionID:    collectionID,
+			QualityLevelID:  qualityLevelID,
+			QuantityChange:  3,
+			OperationTypeID: reservationTypeID,
+			OperationID:     &operationID,
+			CreatedAt:       time.Now(),
+		},
+		{
+			ID:              uuid.New(),
+			UserID:          userID,
+			SectionID:       uuid.New(), // Different section for return
+			ItemID:          itemID,
+			CollectionID:    collectionID,
+			QualityLevelID:  qualityLevelID,
+			QuantityChange:  3,
+			OperationTypeID: returnTypeID,
+			OperationID:     &operationID,
+			CreatedAt:       time.Now().Add(time.Hour),
+		},
+	}
+
+	// Setup mocks
+	mockInventoryRepo.On("GetOperationsByExternalID", ctx, operationID).Return(operations, nil)
+	
+	// Mock operation type mapping
+	operationTypeMapping := map[uuid.UUID]string{
+		reservationTypeID: models.OperationTypeFactoryReservation,
+		returnTypeID:      models.OperationTypeFactoryReturn,
+	}
+	mockClassifierRepo.On("GetUUIDToCodeMapping", ctx, models.ClassifierOperationType).Return(operationTypeMapping, nil)
+
+	// Mock section mapping
+	sectionMapping := map[uuid.UUID]string{
+		sectionID: models.SectionFactory,
+	}
+	mockClassifierRepo.On("GetUUIDToCodeMapping", ctx, models.ClassifierInventorySection).Return(sectionMapping, nil)
+
+	// Mock item details
+	itemDetails := &models.ItemWithDetails{
+		Item: models.Item{
+			ID: itemID,
+		},
+		ItemClass: "resources",
+		ItemType:  "ore",
+	}
+	mockItemRepo.On("GetItemWithDetails", ctx, itemID).Return(itemDetails, nil)
+
+	// Mock collection and quality level mappings
+	collectionMapping := map[uuid.UUID]string{
+		collectionID: "basic",
+	}
+	qualityMapping := map[uuid.UUID]string{
+		qualityLevelID: "metal",
+	}
+	mockClassifierRepo.On("GetUUIDToCodeMapping", ctx, models.ClassifierCollection).Return(collectionMapping, nil)
+	mockClassifierRepo.On("GetUUIDToCodeMapping", ctx, models.ClassifierQualityLevel).Return(qualityMapping, nil)
+
+	// Mock metrics
+	mockMetrics.On("RecordInventoryOperation", "get_reservation_status", "factory", "success").Return()
+
+	// Act
+	result, err := service.GetReservationStatus(ctx, operationID)
+
+	// Assert
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.True(t, result.ReservationExists)
+	assert.Equal(t, "returned", *result.Status)
+
+	mockInventoryRepo.AssertExpectations(t)
+	mockClassifierRepo.AssertExpectations(t)
+	mockItemRepo.AssertExpectations(t)
+}
+
+func TestInventoryService_GetReservationStatus_NotFound(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	deps, mockInventoryRepo, _, _, mockMetrics := createFullTestDeps()
+	service := NewInventoryService(deps)
+
+	operationID := uuid.New()
+
+	// Setup mocks - no operations found
+	mockInventoryRepo.On("GetOperationsByExternalID", ctx, operationID).Return([]*models.Operation{}, nil)
+	mockMetrics.On("RecordInventoryOperation", "get_reservation_status", "factory", "not_found").Return()
+
+	// Act
+	result, err := service.GetReservationStatus(ctx, operationID)
+
+	// Assert
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.False(t, result.ReservationExists)
+	assert.Equal(t, "Reservation not found", *result.Error)
+
+	mockInventoryRepo.AssertExpectations(t)
+}
+
+func TestInventoryService_GetReservationStatus_RepositoryError(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	deps, mockInventoryRepo, _, _, mockMetrics := createFullTestDeps()
+	service := NewInventoryService(deps)
+
+	operationID := uuid.New()
+
+	// Setup mocks - repository error
+	mockInventoryRepo.On("GetOperationsByExternalID", ctx, operationID).Return(([]*models.Operation)(nil), assert.AnError)
+	mockMetrics.On("RecordInventoryOperation", "get_reservation_status", "factory", "error").Return()
+
+	// Act
+	result, err := service.GetReservationStatus(ctx, operationID)
+
+	// Assert
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "failed to get operations by external ID")
+
+	mockInventoryRepo.AssertExpectations(t)
+}
+
+func TestInventoryService_GetReservationStatus_NoReservationOperations(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	deps, mockInventoryRepo, mockClassifierRepo, _, _ := createFullTestDeps()
+	service := NewInventoryService(deps)
+
+	operationID := uuid.New()
+	userID := uuid.New()
+	itemID := uuid.New()
+	sectionID := uuid.New()
+	collectionID := uuid.New()
+	qualityLevelID := uuid.New()
+	otherTypeID := uuid.New()
+
+	// Mock operations that are NOT reservation operations
+	operations := []*models.Operation{
+		{
+			ID:              uuid.New(),
+			UserID:          userID,
+			SectionID:       sectionID,
+			ItemID:          itemID,
+			CollectionID:    collectionID,
+			QualityLevelID:  qualityLevelID,
+			QuantityChange:  5,
+			OperationTypeID: otherTypeID,
+			OperationID:     &operationID,
+			CreatedAt:       time.Now(),
+		},
+	}
+
+	// Setup mocks
+	mockInventoryRepo.On("GetOperationsByExternalID", ctx, operationID).Return(operations, nil)
+	
+	// Mock operation type mapping - not a reservation operation
+	operationTypeMapping := map[uuid.UUID]string{
+		otherTypeID: models.OperationTypeChestReward,
+	}
+	mockClassifierRepo.On("GetUUIDToCodeMapping", ctx, models.ClassifierOperationType).Return(operationTypeMapping, nil)
+
+	// Act
+	result, err := service.GetReservationStatus(ctx, operationID)
+
+	// Assert
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.False(t, result.ReservationExists)
+	assert.Equal(t, "Reservation not found", *result.Error)
+
+	mockInventoryRepo.AssertExpectations(t)
+	mockClassifierRepo.AssertExpectations(t)
+}
+
+func TestInventoryService_GetReservationStatus_MultipleItems(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	deps, mockInventoryRepo, mockClassifierRepo, mockItemRepo, mockMetrics := createFullTestDeps()
+	service := NewInventoryService(deps)
+
+	operationID := uuid.New()
+	userID := uuid.New()
+	item1ID := uuid.New()
+	item2ID := uuid.New()
+	sectionID := uuid.New()
+	collection1ID := uuid.New()
+	collection2ID := uuid.New()
+	quality1ID := uuid.New()
+	quality2ID := uuid.New()
+	operationTypeID := uuid.New()
+
+	// Mock multiple reservation operations
+	reservationOps := []*models.Operation{
+		{
+			ID:              uuid.New(),
+			UserID:          userID,
+			SectionID:       sectionID,
+			ItemID:          item1ID,
+			CollectionID:    collection1ID,
+			QualityLevelID:  quality1ID,
+			QuantityChange:  5,
+			OperationTypeID: operationTypeID,
+			OperationID:     &operationID,
+			CreatedAt:       time.Now(),
+		},
+		{
+			ID:              uuid.New(),
+			UserID:          userID,
+			SectionID:       sectionID,
+			ItemID:          item2ID,
+			CollectionID:    collection2ID,
+			QualityLevelID:  quality2ID,
+			QuantityChange:  3,
+			OperationTypeID: operationTypeID,
+			OperationID:     &operationID,
+			CreatedAt:       time.Now(),
+		},
+	}
+
+	// Setup mocks
+	mockInventoryRepo.On("GetOperationsByExternalID", ctx, operationID).Return(reservationOps, nil)
+	
+	// Mock operation type mapping
+	operationTypeMapping := map[uuid.UUID]string{
+		operationTypeID: models.OperationTypeFactoryReservation,
+	}
+	mockClassifierRepo.On("GetUUIDToCodeMapping", ctx, models.ClassifierOperationType).Return(operationTypeMapping, nil)
+
+	// Mock section mapping
+	sectionMapping := map[uuid.UUID]string{
+		sectionID: models.SectionFactory,
+	}
+	mockClassifierRepo.On("GetUUIDToCodeMapping", ctx, models.ClassifierInventorySection).Return(sectionMapping, nil)
+
+	// Mock item details for both items
+	item1Details := &models.ItemWithDetails{
+		Item: models.Item{
+			ID: item1ID,
+		},
+		ItemClass: "resources",
+		ItemType:  "wood_plank",
+	}
+	item2Details := &models.ItemWithDetails{
+		Item: models.Item{
+			ID: item2ID,
+		},
+		ItemClass: "resources",
+		ItemType:  "stone",
+	}
+	mockItemRepo.On("GetItemWithDetails", ctx, item1ID).Return(item1Details, nil)
+	mockItemRepo.On("GetItemWithDetails", ctx, item2ID).Return(item2Details, nil)
+
+	// Mock collection and quality level mappings
+	collectionMapping := map[uuid.UUID]string{
+		collection1ID: "basic",
+		collection2ID: "winter_2025",
+	}
+	qualityMapping := map[uuid.UUID]string{
+		quality1ID: "common",
+		quality2ID: "stone",
+	}
+	mockClassifierRepo.On("GetUUIDToCodeMapping", ctx, models.ClassifierCollection).Return(collectionMapping, nil)
+	mockClassifierRepo.On("GetUUIDToCodeMapping", ctx, models.ClassifierQualityLevel).Return(qualityMapping, nil)
+
+	// Mock metrics
+	mockMetrics.On("RecordInventoryOperation", "get_reservation_status", "factory", "success").Return()
+
+	// Act
+	result, err := service.GetReservationStatus(ctx, operationID)
+
+	// Assert
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.True(t, result.ReservationExists)
+	assert.Equal(t, operationID, *result.OperationID)
+	assert.Equal(t, userID, *result.UserID)
+	assert.Equal(t, "active", *result.Status)
+	assert.Len(t, result.ReservedItems, 2)
+
+	// Check that both items are present (order may vary)
+	itemCodes := make(map[string]int64)
+	for _, item := range result.ReservedItems {
+		itemCodes[item.ItemCode] = item.Quantity
+	}
+	assert.Equal(t, int64(5), itemCodes["wood_plank"])
+	assert.Equal(t, int64(3), itemCodes["stone"])
+
+	mockInventoryRepo.AssertExpectations(t)
+	mockClassifierRepo.AssertExpectations(t)
+	mockItemRepo.AssertExpectations(t)
+}

@@ -249,3 +249,58 @@ func (h *InventoryHandler) AddItems(c *gin.Context) {
 
 	c.JSON(http.StatusOK, response)
 }
+
+// GetReservationStatus handles GET /inventory/reservation/{operationID}
+func (h *InventoryHandler) GetReservationStatus(c *gin.Context) {
+	// 1. Извлечение operationID из пути
+	operationIDParam := c.Param("operationID")
+	if operationIDParam == "" {
+		h.logger.Error("Missing operationID parameter")
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "missing_parameter",
+			Message: "operationID parameter is required",
+		})
+		return
+	}
+
+	// 2. Парсинг UUID
+	operationID, err := uuid.Parse(operationIDParam)
+	if err != nil {
+		h.logger.Error("Invalid operationID format", "operationID", operationIDParam, "error", err)
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_operation_id",
+			Message: "Invalid operationID format",
+			Details: map[string]interface{}{"operationID": operationIDParam},
+		})
+		return
+	}
+
+	// 3. Вызов сервиса для получения статуса резервирования
+	response, err := h.inventoryService.GetReservationStatus(c.Request.Context(), operationID)
+	if err != nil {
+		h.logger.Error("Failed to get reservation status",
+			"operationID", operationID,
+			"error", err)
+
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+			Error:   "internal_error",
+			Message: "Failed to get reservation status",
+		})
+		return
+	}
+
+	// 4. Определение HTTP статуса ответа
+	if !response.ReservationExists {
+		h.logger.Info("Reservation not found", "operationID", operationID)
+		c.JSON(http.StatusNotFound, response)
+		return
+	}
+
+	// 5. Возврат успешного ответа
+	h.logger.Info("Successfully retrieved reservation status",
+		"operationID", operationID,
+		"userID", response.UserID,
+		"status", response.Status)
+
+	c.JSON(http.StatusOK, response)
+}

@@ -235,3 +235,73 @@ docker-compose down -v
 # Мониторинг логов в реальном времени
 docker-compose logs -f inventory-service
 ```
+
+## API Примеры
+
+### Проверка статуса резервирования
+
+Новый эндпоинт для проверки статуса резервирования предметов, используется Production Service для cleanup процессов.
+
+```bash
+# Проверить статус существующего резервирования
+curl -X GET http://localhost:8090/api/inventory/reservation/f47ac10b-58cc-4372-a567-0e02b2c3d479
+
+# Ответ для активного резервирования:
+{
+  "reservation_exists": true,
+  "operation_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "reserved_items": [
+    {
+      "item_code": "wood_plank",
+      "collection_code": "basic",
+      "quality_level_code": "common",
+      "quantity": 5
+    }
+  ],
+  "reservation_date": "2025-06-28T10:30:00Z",
+  "status": "active"
+}
+
+# Ответ для несуществующего резервирования (404):
+{
+  "reservation_exists": false,
+  "error": "Reservation not found"
+}
+
+# Ответ для некорректного UUID (400):
+{
+  "error": "invalid_operation_id",
+  "message": "Invalid operationID format",
+  "details": {
+    "operationID": "invalid-uuid"
+  }
+}
+```
+
+### Возможные статусы резервирования
+
+- `active` - резервирование активно, предметы зарезервированы в фабричном инвентаре
+- `consumed` - резерв потреблен, предметы уничтожены при завершении производства
+- `returned` - резерв возвращен, предметы возвращены в основной инвентарь при отмене производства
+
+### Использование в Production Service
+
+```bash
+# Пример использования для cleanup процесса
+OPERATION_ID="f47ac10b-58cc-4372-a567-0e02b2c3d479"
+
+# Проверить статус резервирования
+STATUS=$(curl -s http://inventory-service:8090/api/inventory/reservation/$OPERATION_ID | jq -r '.status // "not_found"')
+
+if [ "$STATUS" = "active" ]; then
+  echo "Резервирование активно, возвращаем предметы"
+  curl -X POST http://inventory-service:8090/api/inventory/return-reserve \
+    -H "Content-Type: application/json" \
+    -d '{"user_id": "user-uuid", "operation_id": "'$OPERATION_ID'"}'
+elif [ "$STATUS" = "not_found" ]; then
+  echo "Резервирование не найдено, очистка не требуется"
+else
+  echo "Резервирование в статусе: $STATUS"
+fi
+```

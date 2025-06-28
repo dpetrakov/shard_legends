@@ -277,6 +277,7 @@ func setupAPIWithJWT(cfg *config.Config, publicRouter *gin.Engine, internalRoute
 		internal.POST("/reserve", inventoryHandler.ReserveItems)
 		internal.POST("/return-reserve", inventoryHandler.ReturnReservedItems)
 		internal.POST("/consume-reserve", inventoryHandler.ConsumeReservedItems)
+		internal.GET("/reservation/:operationID", inventoryHandler.GetReservationStatus)
 	}
 
 	// Administrative endpoints on internal API (no authentication required - isolated by network)

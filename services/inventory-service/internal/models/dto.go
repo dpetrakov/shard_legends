@@ -125,3 +125,22 @@ type MissingItem struct {
 	Required     int64     `json:"required"`
 	Available    int64     `json:"available"`
 }
+
+// ReservationStatusResponse represents the response for reservation status check
+type ReservationStatusResponse struct {
+	ReservationExists bool                        `json:"reservation_exists"`
+	OperationID       *uuid.UUID                  `json:"operation_id,omitempty"`
+	UserID            *uuid.UUID                  `json:"user_id,omitempty"`
+	ReservedItems     []ReservationItemResponse   `json:"reserved_items,omitempty"`
+	ReservationDate   *string                     `json:"reservation_date,omitempty"`
+	Status            *string                     `json:"status,omitempty"`
+	Error             *string                     `json:"error,omitempty"`
+}
+
+// ReservationItemResponse represents a reserved item in the status response
+type ReservationItemResponse struct {
+	ItemCode         string `json:"item_code"`
+	CollectionCode   string `json:"collection_code"`
+	QualityLevelCode string `json:"quality_level_code"`
+	Quantity         int64  `json:"quantity"`
+}
