@@ -1,3 +1,14 @@
+# Daily Chest Reward Recipe Specification
+# Updated: 2025-06-28 to match actual implementation in migrations/dev-data/inventory-service/004_insert_reward_chest_recipe.sql
+# 
+# Changes from original:
+# - operation_class_code: chest_reward -> chest_opening
+# - Added recipe code: daily_chest_reward
+# - Updated probabilities to fractional values (NUMERIC(5,2) precision)
+# - Used item_id instead of item_code for precise references
+# - Updated limits structure to match actual DB schema
+# - Total probability: 100.00% (50.50% resource + 29.50% reagent + 10.00% booster + 10.00% blueprint)
+
 recipes:
   - id: 9b9a4a62-7e79-4f1c-8dbe-62784be4c9d2
     code: daily_chest_reward
