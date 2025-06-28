@@ -74,13 +74,14 @@ func main() {
 	profileHandler := public.NewProfileHandler(mockDataService, logger)
 	internalUserHandler := api.NewUserHandler(mockDataService, logger)
 
-	// Настройка Gin router
+	// Настройка Gin
 	gin.SetMode(gin.ReleaseMode)
-	router := gin.New()
 	
-	// Middleware для логирования
-	router.Use(gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
-		logger.Info("HTTP Request", map[string]interface{}{
+	// Create public router
+	publicRouter := gin.New()
+	publicRouter.Use(gin.Recovery())
+	publicRouter.Use(gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
+		logger.Info("HTTP Request (Public)", map[string]interface{}{
 			"method":     param.Method,
 			"path":       param.Path,
 			"status":     param.StatusCode,
@@ -90,45 +91,76 @@ func main() {
 		})
 		return ""
 	}))
-	
-	router.Use(gin.Recovery())
 
-	// Health check endpoint (без аутентификации)
-	router.GET("/health", healthHandler.GetHealth)
+	// Create internal router
+	internalRouter := gin.New()
+	internalRouter.Use(gin.Recovery())
+	internalRouter.Use(gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
+		logger.Info("HTTP Request (Internal)", map[string]interface{}{
+			"method":     param.Method,
+			"path":       param.Path,
+			"status":     param.StatusCode,
+			"latency":    param.Latency.String(),
+			"client_ip":  param.ClientIP,
+			"user_agent": param.Request.UserAgent(),
+		})
+		return ""
+	}))
 
-	// Публичные эндпоинты (с JWT аутентификацией)
-	publicRoutes := router.Group("/")
+	// Register internal routes (no authentication)
+	internalRouter.GET("/health", healthHandler.GetHealth)
+	internalRouter.GET("/ready", healthHandler.GetHealth) // Readiness check
+	internalRouter.GET("/users/:user_id/production-slots", internalUserHandler.GetProductionSlots)
+	internalRouter.GET("/users/:user_id/production-modifiers", internalUserHandler.GetProductionModifiers)
+
+	// Register public routes (with JWT authentication)
+	publicRoutes := publicRouter.Group("/")
 	publicRoutes.Use(authMiddleware.AuthenticateJWT())
 	{
 		publicRoutes.GET("/profile", profileHandler.GetProfile)
 		publicRoutes.GET("/production-slots", profileHandler.GetProductionSlots)
 	}
 
-	// Внутренние эндпоинты (без аутентификации, только внутри сети)
-	internalRoutes := router.Group("/internal")
-	{
-		internalRoutes.GET("/users/:user_id/production-slots", internalUserHandler.GetProductionSlots)
-		internalRoutes.GET("/users/:user_id/production-modifiers", internalUserHandler.GetProductionModifiers)
-	}
-
-	// Настройка HTTP сервера
-	server := &http.Server{
+	// Create public HTTP server
+	publicServer := &http.Server{
 		Addr:         fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port),
-		Handler:      router,
+		Handler:      publicRouter,
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
 
-	// Запуск сервера в отдельной горутине
+	// Create internal HTTP server
+	internalServer := &http.Server{
+		Addr:         fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.InternalPort),
+		Handler:      internalRouter,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	// Запуск публичного сервера в отдельной горутине
 	go func() {
-		logger.Info("Starting HTTP server", map[string]interface{}{
+		logger.Info("Starting public HTTP server", map[string]interface{}{
 			"host": cfg.Server.Host,
 			"port": cfg.Server.Port,
 		})
 		
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Error("Failed to start HTTP server", map[string]interface{}{"error": err.Error()})
+		if err := publicServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error("Failed to start public HTTP server", map[string]interface{}{"error": err.Error()})
+			os.Exit(1)
+		}
+	}()
+
+	// Запуск внутреннего сервера в отдельной горутине
+	go func() {
+		logger.Info("Starting internal HTTP server", map[string]interface{}{
+			"host": cfg.Server.Host,
+			"port": cfg.Server.InternalPort,
+		})
+		
+		if err := internalServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error("Failed to start internal HTTP server", map[string]interface{}{"error": err.Error()})
 			os.Exit(1)
 		}
 	}()
@@ -146,9 +178,14 @@ func main() {
 	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Остановка HTTP сервера
-	if err := server.Shutdown(ctx); err != nil {
-		logger.Error("HTTP server forced to shutdown", map[string]interface{}{"error": err.Error()})
+	// Остановка публичного HTTP сервера
+	if err := publicServer.Shutdown(ctx); err != nil {
+		logger.Error("Public HTTP server forced to shutdown", map[string]interface{}{"error": err.Error()})
+	}
+
+	// Остановка внутреннего HTTP сервера
+	if err := internalServer.Shutdown(ctx); err != nil {
+		logger.Error("Internal HTTP server forced to shutdown", map[string]interface{}{"error": err.Error()})
 	}
 
 	// Закрытие Redis подключения

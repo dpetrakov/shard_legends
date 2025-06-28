@@ -27,10 +27,15 @@ type HTTPUserClient struct {
 
 // NewHTTPUserClient создает новый HTTP клиент для User Service
 func NewHTTPUserClient(baseURL string, logger *zap.Logger) UserClient {
+	return NewHTTPUserClientWithTimeout(baseURL, 5*time.Second, logger)
+}
+
+// NewHTTPUserClientWithTimeout создает новый HTTP клиент для User Service с настраиваемым таймаутом
+func NewHTTPUserClientWithTimeout(baseURL string, timeout time.Duration, logger *zap.Logger) UserClient {
 	return &HTTPUserClient{
 		baseURL: baseURL,
 		httpClient: &http.Client{
-			Timeout: 5 * time.Second,
+			Timeout: timeout,
 		},
 		logger: logger,
 	}

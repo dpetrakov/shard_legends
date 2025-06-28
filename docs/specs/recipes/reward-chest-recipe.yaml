@@ -1,0 +1,96 @@
+recipes:
+  - id: 9b9a4a62-7e79-4f1c-8dbe-62784be4c9d2
+    operation_class_code: chest_reward
+    is_active: true
+    production_time_seconds: 0
+
+    input_items: []  # Рецепт не требует входных предметов
+
+    output_items:
+      - item_code: resource_chest_s
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 30
+        output_group: main
+        fixed_quality_level_code: small
+
+      - item_code: resource_chest_m
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 15
+        output_group: main
+        fixed_quality_level_code: medium
+
+      - item_code: resource_chest_l
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 5
+        output_group: main
+        fixed_quality_level_code: large
+
+      - item_code: reagent_chest_s
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 18
+        output_group: main
+        fixed_quality_level_code: small
+
+      - item_code: reagent_chest_m
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 9
+        output_group: main
+        fixed_quality_level_code: medium
+
+      - item_code: reagent_chest_l
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 3
+        output_group: main
+        fixed_quality_level_code: large
+
+      - item_code: booster_chest_s
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 6
+        output_group: main
+        fixed_quality_level_code: small
+
+      - item_code: booster_chest_m
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 3
+        output_group: main
+        fixed_quality_level_code: medium
+
+      - item_code: booster_chest_l
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 1
+        output_group: main
+        fixed_quality_level_code: large
+
+      - item_code: blueprint_chest
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 10
+        output_group: main
+
+    translations:
+      - language_code: en
+        field_name: name
+        content: "Daily Chest Reward"
+      - language_code: ru
+        field_name: name
+        content: "Дневная награда: Сундук"
+      - language_code: en
+        field_name: description
+        content: "Receive a random chest as a daily reward from the Deck minigame."
+      - language_code: ru
+        field_name: description
+        content: "Получите случайный сундук как дневную награду из мини-игры \"Дека\"."
+
+    limits:
+      - limit_type: per_day
+        limit_object: recipe_execution
+        limit_quantity: 10 

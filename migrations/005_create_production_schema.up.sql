@@ -19,41 +19,40 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA production GRANT ALL ON SEQUENCES TO slcw_use
 CREATE TABLE IF NOT EXISTS production.recipes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     code VARCHAR(50) UNIQUE NOT NULL,
-    name VARCHAR(255) NOT NULL,
-    description TEXT,
     operation_class_code VARCHAR(50) NOT NULL,
-    base_time_seconds INTEGER NOT NULL CHECK (base_time_seconds > 0),
-    unlock_conditions JSONB,
+    production_time_seconds INTEGER NOT NULL CHECK (production_time_seconds >= 0),
     is_active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     
-    CONSTRAINT chk_recipes_code_not_empty CHECK (length(trim(code)) > 0),
-    CONSTRAINT chk_recipes_name_not_empty CHECK (length(trim(name)) > 0)
+    CONSTRAINT chk_recipes_code_not_empty CHECK (length(trim(code)) > 0)
 );
 
--- Create recipe_inputs table
-CREATE TABLE IF NOT EXISTS production.recipe_inputs (
+-- Create recipe_input_items table
+CREATE TABLE IF NOT EXISTS production.recipe_input_items (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     recipe_id UUID NOT NULL REFERENCES production.recipes(id) ON DELETE CASCADE,
-    item_code VARCHAR(50) NOT NULL,
+    item_id UUID NOT NULL REFERENCES inventory.items(id),
+    collection_code VARCHAR(50),
+    quality_level_code VARCHAR(50),
     quantity INTEGER NOT NULL CHECK (quantity > 0),
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    
-    CONSTRAINT chk_recipe_inputs_item_code_not_empty CHECK (length(trim(item_code)) > 0)
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create recipe_outputs table
-CREATE TABLE IF NOT EXISTS production.recipe_outputs (
+-- Create recipe_output_items table
+CREATE TABLE IF NOT EXISTS production.recipe_output_items (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     recipe_id UUID NOT NULL REFERENCES production.recipes(id) ON DELETE CASCADE,
-    item_code VARCHAR(50) NOT NULL,
+    item_id UUID NOT NULL REFERENCES inventory.items(id),
     min_quantity INTEGER NOT NULL CHECK (min_quantity >= 0),
     max_quantity INTEGER NOT NULL CHECK (max_quantity >= min_quantity),
-    probability DECIMAL(5,4) NOT NULL CHECK (probability >= 0 AND probability <= 1),
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    
-    CONSTRAINT chk_recipe_outputs_item_code_not_empty CHECK (length(trim(item_code)) > 0)
+    probability_percent NUMERIC(5,2) NOT NULL CHECK (probability_percent >= 0 AND probability_percent <= 100),
+    output_group VARCHAR(50),
+    collection_source_input_index INTEGER,
+    quality_source_input_index INTEGER,
+    fixed_collection_code VARCHAR(50),
+    fixed_quality_level_code VARCHAR(50),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create recipe_limits table
@@ -71,33 +70,31 @@ CREATE TABLE IF NOT EXISTS production.recipe_limits (
 -- Create production_tasks table
 CREATE TABLE IF NOT EXISTS production.production_tasks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id VARCHAR(255) NOT NULL,
+    user_id UUID NOT NULL,
     recipe_id UUID NOT NULL REFERENCES production.recipes(id),
     slot_number INTEGER NOT NULL CHECK (slot_number >= 1),
-    status VARCHAR(50) NOT NULL DEFAULT 'active', -- 'active', 'completed', 'claimed', 'cancelled'
-    started_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    completion_time TIMESTAMP WITH TIME ZONE NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'draft',
+    started_at TIMESTAMP WITH TIME ZONE,
+    completion_time TIMESTAMP WITH TIME ZONE,
     claimed_at TIMESTAMP WITH TIME ZONE,
-    pre_calculated_results JSONB NOT NULL,
+    pre_calculated_results JSONB,
     modifiers_applied JSONB,
     reservation_id UUID,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     
-    CONSTRAINT chk_production_tasks_user_id_not_empty CHECK (length(trim(user_id)) > 0),
-    CONSTRAINT chk_production_tasks_status CHECK (status IN ('active', 'completed', 'claimed', 'cancelled')),
-    CONSTRAINT chk_production_tasks_completion_time CHECK (completion_time > started_at)
+    CONSTRAINT chk_production_tasks_status CHECK (status IN ('draft', 'pending', 'in_progress', 'completed', 'claimed', 'cancelled', 'failed'))
 );
 
 -- Create task_output_items table for pre-calculated results
 CREATE TABLE IF NOT EXISTS production.task_output_items (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     task_id UUID NOT NULL REFERENCES production.production_tasks(id) ON DELETE CASCADE,
-    item_code VARCHAR(50) NOT NULL,
+    item_id UUID NOT NULL REFERENCES inventory.items(id),
+    collection_id UUID,
+    quality_level_id UUID,
     quantity INTEGER NOT NULL CHECK (quantity > 0),
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     
-    CONSTRAINT chk_task_output_items_item_code_not_empty CHECK (length(trim(item_code)) > 0)
+    PRIMARY KEY (task_id, item_id)
 );
 
 -- Create indexes for performance
@@ -105,11 +102,11 @@ CREATE INDEX IF NOT EXISTS idx_recipes_code ON production.recipes(code);
 CREATE INDEX IF NOT EXISTS idx_recipes_operation_class ON production.recipes(operation_class_code);
 CREATE INDEX IF NOT EXISTS idx_recipes_active ON production.recipes(is_active);
 
-CREATE INDEX IF NOT EXISTS idx_recipe_inputs_recipe_id ON production.recipe_inputs(recipe_id);
-CREATE INDEX IF NOT EXISTS idx_recipe_inputs_item_code ON production.recipe_inputs(item_code);
+CREATE INDEX IF NOT EXISTS idx_recipe_input_items_recipe_id ON production.recipe_input_items(recipe_id);
+CREATE INDEX IF NOT EXISTS idx_recipe_input_items_item_id ON production.recipe_input_items(item_id);
 
-CREATE INDEX IF NOT EXISTS idx_recipe_outputs_recipe_id ON production.recipe_outputs(recipe_id);
-CREATE INDEX IF NOT EXISTS idx_recipe_outputs_item_code ON production.recipe_outputs(item_code);
+CREATE INDEX IF NOT EXISTS idx_recipe_output_items_recipe_id ON production.recipe_output_items(recipe_id);
+CREATE INDEX IF NOT EXISTS idx_recipe_output_items_item_id ON production.recipe_output_items(item_id);
 
 CREATE INDEX IF NOT EXISTS idx_recipe_limits_recipe_id ON production.recipe_limits(recipe_id);
 CREATE INDEX IF NOT EXISTS idx_recipe_limits_type ON production.recipe_limits(limit_type);
@@ -120,8 +117,22 @@ CREATE INDEX IF NOT EXISTS idx_production_tasks_completion_time ON production.pr
 CREATE INDEX IF NOT EXISTS idx_production_tasks_user_slot ON production.production_tasks(user_id, slot_number);
 CREATE INDEX IF NOT EXISTS idx_production_tasks_recipe_id ON production.production_tasks(recipe_id);
 
+-- Index for draft task cleanup operations
+CREATE INDEX IF NOT EXISTS idx_production_tasks_draft_cleanup 
+ON production.production_tasks(status, created_at) 
+WHERE status = 'draft';
+
+-- Unique constraint for idempotency (user_id + recipe_id for active tasks)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_production_tasks_user_recipe_active
+ON production.production_tasks(user_id, recipe_id)
+WHERE status IN ('draft', 'pending', 'in_progress');
+
+-- Composite index for user status and created_at for efficient querying
+CREATE INDEX IF NOT EXISTS idx_production_tasks_user_status_created
+ON production.production_tasks(user_id, status, created_at);
+
 CREATE INDEX IF NOT EXISTS idx_task_output_items_task_id ON production.task_output_items(task_id);
-CREATE INDEX IF NOT EXISTS idx_task_output_items_item_code ON production.task_output_items(item_code);
+CREATE INDEX IF NOT EXISTS idx_task_output_items_item_id ON production.task_output_items(item_id);
 
 -- Create updated_at trigger function if not exists
 CREATE OR REPLACE FUNCTION production.update_updated_at_column()
@@ -145,16 +156,17 @@ CREATE TRIGGER update_production_tasks_updated_at
 
 -- Add table comments for documentation
 COMMENT ON TABLE production.recipes IS 'Production recipes defining how to create items';
-COMMENT ON TABLE production.recipe_inputs IS 'Required input items for each recipe';
-COMMENT ON TABLE production.recipe_outputs IS 'Possible output items from each recipe with probabilities';
+COMMENT ON TABLE production.recipe_input_items IS 'Required input items for each recipe';
+COMMENT ON TABLE production.recipe_output_items IS 'Possible output items from each recipe with probabilities';
 COMMENT ON TABLE production.recipe_limits IS 'Usage limits for recipes (daily, weekly, total)';
 COMMENT ON TABLE production.production_tasks IS 'Active and completed production tasks for users';
 COMMENT ON TABLE production.task_output_items IS 'Pre-calculated output items for each production task';
 
 -- Add column comments for important fields
 COMMENT ON COLUMN production.recipes.operation_class_code IS 'Code from classifier items defining the operation class';
-COMMENT ON COLUMN production.recipes.base_time_seconds IS 'Base production time in seconds before modifiers';
-COMMENT ON COLUMN production.recipes.unlock_conditions IS 'JSON conditions required to unlock this recipe';
+COMMENT ON COLUMN production.recipes.production_time_seconds IS 'Base production time in seconds before modifiers (0 for instant recipes)';
+COMMENT ON COLUMN production.recipes.is_active IS 'Indicates whether the recipe is active';
+COMMENT ON COLUMN production.production_tasks.status IS 'Task status: draft (created but inventory not reserved), pending (ready to start), in_progress (running), completed (finished), claimed (results taken), cancelled (user cancelled), failed (system error)';
 COMMENT ON COLUMN production.production_tasks.pre_calculated_results IS 'JSON with pre-calculated results including modifiers';
 COMMENT ON COLUMN production.production_tasks.modifiers_applied IS 'JSON with list of modifiers applied to this task';
 COMMENT ON COLUMN production.production_tasks.reservation_id IS 'UUID of inventory reservation for input items';

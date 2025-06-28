@@ -13,7 +13,8 @@ import (
 )
 
 type DB struct {
-	pool *pgxpool.Pool
+	pool         *pgxpool.Pool
+	healthTimeout time.Duration
 }
 
 func NewDB(cfg *config.DatabaseConfig) (*DB, error) {
@@ -24,7 +25,7 @@ func NewDB(cfg *config.DatabaseConfig) (*DB, error) {
 
 	poolConfig.MaxConns = int32(cfg.MaxConnections)
 	poolConfig.MaxConnIdleTime = cfg.MaxIdleTime
-	poolConfig.HealthCheckPeriod = 1 * time.Minute
+	poolConfig.HealthCheckPeriod = cfg.HealthCheckPeriod
 
 	poolConfig.BeforeAcquire = func(ctx context.Context, conn *pgx.Conn) bool {
 		return true
@@ -39,7 +40,7 @@ func NewDB(cfg *config.DatabaseConfig) (*DB, error) {
 		return nil, fmt.Errorf("failed to create connection pool: %w", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.PingTimeout)
 	defer cancel()
 
 	if err := pool.Ping(ctx); err != nil {
@@ -52,7 +53,10 @@ func NewDB(cfg *config.DatabaseConfig) (*DB, error) {
 		zap.Duration("max_idle_time", cfg.MaxIdleTime),
 	)
 
-	return &DB{pool: pool}, nil
+	return &DB{
+		pool:          pool,
+		healthTimeout: cfg.PingTimeout,
+	}, nil
 }
 
 func (db *DB) Pool() *pgxpool.Pool {
@@ -67,7 +71,7 @@ func (db *DB) Close() {
 }
 
 func (db *DB) Health(ctx context.Context) error {
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, db.healthTimeout)
 	defer cancel()
 
 	if err := db.pool.Ping(ctx); err != nil {

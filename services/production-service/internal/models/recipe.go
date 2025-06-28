@@ -116,13 +116,16 @@ type ProductionTask struct {
 	ID                    uuid.UUID        `json:"id" db:"id"`
 	UserID                uuid.UUID        `json:"user_id" db:"user_id"`
 	RecipeID              uuid.UUID        `json:"recipe_id" db:"recipe_id"`
-	OperationClassCode    string           `json:"operation_class_code" db:"operation_class_code"`
+	SlotNumber            int              `json:"slot_number" db:"slot_number"`
 	Status                string           `json:"status" db:"status"`
-	ProductionTimeSeconds int              `json:"production_time_seconds" db:"production_time_seconds"`
-	CreatedAt             time.Time        `json:"created_at" db:"created_at"`
 	StartedAt             *time.Time       `json:"started_at,omitempty" db:"started_at"`
-	CompletedAt           *time.Time       `json:"completed_at,omitempty" db:"completed_at"`
-	AppliedModifiers      AppliedModifiers `json:"applied_modifiers,omitempty" db:"applied_modifiers"`
+	CompletionTime        *time.Time       `json:"completion_time,omitempty" db:"completion_time"`
+	ClaimedAt             *time.Time       `json:"claimed_at,omitempty" db:"claimed_at"`
+	PreCalculatedResults  AppliedModifiers `json:"pre_calculated_results,omitempty" db:"pre_calculated_results"`
+	ModifiersApplied      AppliedModifiers `json:"modifiers_applied,omitempty" db:"modifiers_applied"`
+	ReservationID         *uuid.UUID       `json:"reservation_id,omitempty" db:"reservation_id"`
+	CreatedAt             time.Time        `json:"created_at" db:"created_at"`
+	UpdatedAt             time.Time        `json:"updated_at" db:"updated_at"`
 
 	// Связанные данные
 	OutputItems []TaskOutputItem  `json:"output_items,omitempty"`
@@ -144,12 +147,13 @@ type TaskOutputItem struct {
 
 // Constants для статусов заданий
 const (
-	TaskStatusPending    = "pending"
-	TaskStatusInProgress = "in_progress"
-	TaskStatusCompleted  = "completed"
-	TaskStatusClaimed    = "claimed"
-	TaskStatusCancelled  = "cancelled"
-	TaskStatusFailed     = "failed"
+	TaskStatusDraft      = "draft"       // Задача создана, но инвентарь не зарезервирован (Saga Pattern)
+	TaskStatusPending    = "pending"     // Задача подтверждена, инвентарь зарезервирован
+	TaskStatusInProgress = "in_progress" // Производство в процессе
+	TaskStatusCompleted  = "completed"   // Производство завершено, готово к claim
+	TaskStatusClaimed    = "claimed"     // Результаты получены пользователем
+	TaskStatusCancelled  = "cancelled"   // Отменено пользователем
+	TaskStatusFailed     = "failed"      // Системная ошибка
 )
 
 // Constants для типов лимитов

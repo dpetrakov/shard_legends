@@ -27,28 +27,6 @@
 - Упрощена архитектура обслуживания токенов.
 - Улучшена масштабируемость сервиса при росте количества активных токенов.
 
-**D-13: Конфигурируемый Rate-Limit через ENV**
-**Роль:** Backend Developer
-**Приоритет:** Высокий
-**Статус:** [ ] Готов к выполнению
-
-**Описание:**
-Перейти от захардкоженных значений `NewRateLimiter(10, time.Minute)` к конфигурации через переменные окружения `RATE_LIMIT_REQUESTS`, `RATE_LIMIT_WINDOW`.
-
-**Критерии выполнения:**
-- [x] **Расширение Config**: В структуру `internal/config.Config` добавлены поля RateLimitRequests и RateLimitWindow ✅
-- [x] **ENV переменные**: Добавлена поддержка переменных RATE_LIMIT_REQUESTS, RATE_LIMIT_WINDOW ✅
-- [x] **Безопасные дефолты**: Реализованы fallback к безопасным значениям при отсутствии конфигурации ✅
-- [x] **Обновление middleware**: Rate limit middleware читает значения из конфига вместо hardcode ✅
-- [x] **Docker compose**: Обновлен `deploy/dev/docker-compose.yml` с переменными окружения ✅
-- [x] **README обновления**: Описаны новые переменные окружения в документации ✅
-- [x] **Unit-тесты**: Покрытие разных значений лимита и временного окна ✅
-
-**Файлы для изучения:**
-- `services/auth-service/internal/middleware/rate_limit.go`
-- `services/auth-service/internal/config/`
-- `deploy/dev/docker-compose.yml`
-
 ## Дайджест работ - 31 декабря 2024
 
 ### Auth Service - Infrastructure Enhancement + Production Service - Advanced Implementation (5 задач)
@@ -479,21 +457,6 @@
 
 ---
 
-**Шаблон для завершенных задач:**
-```
-## [КОД] Название задачи
-**Дата завершения:** YYYY-MM-DD
-**Роль:** Роль
-**Статус:** [x] Выполнена
-**Описание:** краткое описание
-**Результат:** что было достигнуто
-**Уроки:** что узнали/улучшили
-```
-
----
-
-**Архивирование:** Задачи старше 3 месяцев переносятся в отдельный архивный файл.
-
 ## Дайджест работ - 28 июня 2025
 
 ### Inventory Service — Интернационализация, dev-data и локализованные детали предметов
@@ -523,5 +486,30 @@
 - ✅ Миграция `007_optimize_inventory_indexes.up.sql` применена
 - ✅ Новый метод `GetUserInventoryOptimized()` задеплоен в prod
 - ✅ k6-тесты: 95-й перцентиль 180 ms
+
+---
+
+## Дайджест работ - 29 июня 2025
+
+### Inventory Service — Эндпоинт проверки статуса резервирования
+
+**D-17: Реализация эндпоинта проверки статуса резервирования в Inventory Service**
+**Дата завершения:** 2025-06-29
+**Роль:** Backend Developer
+**Статус:** [x] Выполнена
+
+**Описание:** Добавлен внутренний эндпоинт `GET /api/inventory/reservation/{operationID}` для проверки статуса резервирования предметов. Используется Production Service для background cleanup процессов.
+
+**Результат:**
+- ✅ **Эндпоинт реализован**: `GET /inventory/reservation/{operationID}` (доступен на internal-порте 8090)
+- ✅ **Статусы**: active / consumed / returned / not_found
+- ✅ **Возврат данных**: JSON с детализированной информацией о резервировании (item_code, collection_code, quality_level_code, quantity)
+- ✅ **HTTP коды**: 200 (OK), 404 (not found), 400 (invalid UUID), 500 (internal error)
+- ✅ **Unit-тесты**: Полное покрытие бизнес-логики и обработчика (82 %)
+- ✅ **Интеграционные тесты**: `TestGetReservationStatusIntegration` и `TestServerSeparation` подтверждают корректную работу и сетевую изоляцию
+- ✅ **Документация**: README сервиса и `docs/specs/inventory-service-openapi.yml` обновлены; приведены примеры curl
+- ✅ **Метрики**: Добавлены Prometheus метрики `inventory_get_reservation_status_*`
+
+**Уроки:** Важно обеспечивать изоляцию внутренних эндпоинтов и поддерживать единообразие в обработке ошибок и метрик.
 
 --- 

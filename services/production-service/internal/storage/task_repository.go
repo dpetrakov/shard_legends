@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/shard-legends/production-service/internal/models"
@@ -35,24 +36,23 @@ func (r *taskRepository) CreateTask(ctx context.Context, task *models.Production
 
 	// Вставляем основную запись задания
 	query := `
-		INSERT INTO production.tasks (
-			id, user_id, recipe_id, operation_class_code, status,
-			production_time_seconds, created_at, started_at, completed_at, applied_modifiers
+		INSERT INTO production.production_tasks (
+			id, user_id, recipe_id, slot_number, status,
+			completion_time, pre_calculated_results, modifiers_applied, reservation_id
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+			$1, $2, $3, $4, $5, $6, $7, $8, $9
 		)`
 
 	err = tx.Exec(ctx, query,
 		task.ID,
 		task.UserID,
 		task.RecipeID,
-		task.OperationClassCode,
+		task.SlotNumber,
 		task.Status,
-		task.ProductionTimeSeconds,
-		task.CreatedAt,
-		task.StartedAt,
-		task.CompletedAt,
-		task.AppliedModifiers,
+		task.CompletionTime,
+		task.PreCalculatedResults,
+		task.ModifiersApplied,
+		task.ReservationID,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to insert task: %w", err)
@@ -98,9 +98,10 @@ func (r *taskRepository) GetTaskByID(ctx context.Context, taskID uuid.UUID) (*mo
 
 	query := `
 		SELECT 
-			id, user_id, recipe_id, operation_class_code, status,
-			production_time_seconds, created_at, started_at, completed_at, applied_modifiers
-		FROM production.tasks
+			id, user_id, recipe_id, slot_number, status,
+			started_at, completion_time, claimed_at, pre_calculated_results, 
+			modifiers_applied, reservation_id, created_at, updated_at
+		FROM production.production_tasks
 		WHERE id = $1`
 
 	row := r.db.QueryRow(ctx, query, taskID)
@@ -108,13 +109,16 @@ func (r *taskRepository) GetTaskByID(ctx context.Context, taskID uuid.UUID) (*mo
 		&task.ID,
 		&task.UserID,
 		&task.RecipeID,
-		&task.OperationClassCode,
+		&task.SlotNumber,
 		&task.Status,
-		&task.ProductionTimeSeconds,
-		&task.CreatedAt,
 		&task.StartedAt,
-		&task.CompletedAt,
-		&task.AppliedModifiers,
+		&task.CompletionTime,
+		&task.ClaimedAt,
+		&task.PreCalculatedResults,
+		&task.ModifiersApplied,
+		&task.ReservationID,
+		&task.CreatedAt,
+		&task.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get task: %w", err)
@@ -171,9 +175,10 @@ func (r *taskRepository) GetUserTasks(ctx context.Context, userID uuid.UUID, sta
 	// Базовый запрос
 	query := `
 		SELECT 
-			id, user_id, recipe_id, operation_class_code, status,
-			production_time_seconds, created_at, started_at, completed_at, applied_modifiers
-		FROM production.tasks
+			id, user_id, recipe_id, slot_number, status,
+			started_at, completion_time, claimed_at, pre_calculated_results, 
+			modifiers_applied, reservation_id, created_at, updated_at
+		FROM production.production_tasks
 		WHERE user_id = $1`
 
 	args := []interface{}{userID}
@@ -200,13 +205,16 @@ func (r *taskRepository) GetUserTasks(ctx context.Context, userID uuid.UUID, sta
 			&task.ID,
 			&task.UserID,
 			&task.RecipeID,
-			&task.OperationClassCode,
+			&task.SlotNumber,
 			&task.Status,
-			&task.ProductionTimeSeconds,
-			&task.CreatedAt,
 			&task.StartedAt,
-			&task.CompletedAt,
-			&task.AppliedModifiers,
+			&task.CompletionTime,
+			&task.ClaimedAt,
+			&task.PreCalculatedResults,
+			&task.ModifiersApplied,
+			&task.ReservationID,
+			&task.CreatedAt,
+			&task.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan task: %w", err)
@@ -268,7 +276,7 @@ func (r *taskRepository) GetUserTasks(ctx context.Context, userID uuid.UUID, sta
 // UpdateTaskStatus обновляет статус задания
 func (r *taskRepository) UpdateTaskStatus(ctx context.Context, taskID uuid.UUID, status string) error {
 	query := `
-		UPDATE production.tasks 
+		UPDATE production.production_tasks 
 		SET status = $2`
 
 	// Добавляем специфичные поля в зависимости от статуса
@@ -290,6 +298,91 @@ func (r *taskRepository) UpdateTaskStatus(ctx context.Context, taskID uuid.UUID,
 	r.metrics.IncDBQuery("task_status_update")
 
 	return nil
+}
+
+// DeleteTask удаляет задание (для компенсации в Saga pattern)
+func (r *taskRepository) DeleteTask(ctx context.Context, taskID uuid.UUID) error {
+	// Начинаем транзакцию
+	tx, err := r.db.BeginTx(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Удаляем выходные предметы задания (CASCADE должен сработать, но лучше быть явным)
+	outputQuery := `DELETE FROM production.task_output_items WHERE task_id = $1`
+	err = tx.Exec(ctx, outputQuery, taskID)
+	if err != nil {
+		return fmt.Errorf("failed to delete task output items: %w", err)
+	}
+
+	// Удаляем само задание
+	taskQuery := `DELETE FROM production.production_tasks WHERE id = $1`
+	err = tx.Exec(ctx, taskQuery, taskID)
+	if err != nil {
+		return fmt.Errorf("failed to delete task: %w", err)
+	}
+
+	// Коммитим транзакцию
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	// Инкрементируем метрики
+	r.metrics.IncDBQuery("task_delete")
+
+	return nil
+}
+
+// GetOrphanedDraftTasks возвращает задания в статусе DRAFT старше указанного времени
+func (r *taskRepository) GetOrphanedDraftTasks(ctx context.Context, olderThan time.Time) ([]models.ProductionTask, error) {
+	query := `
+		SELECT 
+			t.id, t.user_id, t.recipe_id, t.slot_number, t.status,
+			t.started_at, t.completion_time, t.claimed_at, t.pre_calculated_results,
+			t.modifiers_applied, t.reservation_id, t.created_at, t.updated_at
+		FROM production.production_tasks t
+		WHERE t.status = $1 AND t.created_at < $2
+		ORDER BY t.created_at ASC`
+
+	rows, err := r.db.Query(ctx, query, models.TaskStatusDraft, olderThan)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query orphaned draft tasks: %w", err)
+	}
+	defer rows.Close()
+
+	var tasks []models.ProductionTask
+	for rows.Next() {
+		var task models.ProductionTask
+		err := rows.Scan(
+			&task.ID,
+			&task.UserID,
+			&task.RecipeID,
+			&task.SlotNumber,
+			&task.Status,
+			&task.StartedAt,
+			&task.CompletionTime,
+			&task.ClaimedAt,
+			&task.PreCalculatedResults,
+			&task.ModifiersApplied,
+			&task.ReservationID,
+			&task.CreatedAt,
+			&task.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan orphaned draft task: %w", err)
+		}
+		tasks = append(tasks, task)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate orphaned draft tasks: %w", err)
+	}
+
+	// Инкрементируем метрики
+	r.metrics.IncDBQuery("orphaned_draft_tasks_query")
+
+	return tasks, nil
 }
 
 // GetTasksStats возвращает статистику заданий для административной панели

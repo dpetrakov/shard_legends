@@ -1,0 +1,103 @@
+# Production Service Configuration Example
+# 
+# This file shows all available configuration options for the Production Service.
+# Copy this file to config.yaml and modify values as needed.
+# 
+# Environment variables take precedence over config file values.
+# All environment variables use the PROD_SVC_ prefix.
+# Example: PROD_SVC_SERVER_PORT=8080
+
+# HTTP Server Configuration
+server:
+  host: "0.0.0.0"                    # PROD_SVC_SERVER_HOST
+  port: "8080"                       # PROD_SVC_SERVER_PORT (REQUIRED)
+  internal_port: "8081"              # PROD_SVC_SERVER_INTERNAL_PORT (REQUIRED)
+  read_timeout: "15s"                # PROD_SVC_SERVER_READ_TIMEOUT
+  write_timeout: "15s"               # PROD_SVC_SERVER_WRITE_TIMEOUT
+  idle_timeout: "60s"                # PROD_SVC_SERVER_IDLE_TIMEOUT
+
+# Database Configuration
+database:
+  url: "postgres://user:password@localhost:5432/production?sslmode=disable"  # PROD_SVC_DATABASE_URL (REQUIRED)
+  max_connections: 25                # PROD_SVC_DATABASE_MAX_CONNECTIONS
+  max_idle_time: "5m"               # PROD_SVC_DATABASE_MAX_IDLE_TIME
+  health_check_period: "1m"         # PROD_SVC_DATABASE_HEALTH_CHECK_PERIOD
+  ping_timeout: "5s"                # PROD_SVC_DATABASE_PING_TIMEOUT
+
+# Redis Configuration
+redis:
+  url: "redis://localhost:6379/1"              # PROD_SVC_REDIS_URL (REQUIRED)
+  auth_url: "redis://localhost:6379/0"         # PROD_SVC_REDIS_AUTH_URL (REQUIRED)
+  max_connections: 10                          # PROD_SVC_REDIS_MAX_CONNECTIONS
+  read_timeout: "3s"                           # PROD_SVC_REDIS_READ_TIMEOUT
+  write_timeout: "3s"                          # PROD_SVC_REDIS_WRITE_TIMEOUT
+  max_retries: 3                               # PROD_SVC_REDIS_MAX_RETRIES
+  ping_timeout: "5s"                           # PROD_SVC_REDIS_PING_TIMEOUT
+
+# Authentication Configuration
+auth:
+  public_key_url: "http://auth-service:8080/public-key.pem"  # PROD_SVC_AUTH_PUBLIC_KEY_URL (REQUIRED)
+  cache_ttl: "1h"                                            # PROD_SVC_AUTH_CACHE_TTL
+  refresh_interval: "24h"                                    # PROD_SVC_AUTH_REFRESH_INTERVAL
+
+# Logging Configuration
+logging:
+  level: "info"                      # PROD_SVC_LOGGING_LEVEL (debug, info, warn, error)
+
+# External Services Configuration
+external_services:
+  inventory_service:
+    base_url: "http://inventory-service:8081"  # PROD_SVC_EXTERNAL_SERVICES_INVENTORY_SERVICE_BASE_URL (REQUIRED)
+    timeout: "10s"                             # PROD_SVC_EXTERNAL_SERVICES_INVENTORY_SERVICE_TIMEOUT
+  user_service:
+    base_url: "http://user-service:8080"       # PROD_SVC_EXTERNAL_SERVICES_USER_SERVICE_BASE_URL (REQUIRED)
+    timeout: "5s"                              # PROD_SVC_EXTERNAL_SERVICES_USER_SERVICE_TIMEOUT
+
+# Timeout Configuration
+timeouts:
+  http_middleware: "60s"             # PROD_SVC_TIMEOUTS_HTTP_MIDDLEWARE
+  jwt_validator_client: "10s"        # PROD_SVC_TIMEOUTS_JWT_VALIDATOR_CLIENT
+  graceful_shutdown: "30s"           # PROD_SVC_TIMEOUTS_GRACEFUL_SHUTDOWN
+  database_health: "2s"              # PROD_SVC_TIMEOUTS_DATABASE_HEALTH
+  redis_health: "2s"                 # PROD_SVC_TIMEOUTS_REDIS_HEALTH
+
+# Background Cleanup Configuration
+cleanup:
+  orphaned_task_timeout: "5m"        # PROD_SVC_CLEANUP_ORPHANED_TASK_TIMEOUT
+  cleanup_interval: "5m"             # PROD_SVC_CLEANUP_CLEANUP_INTERVAL
+  cleanup_timeout: "5m"              # PROD_SVC_CLEANUP_CLEANUP_TIMEOUT
+
+# Metrics Configuration
+metrics:
+  update_interval: "10s"             # PROD_SVC_METRICS_UPDATE_INTERVAL
+
+# Configuration Notes:
+# 
+# REQUIRED FIELDS (must be set via environment variables in production):
+# - PROD_SVC_DATABASE_URL
+# - PROD_SVC_REDIS_URL
+# - PROD_SVC_REDIS_AUTH_URL
+# - PROD_SVC_SERVER_PORT
+# - PROD_SVC_SERVER_INTERNAL_PORT
+# - PROD_SVC_AUTH_PUBLIC_KEY_URL
+# - PROD_SVC_EXTERNAL_SERVICES_INVENTORY_SERVICE_BASE_URL
+# - PROD_SVC_EXTERNAL_SERVICES_USER_SERVICE_BASE_URL
+# 
+# DEVELOPMENT SETUP:
+# For development, create a .env file or config.yaml with your local settings.
+# The service will fail to start if required fields are missing.
+# 
+# PRODUCTION SETUP:
+# Set all required environment variables in your deployment system.
+# Do not use default URLs in production - they point to development services.
+# 
+# TIME FORMATS:
+# Duration values use Go's time.Duration format:
+# - "300ms" (milliseconds)
+# - "5s" (seconds) 
+# - "2m" (minutes)
+# - "1h" (hours)
+# 
+# VALIDATION:
+# The service validates all configuration on startup and will fail fast
+# if any required fields are missing or if values are invalid.

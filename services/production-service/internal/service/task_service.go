@@ -82,6 +82,19 @@ func (s *TaskService) GetCompletedTasks(ctx context.Context, userID uuid.UUID) (
 
 // StartProduction создает новое производственное задание
 func (s *TaskService) StartProduction(ctx context.Context, userID uuid.UUID, request models.StartProductionRequest) (*models.ProductionTask, error) {
+	// 0. Проверяем идемпотентность - есть ли уже активная задача с тем же рецептом
+	existingTasks, err := s.taskRepo.GetUserTasks(ctx, userID, []string{models.TaskStatusDraft, models.TaskStatusPending, models.TaskStatusInProgress})
+	if err != nil {
+		return nil, fmt.Errorf("failed to check existing tasks: %w", err)
+	}
+	
+	for _, task := range existingTasks {
+		if task.RecipeID == request.RecipeID {
+			// Возвращаем существующую задачу (идемпотентность)
+			return &task, nil
+		}
+	}
+
 	// 1. Получаем рецепт
 	recipe, err := s.recipeRepo.GetRecipeByID(ctx, request.RecipeID)
 	if err != nil {
@@ -137,17 +150,16 @@ func (s *TaskService) StartProduction(ctx context.Context, userID uuid.UUID, req
 		return nil, fmt.Errorf("failed to prepare items for reservation: %w", err)
 	}
 
-	// 9. Создаем задание
+	// 9. Создаем задание (статус будет установлен в createTaskWithReservation)
 	task := &models.ProductionTask{
-		ID:                    uuid.New(),
-		UserID:                userID,
-		RecipeID:              recipe.ID,
-		OperationClassCode:    recipe.OperationClassCode,
-		Status:                models.TaskStatusPending,
-		ProductionTimeSeconds: finalProductionTime,
-		CreatedAt:             time.Now(),
-		AppliedModifiers:      s.modifierService.BuildAppliedModifiersForAudit(calcCtx.ModificationResults),
-		OutputItems:           outputItems,
+		ID:               uuid.New(),
+		UserID:           userID,
+		RecipeID:         recipe.ID,
+		SlotNumber:       1, // TODO: implement proper slot allocation
+		CreatedAt:        time.Now(),
+		UpdatedAt:        time.Now(),
+		ModifiersApplied: s.modifierService.BuildAppliedModifiersForAudit(calcCtx.ModificationResults),
+		OutputItems:      outputItems,
 	}
 
 	// 10. Начинаем транзакционную операцию: создание задания + резервирование предметов
@@ -163,8 +175,8 @@ func (s *TaskService) StartProduction(ctx context.Context, userID uuid.UUID, req
 	if s.canStartImmediately(ctx, userID, recipe.OperationClassCode) {
 		task.Status = models.TaskStatusInProgress
 		task.StartedAt = &[]time.Time{time.Now()}[0]
-		completedAt := time.Now().Add(time.Duration(finalProductionTime) * time.Second)
-		task.CompletedAt = &completedAt
+		completionTime := time.Now().Add(time.Duration(finalProductionTime) * time.Second)
+		task.CompletionTime = &completionTime
 
 		err = s.taskRepo.UpdateTaskStatus(ctx, task.ID, models.TaskStatusInProgress)
 		if err != nil {
@@ -202,20 +214,47 @@ func (s *TaskService) prepareItemsForReservation(_ context.Context, inputItems [
 	return items, nil
 }
 
-// createTaskWithReservation создает задание с атомарным резервированием предметов
+// createTaskWithReservation создает задание с атомарным резервированием предметов (Saga Pattern)
 func (s *TaskService) createTaskWithReservation(ctx context.Context, task *models.ProductionTask, itemsToReserve []models.ReservationItem) error {
-	// Сначала создаем задание
+	// Phase 1: Create draft task (database transaction)
+	task.Status = models.TaskStatusDraft
 	err := s.taskRepo.CreateTask(ctx, task)
 	if err != nil {
-		return fmt.Errorf("failed to create task: %w", err)
+		return fmt.Errorf("failed to create draft task: %w", err)
 	}
 
-	// Затем резервируем предметы
+	// Phase 2: Reserve inventory (HTTP call with idempotency)
 	err = s.inventoryClient.ReserveItems(ctx, task.UserID, task.ID, itemsToReserve)
 	if err != nil {
-		// Откатываем создание задания
-		_ = s.taskRepo.UpdateTaskStatus(ctx, task.ID, models.TaskStatusFailed)
-		return fmt.Errorf("failed to reserve items: %w", err)
+		// Compensation: Delete draft task completely
+		deleteErr := s.taskRepo.DeleteTask(ctx, task.ID)
+		if deleteErr != nil {
+			s.logger.Error("Failed to delete draft task during compensation",
+				zap.String("task_id", task.ID.String()),
+				zap.Error(deleteErr))
+		}
+		return fmt.Errorf("failed to reserve inventory: %w", err)
+	}
+
+	// Phase 3: Confirm task (database transaction)
+	err = s.taskRepo.UpdateTaskStatus(ctx, task.ID, models.TaskStatusPending)
+	if err != nil {
+		// Compensation: Return inventory reservation and delete task
+		returnErr := s.inventoryClient.ReturnReserve(ctx, task.UserID, task.ID)
+		if returnErr != nil {
+			s.logger.Error("Failed to return inventory reservation during compensation",
+				zap.String("task_id", task.ID.String()),
+				zap.Error(returnErr))
+		}
+		
+		deleteErr := s.taskRepo.DeleteTask(ctx, task.ID)
+		if deleteErr != nil {
+			s.logger.Error("Failed to delete draft task during compensation",
+				zap.String("task_id", task.ID.String()),
+				zap.Error(deleteErr))
+		}
+		
+		return fmt.Errorf("failed to confirm task: %w", err)
 	}
 
 	return nil
@@ -231,7 +270,13 @@ func (s *TaskService) hasAvailableSlot(ctx context.Context, userID uuid.UUID, op
 
 	occupiedSlots := 0
 	for _, task := range activeTasks {
-		if s.canUseSlot(task.OperationClassCode, operationClass, userSlots) {
+		// Get the recipe to determine operation class
+		recipe, err := s.recipeRepo.GetRecipeByID(ctx, task.RecipeID)
+		if err != nil {
+			s.logger.Error("Failed to get recipe for task", zap.Error(err), zap.String("taskID", task.ID.String()))
+			continue
+		}
+		if s.canUseSlot(recipe.OperationClassCode, operationClass, userSlots) {
 			occupiedSlots++
 		}
 	}
@@ -256,7 +301,13 @@ func (s *TaskService) canStartImmediately(ctx context.Context, userID uuid.UUID,
 	}
 
 	for _, task := range pendingTasks {
-		if task.OperationClassCode == operationClass {
+		// Get the recipe to determine operation class
+		recipe, err := s.recipeRepo.GetRecipeByID(ctx, task.RecipeID)
+		if err != nil {
+			s.logger.Error("Failed to get recipe for task", zap.Error(err), zap.String("taskID", task.ID.String()))
+			continue
+		}
+		if recipe.OperationClassCode == operationClass {
 			return false
 		}
 	}
@@ -409,7 +460,13 @@ func (s *TaskService) processTaskClaim(ctx context.Context, task *models.Product
 	}
 
 	// 5. Пытаемся запустить следующее задание в очереди
-	s.tryStartNextTask(ctx, task.UserID, task.OperationClassCode)
+	// Get the recipe to determine operation class
+	recipe, err := s.recipeRepo.GetRecipeByID(ctx, task.RecipeID)
+	if err != nil {
+		s.logger.Error("Failed to get recipe for task", zap.Error(err), zap.String("taskID", task.ID.String()))
+	} else {
+		s.tryStartNextTask(ctx, task.UserID, recipe.OperationClassCode)
+	}
 
 	return nil
 }
@@ -466,7 +523,13 @@ func (s *TaskService) tryStartNextTask(ctx context.Context, userID uuid.UUID, op
 
 	// Ищем первое подходящее задание
 	for _, task := range pendingTasks {
-		if task.OperationClassCode == operationClass {
+		// Get the recipe to determine operation class
+		recipe, err := s.recipeRepo.GetRecipeByID(ctx, task.RecipeID)
+		if err != nil {
+			s.logger.Error("Failed to get recipe for task", zap.Error(err), zap.String("taskID", task.ID.String()))
+			continue
+		}
+		if recipe.OperationClassCode == operationClass {
 			// Проверяем, можно ли его запустить
 			if s.canStartImmediately(ctx, userID, operationClass) {
 				err = s.taskRepo.UpdateTaskStatus(ctx, task.ID, models.TaskStatusInProgress)

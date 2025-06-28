@@ -1,0 +1,468 @@
+recipes:
+  # Wooden quality
+  - id: d9e1f372-514c-47f9-8e5e-0de36c15c511
+    operation_class_code: crafting
+    is_active: true
+    production_time_seconds: 43200
+    input_items:
+      - item_code: blueprint_shovel
+        quantity: 1
+      - item_code: blank_wooden
+        quantity: 4
+    output_items:
+      - item_code: shovel
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 100
+        fixed_quality_level_code: wooden
+    translations:
+      - language_code: en
+        field_name: name
+        content: "Craft Wooden Shovel"
+      - language_code: ru
+        field_name: name
+        content: "Крафт: Деревянная лопата"
+      - language_code: en
+        field_name: description
+        content: "Use blueprint and 4 wooden blanks to craft a wooden shovel."
+      - language_code: ru
+        field_name: description
+        content: "Используйте чертеж и 4 деревянные заготовки, чтобы создать деревянную лопату."
+
+  - id: 4e925e26-acc3-421e-9371-298c5a3f36d4
+    operation_class_code: crafting
+    is_active: true
+    production_time_seconds: 43200
+    input_items:
+      - item_code: blueprint_sickle
+        quantity: 1
+      - item_code: blank_wooden
+        quantity: 4
+    output_items:
+      - item_code: sickle
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 100
+        fixed_quality_level_code: wooden
+    translations:
+      - language_code: en
+        field_name: name
+        content: "Craft Wooden Sickle"
+      - language_code: ru
+        field_name: name
+        content: "Крафт: Деревянный серп"
+      - language_code: en
+        field_name: description
+        content: "Use blueprint and 4 wooden blanks to craft a wooden sickle."
+      - language_code: ru
+        field_name: description
+        content: "Используйте чертеж и 4 деревянные заготовки, чтобы создать деревянный серп."
+
+  - id: 14f8d076-08b7-45de-8bef-73346103599e
+    operation_class_code: crafting
+    is_active: true
+    production_time_seconds: 43200
+    input_items:
+      - item_code: blueprint_axe
+        quantity: 1
+      - item_code: blank_wooden
+        quantity: 4
+    output_items:
+      - item_code: axe
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 100
+        fixed_quality_level_code: wooden
+    translations:
+      - language_code: en
+        field_name: name
+        content: "Craft Wooden Axe"
+      - language_code: ru
+        field_name: name
+        content: "Крафт: Деревянный топор"
+      - language_code: en
+        field_name: description
+        content: "Use blueprint and 4 wooden blanks to craft a wooden axe."
+      - language_code: ru
+        field_name: description
+        content: "Используйте чертеж и 4 деревянные заготовки, чтобы создать деревянный топор."
+
+  - id: 8f37d0ff-b99a-4ccd-9cdb-87d0bb9692ac
+    operation_class_code: crafting
+    is_active: true
+    production_time_seconds: 43200
+    input_items:
+      - item_code: blueprint_pickaxe
+        quantity: 1
+      - item_code: blank_wooden
+        quantity: 4
+    output_items:
+      - item_code: pickaxe
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 100
+        fixed_quality_level_code: wooden
+    translations:
+      - language_code: en
+        field_name: name
+        content: "Craft Wooden Pickaxe"
+      - language_code: ru
+        field_name: name
+        content: "Крафт: Деревянная кирка"
+      - language_code: en
+        field_name: description
+        content: "Use blueprint and 4 wooden blanks to craft a wooden pickaxe."
+      - language_code: ru
+        field_name: description
+        content: "Используйте чертеж и 4 деревянные заготовки, чтобы создать деревянную кирку."
+
+  # Stone quality
+  - id: 7a8275bb-b314-4ce4-b327-ecd7aca5eab0
+    operation_class_code: crafting
+    is_active: true
+    production_time_seconds: 43200
+    input_items:
+      - item_code: blueprint_shovel
+        quantity: 1
+      - item_code: blank_stone
+        quantity: 4
+    output_items:
+      - item_code: shovel
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 100
+        fixed_quality_level_code: stone
+    translations:
+      - language_code: en
+        field_name: name
+        content: "Craft Stone Shovel"
+      - language_code: ru
+        field_name: name
+        content: "Крафт: Каменная лопата"
+      - language_code: en
+        field_name: description
+        content: "Use blueprint and 4 stone blanks to craft a stone shovel."
+      - language_code: ru
+        field_name: description
+        content: "Используйте чертеж и 4 каменные заготовки, чтобы создать каменную лопату."
+
+  - id: 1a3f9d7c-ecdc-41dd-80a9-6f2795a746c2
+    operation_class_code: crafting
+    is_active: true
+    production_time_seconds: 43200
+    input_items:
+      - item_code: blueprint_sickle
+        quantity: 1
+      - item_code: blank_stone
+        quantity: 4
+    output_items:
+      - item_code: sickle
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 100
+        fixed_quality_level_code: stone
+    translations:
+      - language_code: en
+        field_name: name
+        content: "Craft Stone Sickle"
+      - language_code: ru
+        field_name: name
+        content: "Крафт: Каменный серп"
+      - language_code: en
+        field_name: description
+        content: "Use blueprint and 4 stone blanks to craft a stone sickle."
+      - language_code: ru
+        field_name: description
+        content: "Используйте чертеж и 4 каменные заготовки, чтобы создать каменный серп."
+
+  - id: f37d0106-f9d2-4592-91ed-bfe9cbf3c289
+    operation_class_code: crafting
+    is_active: true
+    production_time_seconds: 43200
+    input_items:
+      - item_code: blueprint_axe
+        quantity: 1
+      - item_code: blank_stone
+        quantity: 4
+    output_items:
+      - item_code: axe
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 100
+        fixed_quality_level_code: stone
+    translations:
+      - language_code: en
+        field_name: name
+        content: "Craft Stone Axe"
+      - language_code: ru
+        field_name: name
+        content: "Крафт: Каменный топор"
+      - language_code: en
+        field_name: description
+        content: "Use blueprint and 4 stone blanks to craft a stone axe."
+      - language_code: ru
+        field_name: description
+        content: "Используйте чертеж и 4 каменные заготовки, чтобы создать каменный топор."
+
+  - id: a82e6870-29d3-4718-b11d-d9df93a75b33
+    operation_class_code: crafting
+    is_active: true
+    production_time_seconds: 43200
+    input_items:
+      - item_code: blueprint_pickaxe
+        quantity: 1
+      - item_code: blank_stone
+        quantity: 4
+    output_items:
+      - item_code: pickaxe
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 100
+        fixed_quality_level_code: stone
+    translations:
+      - language_code: en
+        field_name: name
+        content: "Craft Stone Pickaxe"
+      - language_code: ru
+        field_name: name
+        content: "Крафт: Каменная кирка"
+      - language_code: en
+        field_name: description
+        content: "Use blueprint and 4 stone blanks to craft a stone pickaxe."
+      - language_code: ru
+        field_name: description
+        content: "Используйте чертеж и 4 каменные заготовки, чтобы создать каменную кирку."
+
+  # Metal quality
+  - id: 5c1bbab9-b3fe-4caf-9155-4261d849d1a9
+    operation_class_code: crafting
+    is_active: true
+    production_time_seconds: 43200
+    input_items:
+      - item_code: blueprint_shovel
+        quantity: 1
+      - item_code: blank_metal
+        quantity: 4
+    output_items:
+      - item_code: shovel
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 100
+        fixed_quality_level_code: metal
+    translations:
+      - language_code: en
+        field_name: name
+        content: "Craft Metal Shovel"
+      - language_code: ru
+        field_name: name
+        content: "Крафт: Металлическая лопата"
+      - language_code: en
+        field_name: description
+        content: "Use blueprint and 4 metal blanks to craft a metal shovel."
+      - language_code: ru
+        field_name: description
+        content: "Используйте чертеж и 4 металлические заготовки, чтобы создать металлическую лопату."
+
+  - id: 3ba7f9c0-c5e3-44a2-a415-2eedeb949106
+    operation_class_code: crafting
+    is_active: true
+    production_time_seconds: 43200
+    input_items:
+      - item_code: blueprint_sickle
+        quantity: 1
+      - item_code: blank_metal
+        quantity: 4
+    output_items:
+      - item_code: sickle
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 100
+        fixed_quality_level_code: metal
+    translations:
+      - language_code: en
+        field_name: name
+        content: "Craft Metal Sickle"
+      - language_code: ru
+        field_name: name
+        content: "Крафт: Металлический серп"
+      - language_code: en
+        field_name: description
+        content: "Use blueprint and 4 metal blanks to craft a metal sickle."
+      - language_code: ru
+        field_name: description
+        content: "Используйте чертеж и 4 металлические заготовки, чтобы создать металлический серп."
+
+  - id: 4fb18d0d-e7d6-46cb-9352-d535b772a1af
+    operation_class_code: crafting
+    is_active: true
+    production_time_seconds: 43200
+    input_items:
+      - item_code: blueprint_axe
+        quantity: 1
+      - item_code: blank_metal
+        quantity: 4
+    output_items:
+      - item_code: axe
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 100
+        fixed_quality_level_code: metal
+    translations:
+      - language_code: en
+        field_name: name
+        content: "Craft Metal Axe"
+      - language_code: ru
+        field_name: name
+        content: "Крафт: Металлический топор"
+      - language_code: en
+        field_name: description
+        content: "Use blueprint and 4 metal blanks to craft a metal axe."
+      - language_code: ru
+        field_name: description
+        content: "Используйте чертеж и 4 металлические заготовки, чтобы создать металлический топор."
+
+  - id: 2f27767f-9c4c-41ea-9c5b-a6fc2fb91c97
+    operation_class_code: crafting
+    is_active: true
+    production_time_seconds: 43200
+    input_items:
+      - item_code: blueprint_pickaxe
+        quantity: 1
+      - item_code: blank_metal
+        quantity: 4
+    output_items:
+      - item_code: pickaxe
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 100
+        fixed_quality_level_code: metal
+    translations:
+      - language_code: en
+        field_name: name
+        content: "Craft Metal Pickaxe"
+      - language_code: ru
+        field_name: name
+        content: "Крафт: Металлическая кирка"
+      - language_code: en
+        field_name: description
+        content: "Use blueprint and 4 metal blanks to craft a metal pickaxe."
+      - language_code: ru
+        field_name: description
+        content: "Используйте чертеж и 4 металлические заготовки, чтобы создать металлическую кирку."
+
+  # Diamond quality
+  - id: 8d23723f-8e4f-4d77-90fb-8e96ef892af5
+    operation_class_code: crafting
+    is_active: true
+    production_time_seconds: 43200
+    input_items:
+      - item_code: blueprint_shovel
+        quantity: 1
+      - item_code: blank_diamond
+        quantity: 4
+    output_items:
+      - item_code: shovel
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 100
+        fixed_quality_level_code: diamond
+    translations:
+      - language_code: en
+        field_name: name
+        content: "Craft Diamond Shovel"
+      - language_code: ru
+        field_name: name
+        content: "Крафт: Бриллиантовая лопата"
+      - language_code: en
+        field_name: description
+        content: "Use blueprint and 4 diamond blanks to craft a diamond shovel."
+      - language_code: ru
+        field_name: description
+        content: "Используйте чертеж и 4 бриллиантовые заготовки, чтобы создать бриллиантовую лопату."
+
+  - id: c26fb0bc-4b9f-48aa-9eb4-8dd9afd1cd29
+    operation_class_code: crafting
+    is_active: true
+    production_time_seconds: 43200
+    input_items:
+      - item_code: blueprint_sickle
+        quantity: 1
+      - item_code: blank_diamond
+        quantity: 4
+    output_items:
+      - item_code: sickle
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 100
+        fixed_quality_level_code: diamond
+    translations:
+      - language_code: en
+        field_name: name
+        content: "Craft Diamond Sickle"
+      - language_code: ru
+        field_name: name
+        content: "Крафт: Бриллиантовый серп"
+      - language_code: en
+        field_name: description
+        content: "Use blueprint and 4 diamond blanks to craft a diamond sickle."
+      - language_code: ru
+        field_name: description
+        content: "Используйте чертеж и 4 бриллиантовые заготовки, чтобы создать бриллиантовый серп."
+
+  - id: 612abee0-f60e-480b-849b-b6f93e7eb2d5
+    operation_class_code: crafting
+    is_active: true
+    production_time_seconds: 43200
+    input_items:
+      - item_code: blueprint_axe
+        quantity: 1
+      - item_code: blank_diamond
+        quantity: 4
+    output_items:
+      - item_code: axe
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 100
+        fixed_quality_level_code: diamond
+    translations:
+      - language_code: en
+        field_name: name
+        content: "Craft Diamond Axe"
+      - language_code: ru
+        field_name: name
+        content: "Крафт: Бриллиантовый топор"
+      - language_code: en
+        field_name: description
+        content: "Use blueprint and 4 diamond blanks to craft a diamond axe."
+      - language_code: ru
+        field_name: description
+        content: "Используйте чертеж и 4 бриллиантовые заготовки, чтобы создать бриллиантовый топор."
+
+  - id: 5d7e4270-310b-416f-9ed2-2ae3822ee2a1
+    operation_class_code: crafting
+    is_active: true
+    production_time_seconds: 43200
+    input_items:
+      - item_code: blueprint_pickaxe
+        quantity: 1
+      - item_code: blank_diamond
+        quantity: 4
+    output_items:
+      - item_code: pickaxe
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 100
+        fixed_quality_level_code: diamond
+    translations:
+      - language_code: en
+        field_name: name
+        content: "Craft Diamond Pickaxe"
+      - language_code: ru
+        field_name: name
+        content: "Крафт: Бриллиантовая кирка"
+      - language_code: en
+        field_name: description
+        content: "Use blueprint and 4 diamond blanks to craft a diamond pickaxe."
+      - language_code: ru
+        field_name: description
+        content: "Используйте чертеж и 4 бриллиантовые заготовки, чтобы создать бриллиантовую кирку." 

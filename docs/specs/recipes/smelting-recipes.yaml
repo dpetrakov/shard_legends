@@ -1,0 +1,124 @@
+recipes:
+  - id: 1d8d7341-2c68-4aa8-9c2d-1f0c7d4addea
+    operation_class_code: smelting
+    is_active: true
+    production_time_seconds: 3600
+
+    input_items:
+      - item_code: wood
+        quantity: 100
+      - item_code: disc
+        quantity: 4
+
+    output_items:
+      - item_code: wooden_plank
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 100
+
+    translations:
+      - language_code: en
+        field_name: name
+        content: "Wooden Plank Smelting"
+      - language_code: ru
+        field_name: name
+        content: "Переплавка: Деревянный брусок"
+      - language_code: en
+        field_name: description
+        content: "Convert 100 wood and 4 discs into 1 wooden plank"
+      - language_code: ru
+        field_name: description
+        content: "Переплавить 100 древесины и 4 диска в 1 деревянный брусок"
+
+  - id: 2c5f8e8a-0bdb-4bab-ae48-3fbe285f063c
+    operation_class_code: smelting
+    is_active: true
+    production_time_seconds: 3600
+
+    input_items:
+      - item_code: stone
+        quantity: 100
+      - item_code: abrasive
+        quantity: 4
+
+    output_items:
+      - item_code: stone_block
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 100
+
+    translations:
+      - language_code: en
+        field_name: name
+        content: "Stone Block Smelting"
+      - language_code: ru
+        field_name: name
+        content: "Переплавка: Каменный блок"
+      - language_code: en
+        field_name: description
+        content: "Convert 100 stone and 4 abrasives into 1 stone block"
+      - language_code: ru
+        field_name: description
+        content: "Переплавить 100 камня и 4 абразива в 1 каменный блок"
+
+  - id: 3e5a813d-3fda-4f37-9d2b-6e77804e9cb1
+    operation_class_code: smelting
+    is_active: true
+    production_time_seconds: 3600
+
+    input_items:
+      - item_code: ore
+        quantity: 100
+      - item_code: inductor
+        quantity: 4
+
+    output_items:
+      - item_code: metal_ingot
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 100
+
+    translations:
+      - language_code: en
+        field_name: name
+        content: "Metal Ingot Smelting"
+      - language_code: ru
+        field_name: name
+        content: "Переплавка: Металлический слиток"
+      - language_code: en
+        field_name: description
+        content: "Convert 100 ore and 4 inductors into 1 metal ingot"
+      - language_code: ru
+        field_name: description
+        content: "Переплавить 100 руды и 4 индуктора в 1 металлический слиток"
+
+  - id: 4a9febbe-7f5b-4f45-a8c9-c1f0874d81f3
+    operation_class_code: smelting
+    is_active: true
+    production_time_seconds: 3600
+
+    input_items:
+      - item_code: diamond
+        quantity: 100
+      - item_code: paste
+        quantity: 4
+
+    output_items:
+      - item_code: diamond
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 100
+
+    translations:
+      - language_code: en
+        field_name: name
+        content: "Diamond Refining"
+      - language_code: ru
+        field_name: name
+        content: "Переплавка: Бриллиант"
+      - language_code: en
+        field_name: description
+        content: "Refine 100 diamonds and 4 pastes into 1 pure diamond"
+      - language_code: ru
+        field_name: description
+        content: "Переплавить 100 алмазов и 4 пасты в 1 бриллиант" 

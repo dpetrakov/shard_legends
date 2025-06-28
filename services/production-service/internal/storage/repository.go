@@ -40,6 +40,12 @@ type TaskRepository interface {
 	// UpdateTaskStatus обновляет статус задания
 	UpdateTaskStatus(ctx context.Context, taskID uuid.UUID, status string) error
 
+	// DeleteTask удаляет задание (для компенсации в Saga pattern)
+	DeleteTask(ctx context.Context, taskID uuid.UUID) error
+
+	// GetOrphanedDraftTasks возвращает задания в статусе DRAFT старше указанного времени
+	GetOrphanedDraftTasks(ctx context.Context, olderThan time.Time) ([]models.ProductionTask, error)
+
 	// GetTasksStats возвращает статистику заданий для административной панели
 	GetTasksStats(ctx context.Context, filters map[string]interface{}, page, limit int) (*models.TasksStatsResponse, error)
 }

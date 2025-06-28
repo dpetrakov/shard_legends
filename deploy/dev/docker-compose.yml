@@ -202,19 +202,24 @@ services:
     ports:
       - "127.0.0.1:22004:8090"  # Internal port for nginx
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-slcw_user}:${POSTGRES_PASSWORD:-dev_password_2024}@postgres:5432/${POSTGRES_DB:-shard_legends_dev}?sslmode=disable
-      - REDIS_URL=redis://redis:6379/2
-      - REDIS_AUTH_URL=redis://redis:6379/0
-      - PRODUCTION_SERVICE_HOST=0.0.0.0
-      - PROD_SVC_PUBLIC_PORT=8080
-      - PROD_SVC_INTERNAL_PORT=8090
-      - DATABASE_MAX_CONNECTIONS=25
-      - REDIS_MAX_CONNECTIONS=10
-      - LOG_LEVEL=debug
-      - AUTH_PUBLIC_KEY_URL=http://auth-service:8090/public-key.pem
-      - INVENTORY_SERVICE_URL=http://inventory-service:8090
-      - USER_SERVICE_URL=http://user-service:8080
-      - AUTH_SERVICE_URL=http://auth-service:8090
+      # Required configuration (PROD_SVC_ prefix)
+      - PROD_SVC_DATABASE_URL=postgresql://${POSTGRES_USER:-slcw_user}:${POSTGRES_PASSWORD:-dev_password_2024}@postgres:5432/${POSTGRES_DB:-shard_legends_dev}?sslmode=disable
+      - PROD_SVC_REDIS_URL=redis://redis:6379/2
+      - PROD_SVC_REDIS_AUTH_URL=redis://redis:6379/0
+      - PROD_SVC_SERVER_HOST=0.0.0.0
+      - PROD_SVC_SERVER_PORT=8080
+      - PROD_SVC_SERVER_INTERNAL_PORT=8090
+      - PROD_SVC_AUTH_PUBLIC_KEY_URL=http://auth-service:8090/public-key.pem
+      - PROD_SVC_EXTERNAL_SERVICES_INVENTORY_SERVICE_BASE_URL=http://inventory-service:8090
+      - PROD_SVC_EXTERNAL_SERVICES_USER_SERVICE_BASE_URL=http://user-service:8080
+      # Optional configuration with dev-optimized values
+      - PROD_SVC_DATABASE_MAX_CONNECTIONS=25
+      - PROD_SVC_REDIS_MAX_CONNECTIONS=10
+      - PROD_SVC_LOGGING_LEVEL=debug
+      - PROD_SVC_EXTERNAL_SERVICES_INVENTORY_SERVICE_TIMEOUT=10s
+      - PROD_SVC_EXTERNAL_SERVICES_USER_SERVICE_TIMEOUT=5s
+      - PROD_SVC_CLEANUP_CLEANUP_INTERVAL=5m
+      - PROD_SVC_CLEANUP_ORPHANED_TASK_TIMEOUT=5m
     networks:
       - slcw-dev
       - slcw-monitoring
@@ -252,15 +257,17 @@ services:
       context: ../../services/user-service
       dockerfile: Dockerfile
     container_name: slcw-user-service-dev
-    # No external ports - accessed via API Gateway and internal services
+    ports:
+      - "127.0.0.1:22005:8090"  # Internal API endpoint for development access
     environment:
       - REDIS_URL=redis://redis:6379/3
       - REDIS_AUTH_URL=redis://redis:6379/0
       - USER_SERVICE_HOST=0.0.0.0
       - USER_SERVICE_PORT=8080
+      - USER_SERVICE_INTERNAL_PORT=8090
       - REDIS_MAX_CONNECTIONS=10
       - LOG_LEVEL=info
-      - AUTH_PUBLIC_KEY_URL=http://auth-service:8090/public-key.pem
+      - AUTH_SERVICE_PUBLIC_KEY_URL=http://auth-service:8090/public-key.pem
       - AUTH_SERVICE_URL=http://auth-service:8080
     networks:
       - slcw-dev
@@ -276,7 +283,7 @@ services:
         max-file: "3"
         labels: "logging.service,logging.environment"
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8090/health"]
       interval: 30s
       timeout: 10s
       retries: 3

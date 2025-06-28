@@ -127,8 +127,8 @@ func (h *FactoryHandler) StartProduction(w http.ResponseWriter, r *http.Request)
 
 	// Формируем ответ
 	expectedCompletion := ""
-	if task.CompletedAt != nil {
-		expectedCompletion = task.CompletedAt.Format("2006-01-02T15:04:05Z07:00")
+	if task.CompletionTime != nil {
+		expectedCompletion = task.CompletionTime.Format("2006-01-02T15:04:05Z07:00")
 	}
 
 	response := models.StartProductionResponse{

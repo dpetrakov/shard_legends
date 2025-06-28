@@ -12,8 +12,9 @@ import (
 )
 
 type RedisClient struct {
-	client     *redis.Client
-	authClient *redis.Client // Клиент для JWT revocation (база 0)
+	client        *redis.Client
+	authClient    *redis.Client // Клиент для JWT revocation (база 0)
+	healthTimeout time.Duration
 }
 
 func NewRedisClient(cfg *config.RedisConfig) (*RedisClient, error) {
@@ -22,7 +23,7 @@ func NewRedisClient(cfg *config.RedisConfig) (*RedisClient, error) {
 		return nil, fmt.Errorf("failed to parse redis URL: %w", err)
 	}
 
-	opt.MaxRetries = 3
+	opt.MaxRetries = cfg.MaxRetries
 	opt.PoolSize = cfg.MaxConnections
 	opt.ReadTimeout = cfg.ReadTimeout
 	opt.WriteTimeout = cfg.WriteTimeout
@@ -35,14 +36,14 @@ func NewRedisClient(cfg *config.RedisConfig) (*RedisClient, error) {
 		return nil, fmt.Errorf("failed to parse redis auth URL: %w", err)
 	}
 
-	authOpt.MaxRetries = 3
+	authOpt.MaxRetries = cfg.MaxRetries
 	authOpt.PoolSize = cfg.MaxConnections
 	authOpt.ReadTimeout = cfg.ReadTimeout
 	authOpt.WriteTimeout = cfg.WriteTimeout
 
 	authClient := redis.NewClient(authOpt)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.PingTimeout)
 	defer cancel()
 
 	// Проверка основного клиента
@@ -64,8 +65,9 @@ func NewRedisClient(cfg *config.RedisConfig) (*RedisClient, error) {
 	)
 
 	return &RedisClient{
-		client:     client,
-		authClient: authClient,
+		client:        client,
+		authClient:    authClient,
+		healthTimeout: cfg.PingTimeout,
 	}, nil
 }
 
@@ -97,7 +99,7 @@ func (r *RedisClient) Close() error {
 }
 
 func (r *RedisClient) Health(ctx context.Context) error {
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, r.healthTimeout)
 	defer cancel()
 
 	// Проверка основного клиента

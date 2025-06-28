@@ -47,7 +47,7 @@ func main() {
 	go func() {
 		for {
 			metrics.ServiceUptime.Set(time.Since(startTime).Seconds())
-			time.Sleep(10 * time.Second)
+			time.Sleep(cfg.Metrics.UpdateInterval)
 		}
 	}()
 
@@ -70,7 +70,7 @@ func main() {
 
 	// Initialize JWT validator
 	jwtValidator := jwt.NewValidator(cfg.Auth.PublicKeyURL, redis, cfg.Auth.CacheTTL)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.Timeouts.JWTValidatorClient)
 	defer cancel()
 
 	if err := jwtValidator.Initialize(ctx); err != nil {
@@ -79,7 +79,7 @@ func main() {
 
 	// Refresh JWT public key periodically
 	go func() {
-		ticker := time.NewTicker(24 * time.Hour)
+		ticker := time.NewTicker(cfg.Auth.RefreshInterval)
 		defer ticker.Stop()
 
 		for range ticker.C {
@@ -114,9 +114,9 @@ func main() {
 	// Initialize service layer
 	serviceLayer := service.NewService(serviceDeps)
 
-	// Initialize external service clients
-	inventoryClient := service.NewHTTPInventoryClient(cfg.ExternalServices.InventoryService.BaseURL, logger.Get())
-	userClient := service.NewHTTPUserClient(cfg.ExternalServices.UserService.BaseURL, logger.Get())
+	// Initialize external service clients with configurable timeouts
+	inventoryClient := service.NewHTTPInventoryClientWithTimeout(cfg.ExternalServices.InventoryService.BaseURL, cfg.ExternalServices.InventoryService.Timeout, logger.Get())
+	userClient := service.NewHTTPUserClientWithTimeout(cfg.ExternalServices.UserService.BaseURL, cfg.ExternalServices.UserService.Timeout, logger.Get())
 
 	// Initialize task service
 	taskService := service.NewTaskService(
@@ -128,6 +128,26 @@ func main() {
 		userClient,
 		logger.Get(),
 	)
+
+	// Initialize cleanup service for orphaned draft tasks
+	cleanupConfig := service.CleanupConfig{
+		OrphanedTaskTimeout: cfg.Cleanup.OrphanedTaskTimeout,
+		CleanupInterval:     cfg.Cleanup.CleanupInterval,
+	}
+	cleanupService := service.NewCleanupService(
+		repository.Task,
+		inventoryClient,
+		logger.Get(),
+		cleanupConfig,
+	)
+
+	// Start cleanup service in background
+	cleanupCtx, cleanupCancel := context.WithCancel(context.Background())
+	defer cleanupCancel()
+	
+	go func() {
+		cleanupService.Start(cleanupCtx)
+	}()
 
 	// Initialize handlers
 	handlerDeps := &handlers.HandlerDependencies{
@@ -150,7 +170,7 @@ func main() {
 	publicRouter.Use(customMiddleware.Recovery())
 	publicRouter.Use(customMiddleware.Logging())
 	publicRouter.Use(customMiddleware.Metrics())
-	publicRouter.Use(middleware.Timeout(60 * time.Second))
+	publicRouter.Use(middleware.Timeout(cfg.Timeouts.HTTPMiddleware))
 
 	// CORS for public endpoints
 	publicRouter.Use(cors.Handler(cors.Options{
@@ -171,7 +191,7 @@ func main() {
 	internalRouter.Use(customMiddleware.Recovery())
 	internalRouter.Use(customMiddleware.Logging())
 	internalRouter.Use(customMiddleware.Metrics())
-	internalRouter.Use(middleware.Timeout(60 * time.Second))
+	internalRouter.Use(middleware.Timeout(cfg.Timeouts.HTTPMiddleware))
 
 	// Internal endpoints - health, metrics, admin
 	internalRouter.Get("/health", allHandlers.Health.Health)
@@ -273,7 +293,7 @@ func main() {
 	logger.Info("Shutting down server...")
 
 	// Graceful shutdown with timeout
-	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), cfg.Timeouts.GracefulShutdown)
 	defer cancel()
 
 	// Shutdown both servers

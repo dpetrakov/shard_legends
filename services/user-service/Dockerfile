@@ -30,12 +30,12 @@ WORKDIR /root/
 # Копирование бинарного файла
 COPY --from=builder /app/user-service .
 
-# Порт для сервиса
-EXPOSE 8080
+# Порты для сервиса (public и internal)
+EXPOSE 8080 8090
 
-# Health check
+# Health check (using internal port)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8090/health || exit 1
 
 # Запуск сервиса
 CMD ["./user-service"]

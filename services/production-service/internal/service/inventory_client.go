@@ -30,10 +30,15 @@ type HTTPInventoryClient struct {
 
 // NewHTTPInventoryClient создает новый HTTP клиент для Inventory Service
 func NewHTTPInventoryClient(baseURL string, logger *zap.Logger) InventoryClient {
+	return NewHTTPInventoryClientWithTimeout(baseURL, 10*time.Second, logger)
+}
+
+// NewHTTPInventoryClientWithTimeout создает новый HTTP клиент для Inventory Service с настраиваемым таймаутом
+func NewHTTPInventoryClientWithTimeout(baseURL string, timeout time.Duration, logger *zap.Logger) InventoryClient {
 	return &HTTPInventoryClient{
 		baseURL: baseURL,
 		httpClient: &http.Client{
-			Timeout: 10 * time.Second,
+			Timeout: timeout,
 		},
 		logger: logger,
 	}
