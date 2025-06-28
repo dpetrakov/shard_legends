@@ -46,10 +46,10 @@ graph TB
     ProductionService --> Cache
     UserService --> Cache
     
-    BotService -.->|JWT validation| Cache
-    InventoryService -.->|JWT validation| Cache
-    ProductionService -.->|JWT validation| Cache
-    UserService -.->|JWT validation| Cache
+    BotService -.->|Public API JWT validation| Cache
+    InventoryService -.->|Public API JWT validation| Cache
+    ProductionService -.->|Public API JWT validation| Cache
+    UserService -.->|Public API JWT validation| Cache
     
     subgraph "Docker Compose Environment"
         Gateway
@@ -382,12 +382,20 @@ graph TB
 ## Безопасность
 
 ### Аутентификация и авторизация
+
+#### Публичные API (порт 8080)
 - **Auth Service** для централизованной авторизации
 - Telegram Web App валидация через `initData` заголовки
 - JWT токены с RSA подписью (срок жизни 24 часа)
 - Управление активными/отозванными токенами в Redis
 - Автоматическая регистрация новых пользователей
 - Rate limiting для защиты endpoints
+
+#### Внутренние API (порт 8090)
+- **Сетевая изоляция** как основной механизм безопасности
+- Отсутствие JWT аутентификации для упрощения архитектуры
+- Доступ только внутри Docker Compose сети
+- Защита на уровне инфраструктуры и сетевых политик
 
 ### Защита API
 - Rate limiting на уровне пользователя

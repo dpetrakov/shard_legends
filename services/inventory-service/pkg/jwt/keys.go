@@ -28,31 +28,31 @@ func LoadPublicKeyFromAuthService(authServiceURL string) (*rsa.PublicKey, error)
 	if authServiceURL == "" {
 		authServiceURL = "http://auth-service:8080"
 	}
-	
+
 	endpoint := authServiceURL + "/public-key.pem"
-	
+
 	// Create HTTP client with timeout
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 	}
-	
+
 	// Make request to auth service
 	resp, err := client.Get(endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch public key from auth service: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("auth service returned status %d when fetching public key", resp.StatusCode)
 	}
-	
+
 	// Read response body
 	keyData, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read public key response: %w", err)
 	}
-	
+
 	// Parse the key data using existing function logic
 	return parsePublicKeyPEM(keyData)
 }

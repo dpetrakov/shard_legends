@@ -72,8 +72,8 @@ func (dbc *dailyBalanceCreator) CreateDailyBalance(ctx context.Context, req *Dai
 	newBalance := baseBalance
 	for _, op := range operations {
 		// Only include operations up to end of target date
-		if (op.CreatedAt.After(fromDate) || op.CreatedAt.Equal(fromDate)) && 
-		   (op.CreatedAt.Before(targetDateEnd) || op.CreatedAt.Equal(targetDateEnd)) {
+		if (op.CreatedAt.After(fromDate) || op.CreatedAt.Equal(fromDate)) &&
+			(op.CreatedAt.Before(targetDateEnd) || op.CreatedAt.Equal(targetDateEnd)) {
 			newBalance += op.QuantityChange
 		}
 	}

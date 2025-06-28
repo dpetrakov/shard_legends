@@ -17,11 +17,11 @@ func TestLoad(t *testing.T) {
 		"REDIS_URL", "REDIS_MAX_CONNECTIONS",
 		"LOG_LEVEL", "METRICS_PORT",
 	}
-	
+
 	for _, key := range envVars {
 		originalEnvVars[key] = os.Getenv(key)
 	}
-	
+
 	// Clean up function
 	cleanup := func() {
 		for _, key := range envVars {
@@ -39,7 +39,7 @@ func TestLoad(t *testing.T) {
 		for _, key := range envVars {
 			os.Unsetenv(key)
 		}
-		
+
 		// Set test values
 		os.Setenv("INVENTORY_SERVICE_HOST", "127.0.0.1")
 		os.Setenv("INVENTORY_SERVICE_PORT", "8081")
@@ -52,7 +52,7 @@ func TestLoad(t *testing.T) {
 
 		cfg, err := Load()
 		require.NoError(t, err)
-		
+
 		assert.Equal(t, "127.0.0.1", cfg.ServiceHost)
 		assert.Equal(t, "8081", cfg.ServicePort)
 		assert.Equal(t, "postgresql://user:pass@localhost:5432/testdb", cfg.DatabaseURL)
@@ -68,14 +68,14 @@ func TestLoad(t *testing.T) {
 		for _, key := range envVars {
 			os.Unsetenv(key)
 		}
-		
+
 		// Set only required values
 		os.Setenv("DATABASE_URL", "postgresql://user:pass@localhost:5432/testdb")
 		os.Setenv("REDIS_URL", "redis://localhost:6379")
 
 		cfg, err := Load()
 		require.NoError(t, err)
-		
+
 		// Check defaults
 		assert.Equal(t, "0.0.0.0", cfg.ServiceHost)
 		assert.Equal(t, "8080", cfg.ServicePort)
@@ -90,7 +90,7 @@ func TestLoad(t *testing.T) {
 		for _, key := range envVars {
 			os.Unsetenv(key)
 		}
-		
+
 		os.Setenv("REDIS_URL", "redis://localhost:6379")
 
 		cfg, err := Load()
@@ -104,7 +104,7 @@ func TestLoad(t *testing.T) {
 		for _, key := range envVars {
 			os.Unsetenv(key)
 		}
-		
+
 		os.Setenv("DATABASE_URL", "postgresql://user:pass@localhost:5432/testdb")
 
 		cfg, err := Load()
@@ -118,7 +118,7 @@ func TestLoad(t *testing.T) {
 		for _, key := range envVars {
 			os.Unsetenv(key)
 		}
-		
+
 		os.Setenv("DATABASE_URL", "postgresql://user:pass@localhost:5432/testdb")
 		os.Setenv("REDIS_URL", "redis://localhost:6379")
 		os.Setenv("DATABASE_MAX_CONNECTIONS", "not_a_number")
@@ -134,7 +134,7 @@ func TestLoad(t *testing.T) {
 		for _, key := range envVars {
 			os.Unsetenv(key)
 		}
-		
+
 		os.Setenv("DATABASE_URL", "postgresql://user:pass@localhost:5432/testdb")
 		os.Setenv("REDIS_URL", "redis://localhost:6379")
 		os.Setenv("REDIS_MAX_CONNECTIONS", "invalid")
@@ -273,7 +273,7 @@ func TestConfig_Validate(t *testing.T) {
 
 	t.Run("all valid log levels", func(t *testing.T) {
 		validLevels := []string{"debug", "info", "warn", "error"}
-		
+
 		for _, level := range validLevels {
 			cfg := &Config{
 				DatabaseURL:      "postgresql://user:pass@localhost:5432/testdb",
@@ -303,13 +303,13 @@ func TestConfig_String(t *testing.T) {
 		}
 
 		str := cfg.String()
-		
+
 		// Check that basic info is present
 		assert.Contains(t, str, "localhost")
 		assert.Contains(t, str, "8080")
 		assert.Contains(t, str, "info")
 		assert.Contains(t, str, "9090")
-		
+
 		// Check that URLs are masked (should contain ***)
 		assert.Contains(t, str, "***")
 	})
@@ -319,7 +319,7 @@ func TestMaskURL(t *testing.T) {
 	t.Run("URL with credentials", func(t *testing.T) {
 		url := "postgresql://user:password@localhost:5432/database"
 		masked := maskURL(url)
-		
+
 		assert.Contains(t, masked, "postgresql://***@localhost:5432/database")
 		assert.NotContains(t, masked, "password")
 		assert.NotContains(t, masked, "user")
@@ -328,7 +328,7 @@ func TestMaskURL(t *testing.T) {
 	t.Run("Redis URL with credentials", func(t *testing.T) {
 		url := "redis://user:secret@localhost:6379/0"
 		masked := maskURL(url)
-		
+
 		assert.Contains(t, masked, "redis://***@localhost:6379/0")
 		assert.NotContains(t, masked, "secret")
 		assert.NotContains(t, masked, "user")
@@ -337,7 +337,7 @@ func TestMaskURL(t *testing.T) {
 	t.Run("URL without credentials", func(t *testing.T) {
 		url := "redis://localhost:6379"
 		masked := maskURL(url)
-		
+
 		// Should remain unchanged
 		assert.Equal(t, url, masked)
 	})
@@ -345,14 +345,14 @@ func TestMaskURL(t *testing.T) {
 	t.Run("malformed URL", func(t *testing.T) {
 		url := "not-a-url"
 		masked := maskURL(url)
-		
+
 		// Should remain unchanged
 		assert.Equal(t, url, masked)
 	})
 
 	t.Run("URL with @ but no credentials", func(t *testing.T) {
 		url := "redis://@localhost:6379"
-		
+
 		// Should handle gracefully
 		assert.NotPanics(t, func() {
 			maskURL(url)

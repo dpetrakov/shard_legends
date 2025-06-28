@@ -66,6 +66,38 @@ func (m *MockItemRepo) GetItemWithDetails(ctx context.Context, itemID uuid.UUID)
 	return args.Get(0).(*models.ItemWithDetails), args.Error(1)
 }
 
+func (m *MockItemRepo) GetItemsBatch(ctx context.Context, itemIDs []uuid.UUID) (map[uuid.UUID]*models.ItemWithDetails, error) {
+	args := m.Called(ctx, itemIDs)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(map[uuid.UUID]*models.ItemWithDetails), args.Error(1)
+}
+
+func (m *MockItemRepo) GetTranslationsBatch(ctx context.Context, entityType string, entityIDs []uuid.UUID, languageCode string) (map[uuid.UUID]map[string]string, error) {
+	args := m.Called(ctx, entityType, entityIDs, languageCode)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(map[uuid.UUID]map[string]string), args.Error(1)
+}
+
+func (m *MockItemRepo) GetDefaultLanguage(ctx context.Context) (*models.Language, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Language), args.Error(1)
+}
+
+func (m *MockItemRepo) GetItemImagesBatch(ctx context.Context, requests []models.ItemDetailRequestItem) (map[string]string, error) {
+	args := m.Called(ctx, requests)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(map[string]string), args.Error(1)
+}
+
 func createFullTestDeps() (*ServiceDependencies, *MockCache, *MockClassifierRepo, *MockItemRepo, *MockInventoryRepo) {
 	cache := new(MockCache)
 	classifierRepo := new(MockClassifierRepo)
@@ -124,86 +156,26 @@ func TestInventoryService_CalculateCurrentBalance(t *testing.T) {
 func TestInventoryService_GetUserInventory(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
-	deps, cache, classifierRepo, itemRepo, inventoryRepo := createFullTestDeps()
+	deps, _, _, _, inventoryRepo := createFullTestDeps()
 	service := NewInventoryService(deps)
 
 	userID := uuid.New()
 	sectionID := uuid.New()
 	itemID := uuid.New()
-	collectionID := uuid.New()
-	qualityLevelID := uuid.New()
 
-	// Mock inventory items
-	itemKeys := []*models.ItemKey{
+	// Mock the optimized method to return complete inventory data
+	expectedItems := []*models.InventoryItemResponse{
 		{
-			UserID:         userID,
-			SectionID:      sectionID,
-			ItemID:         itemID,
-			CollectionID:   collectionID,
-			QualityLevelID: qualityLevelID,
+			ItemID:       itemID,
+			ItemClass:    "resources",
+			ItemType:     "stone",
+			Collection:   stringPtr("common"),
+			QualityLevel: stringPtr("basic"),
+			Quantity:     50,
 		},
 	}
 
-	inventoryRepo.On("GetUserInventoryItems", ctx, userID, sectionID).Return(itemKeys, nil)
-
-	// Mock balance calculation (cache miss, then database)
-	cacheKey := "inventory:" + userID.String() + ":" + sectionID.String() + ":" +
-		itemID.String() + ":" + collectionID.String() + ":" + qualityLevelID.String()
-
-	cache.On("Get", ctx, cacheKey, mock.AnythingOfType("*int64")).Return(assert.AnError)
-	inventoryRepo.On("GetLatestDailyBalance", ctx, userID, sectionID, itemID, collectionID, qualityLevelID, mock.AnythingOfType("time.Time")).Return(nil, assert.AnError).Maybe()
-
-	// Mock GetDailyBalance call from CreateDailyBalance
-	inventoryRepo.On("GetDailyBalance", ctx, userID, sectionID, itemID, collectionID, qualityLevelID, mock.AnythingOfType("time.Time")).Return(nil, assert.AnError).Maybe()
-
-	operations := []*models.Operation{
-		{
-			ID:              uuid.New(),
-			UserID:          userID,
-			SectionID:       sectionID,
-			ItemID:          itemID,
-			CollectionID:    collectionID,
-			QualityLevelID:  qualityLevelID,
-			QuantityChange:  50,
-			OperationTypeID: uuid.New(),
-		},
-	}
-
-	// Mock operations for CreateDailyBalance (called first)
-	inventoryRepo.On("GetOperations", ctx, userID, sectionID, itemID, collectionID, qualityLevelID, time.Time{}).Return(operations, nil).Maybe()
-
-	// Mock CreateDailyBalance call
-	inventoryRepo.On("CreateDailyBalance", ctx, mock.AnythingOfType("*models.DailyBalance")).Return(nil).Maybe()
-
-	// Mock operations for balance calculation (called second)
-	inventoryRepo.On("GetOperations", ctx, userID, sectionID, itemID, collectionID, qualityLevelID, mock.AnythingOfType("time.Time")).Return(operations, nil).Maybe()
-
-	cache.On("Set", ctx, cacheKey, mock.AnythingOfType("int64"), mock.AnythingOfType("time.Duration")).Return(nil).Maybe()
-
-	// Mock item details
-	itemDetails := &models.ItemWithDetails{
-		Item: models.Item{
-			ID:                        itemID,
-			ItemClassID:               uuid.New(),
-			ItemTypeID:                uuid.New(),
-			QualityLevelsClassifierID: uuid.New(),
-			CollectionsClassifierID:   uuid.New(),
-		},
-		ItemClass: "resources",
-		ItemType:  "stone",
-	}
-	itemRepo.On("GetItemWithDetails", ctx, itemID).Return(itemDetails, nil)
-
-	// Mock classifier mappings
-	collectionMapping := map[uuid.UUID]string{
-		collectionID: "common",
-	}
-	qualityMapping := map[uuid.UUID]string{
-		qualityLevelID: "basic",
-	}
-
-	classifierRepo.On("GetUUIDToCodeMapping", ctx, models.ClassifierCollection).Return(collectionMapping, nil)
-	classifierRepo.On("GetUUIDToCodeMapping", ctx, models.ClassifierQualityLevel).Return(qualityMapping, nil)
+	inventoryRepo.On("GetUserInventoryOptimized", ctx, userID, sectionID).Return(expectedItems, nil)
 
 	// Act
 	result, err := service.GetUserInventory(ctx, userID, sectionID)
@@ -218,13 +190,10 @@ func TestInventoryService_GetUserInventory(t *testing.T) {
 	assert.Equal(t, "stone", item.ItemType)
 	assert.Equal(t, "common", *item.Collection)
 	assert.Equal(t, "basic", *item.QualityLevel)
-	assert.Equal(t, int64(100), item.Quantity) // Double due to multiple balance calculations
+	assert.Equal(t, int64(50), item.Quantity)
 
 	// Verify all mocks
 	inventoryRepo.AssertExpectations(t)
-	itemRepo.AssertExpectations(t)
-	classifierRepo.AssertExpectations(t)
-	cache.AssertExpectations(t)
 }
 
 func TestInventoryService_AddItems(t *testing.T) {
@@ -413,7 +382,7 @@ func TestInventoryService_ReserveItems_InsufficientBalance(t *testing.T) {
 	assert.Nil(t, result)
 	t.Logf("Error received: %v", err)
 	t.Logf("Error type: %T", err)
-	
+
 	// The error should contain information about insufficient balance
 	assert.Contains(t, err.Error(), "insufficient balance for reservation")
 
@@ -534,4 +503,232 @@ func TestInventoryService_CreateDailyBalance(t *testing.T) {
 	assert.Equal(t, req.UserID, result.UserID)
 
 	inventoryRepo.AssertExpectations(t)
+}
+
+func TestInventoryService_GetItemsDetails(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	deps, _, _, itemRepo, _ := createFullTestDeps()
+	service := NewInventoryService(deps)
+
+	itemID1 := uuid.New()
+	itemID2 := uuid.New()
+
+	req := &models.ItemDetailsRequest{
+		Items: []models.ItemDetailRequestItem{
+			{
+				ItemID:       itemID1,
+				Collection:   stringPtr("winter_2025"),
+				QualityLevel: stringPtr("stone"),
+			},
+			{
+				ItemID:       itemID2,
+				Collection:   nil,
+				QualityLevel: nil,
+			},
+		},
+	}
+
+	// Mock items batch
+	itemsMap := map[uuid.UUID]*models.ItemWithDetails{
+		itemID1: {
+			Item: models.Item{
+				ID: itemID1,
+			},
+			ItemClass: "resources",
+			ItemType:  "stone",
+		},
+		itemID2: {
+			Item: models.Item{
+				ID: itemID2,
+			},
+			ItemClass: "reagents",
+			ItemType:  "disc",
+		},
+	}
+	itemRepo.On("GetItemsBatch", ctx, []uuid.UUID{itemID1, itemID2}).Return(itemsMap, nil)
+
+	// Mock translations
+	translationsMap := map[uuid.UUID]map[string]string{
+		itemID1: {
+			"name":        "Камень",
+			"description": "Базовый строительный материал",
+		},
+		itemID2: {
+			"name":        "Диск",
+			"description": "Реагент для обработки",
+		},
+	}
+	itemRepo.On("GetTranslationsBatch", ctx, "item", []uuid.UUID{itemID1, itemID2}, "ru").Return(translationsMap, nil)
+
+	// Mock default language
+	defaultLang := &models.Language{
+		Code:      "en",
+		Name:      "English",
+		IsDefault: true,
+		IsActive:  true,
+	}
+	itemRepo.On("GetDefaultLanguage", ctx).Return(defaultLang, nil)
+
+	// Mock fallback translations (not called since language is different)
+	fallbackTranslations := map[uuid.UUID]map[string]string{
+		itemID1: {
+			"name":        "Stone",
+			"description": "Basic building material",
+		},
+		itemID2: {
+			"name":        "Disc",
+			"description": "Processing reagent",
+		},
+	}
+	itemRepo.On("GetTranslationsBatch", ctx, "item", []uuid.UUID{itemID1, itemID2}, "en").Return(fallbackTranslations, nil)
+
+	// Mock images
+	imagesMap := map[string]string{
+		itemID1.String() + "_winter_2025_stone": "https://cdn.example.com/items/stone_winter_2025_stone.png",
+		itemID2.String():                        "https://cdn.example.com/items/disc_default.png",
+	}
+	itemRepo.On("GetItemImagesBatch", ctx, req.Items).Return(imagesMap, nil)
+
+	// Act
+	result, err := service.GetItemsDetails(ctx, req, "ru")
+
+	// Assert
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Len(t, result.Items, 2)
+
+	// Check first item
+	item1 := result.Items[0]
+	assert.Equal(t, itemID1, item1.ItemID)
+	assert.Equal(t, "stone", item1.Code)
+	assert.Equal(t, "Камень", item1.Name)
+	assert.Equal(t, "Базовый строительный материал", item1.Description)
+	assert.Equal(t, "https://cdn.example.com/items/stone_winter_2025_stone.png", item1.ImageURL)
+	assert.Equal(t, "winter_2025", *item1.Collection)
+	assert.Equal(t, "stone", *item1.QualityLevel)
+
+	// Check second item
+	item2 := result.Items[1]
+	assert.Equal(t, itemID2, item2.ItemID)
+	assert.Equal(t, "disc", item2.Code)
+	assert.Equal(t, "Диск", item2.Name)
+	assert.Equal(t, "Реагент для обработки", item2.Description)
+	assert.Equal(t, "https://cdn.example.com/items/disc_default.png", item2.ImageURL)
+	assert.Nil(t, item2.Collection)
+	assert.Nil(t, item2.QualityLevel)
+
+	itemRepo.AssertExpectations(t)
+}
+
+func TestInventoryService_GetItemsDetails_WithFallback(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	deps, _, _, itemRepo, _ := createFullTestDeps()
+	service := NewInventoryService(deps)
+
+	itemID := uuid.New()
+
+	req := &models.ItemDetailsRequest{
+		Items: []models.ItemDetailRequestItem{
+			{
+				ItemID:       itemID,
+				Collection:   stringPtr("winter_2025"),
+				QualityLevel: stringPtr("stone"),
+			},
+		},
+	}
+
+	// Mock items batch
+	itemsMap := map[uuid.UUID]*models.ItemWithDetails{
+		itemID: {
+			Item: models.Item{
+				ID: itemID,
+			},
+			ItemClass: "resources",
+			ItemType:  "stone",
+		},
+	}
+	itemRepo.On("GetItemsBatch", ctx, []uuid.UUID{itemID}).Return(itemsMap, nil)
+
+	// Mock translations - missing for requested language
+	translationsMap := map[uuid.UUID]map[string]string{
+		itemID: {
+			"description": "Базовый строительный материал", // Only description in Russian
+		},
+	}
+	itemRepo.On("GetTranslationsBatch", ctx, "item", []uuid.UUID{itemID}, "ru").Return(translationsMap, nil)
+
+	// Mock default language
+	defaultLang := &models.Language{
+		Code:      "en",
+		Name:      "English",
+		IsDefault: true,
+		IsActive:  true,
+	}
+	itemRepo.On("GetDefaultLanguage", ctx).Return(defaultLang, nil)
+
+	// Mock fallback translations
+	fallbackTranslations := map[uuid.UUID]map[string]string{
+		itemID: {
+			"name":        "Stone", // Name available in fallback language
+			"description": "Basic building material",
+		},
+	}
+	itemRepo.On("GetTranslationsBatch", ctx, "item", []uuid.UUID{itemID}, "en").Return(fallbackTranslations, nil)
+
+	// Mock images
+	imagesMap := map[string]string{
+		itemID.String() + "_winter_2025_stone": "https://cdn.example.com/items/stone_winter_2025_stone.png",
+	}
+	itemRepo.On("GetItemImagesBatch", ctx, req.Items).Return(imagesMap, nil)
+
+	// Act
+	result, err := service.GetItemsDetails(ctx, req, "ru")
+
+	// Assert
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Len(t, result.Items, 1)
+
+	item := result.Items[0]
+	assert.Equal(t, itemID, item.ItemID)
+	assert.Equal(t, "Stone", item.Name)                                // Fallback name from English
+	assert.Equal(t, "Базовый строительный материал", item.Description) // Russian description
+
+	itemRepo.AssertExpectations(t)
+}
+
+func TestInventoryService_GetItemsDetails_EmptyRequest(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	deps, _, _, _, _ := createFullTestDeps()
+	service := NewInventoryService(deps)
+
+	req := &models.ItemDetailsRequest{
+		Items: []models.ItemDetailRequestItem{},
+	}
+
+	// Act
+	result, err := service.GetItemsDetails(ctx, req, "ru")
+
+	// Assert
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Len(t, result.Items, 0)
+}
+
+func TestInventoryService_GetItemsDetails_NilRequest(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	deps, _, _, _, _ := createFullTestDeps()
+	service := NewInventoryService(deps)
+
+	// Act
+	result, err := service.GetItemsDetails(ctx, nil, "ru")
+
+	// Assert
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "item details request cannot be nil")
 }

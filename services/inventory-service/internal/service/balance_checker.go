@@ -7,14 +7,14 @@ import (
 
 	"github.com/google/uuid"
 	pkgerrors "github.com/pkg/errors"
-	
+
 	"github.com/shard-legends/inventory-service/internal/models"
 )
 
 // InsufficientBalanceError represents an error when there are insufficient items
 type InsufficientBalanceError struct {
-	Message      string                  `json:"message"`
-	MissingItems []MissingItemDetails    `json:"missing_items"`
+	Message      string               `json:"message"`
+	MissingItems []MissingItemDetails `json:"missing_items"`
 }
 
 func (e *InsufficientBalanceError) Error() string {
@@ -103,9 +103,9 @@ func (bc *balanceChecker) CheckSufficientBalanceForItems(ctx context.Context, us
 		// For this conversion, we assume that codes have already been converted to UUIDs
 		// In a real implementation, you'd need to convert codes to UUIDs first
 		checkItems[i] = ItemQuantityCheck{
-			ItemID:         item.ItemID,
+			ItemID: item.ItemID,
 			// CollectionID and QualityLevelID would need to be obtained from code conversion
-			RequiredQty:    item.Quantity,
+			RequiredQty: item.Quantity,
 		}
 	}
 
@@ -138,11 +138,11 @@ func (bc *balanceChecker) GetAvailableBalance(ctx context.Context, userID, secti
 		}
 
 		// Create a unique key for this item combination
-		key := fmt.Sprintf("%s:%s:%s", 
-			item.ItemID.String(), 
-			item.CollectionID.String(), 
+		key := fmt.Sprintf("%s:%s:%s",
+			item.ItemID.String(),
+			item.CollectionID.String(),
 			item.QualityLevelID.String())
-		
+
 		result[key] = balance
 	}
 
@@ -155,20 +155,20 @@ func (bc *balanceChecker) ValidateItemQuantities(items []ItemQuantityCheck) erro
 		if item.RequiredQty <= 0 {
 			return pkgerrors.Errorf("item at index %d has invalid quantity: %d", i, item.RequiredQty)
 		}
-		
+
 		if item.ItemID == uuid.Nil {
 			return pkgerrors.Errorf("item at index %d has invalid item ID", i)
 		}
-		
+
 		if item.CollectionID == uuid.Nil {
 			return pkgerrors.Errorf("item at index %d has invalid collection ID", i)
 		}
-		
+
 		if item.QualityLevelID == uuid.Nil {
 			return pkgerrors.Errorf("item at index %d has invalid quality level ID", i)
 		}
 	}
-	
+
 	return nil
 }
 

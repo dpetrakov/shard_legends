@@ -50,7 +50,7 @@ func createTempKeyFile(t *testing.T, publicKey *rsa.PublicKey, keyType string) s
 	tempFile := filepath.Join(t.TempDir(), "test_key.pem")
 	err = os.WriteFile(tempFile, pemBytes, 0644)
 	require.NoError(t, err)
-	
+
 	return tempFile
 }
 
@@ -58,7 +58,7 @@ func TestLoadPublicKeyFromFile_PKIX(t *testing.T) {
 	// Arrange
 	_, expectedKey, err := generateTestKeyPair()
 	require.NoError(t, err)
-	
+
 	keyFile := createTempKeyFile(t, expectedKey, "PUBLIC KEY")
 
 	// Act
@@ -74,7 +74,7 @@ func TestLoadPublicKeyFromFile_PKCS1(t *testing.T) {
 	// Arrange
 	_, expectedKey, err := generateTestKeyPair()
 	require.NoError(t, err)
-	
+
 	keyFile := createTempKeyFile(t, expectedKey, "RSA PUBLIC KEY")
 
 	// Act
@@ -143,7 +143,7 @@ func TestLoadPublicKeyFromAuthService_Success(t *testing.T) {
 func TestLoadPublicKeyFromAuthService_DefaultURL(t *testing.T) {
 	// This test verifies that the default URL is used when an empty string is passed
 	// We can't easily test the actual connection, so we just verify the error message contains the default URL
-	
+
 	// Act
 	key, err := LoadPublicKeyFromAuthService("")
 

@@ -12,7 +12,7 @@ func TestMetricsCreation(t *testing.T) {
 		globalMetrics = New()
 	}
 	metrics := globalMetrics
-	
+
 	if metrics == nil {
 		t.Fatal("Expected metrics to be created, got nil")
 	}
@@ -91,11 +91,11 @@ func TestUpdateDependencyHealth(t *testing.T) {
 		globalMetrics = New()
 	}
 	metrics := globalMetrics
-	
+
 	// Test updating dependency health
 	metrics.UpdateDependencyHealth("postgres", true)
 	metrics.UpdateDependencyHealth("redis", false)
-	
+
 	// Should not panic
 }
 
@@ -104,9 +104,9 @@ func TestShutdown(t *testing.T) {
 		globalMetrics = New()
 	}
 	metrics := globalMetrics
-	
+
 	// Test shutdown
 	metrics.Shutdown()
-	
+
 	// Should not panic
 }

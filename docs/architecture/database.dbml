@@ -1,4 +1,69 @@
 // ============================================================================
+// I18N SCHEMA - Система интернационализации
+// ============================================================================
+
+Table i18n.languages {
+  code varchar(5) [primary key, note: 'Код языка (ru, en, zh-CN)']
+  name varchar(100) [not null, note: 'Название языка (Русский, English)']
+  is_default boolean [default: false, note: 'Базовый язык для fallback']
+  is_active boolean [default: true, note: 'Активен ли язык']
+  created_at timestamptz [default: `now()`, note: 'Время создания']
+  updated_at timestamptz [default: `now()`, note: 'Время последнего обновления']
+
+  indexes {
+    is_default [name: 'idx_languages_default', note: 'Поиск базового языка']
+    is_active [name: 'idx_languages_active', note: 'Поиск активных языков']
+  }
+
+  Note: '''
+    Справочник поддерживаемых языков системы.
+    Обязательно должен содержать один язык с is_default = true.
+  '''
+}
+
+Table i18n.translations {
+  id uuid [primary key, note: 'UUID перевода']
+  entity_type varchar(50) [not null, note: 'Тип сущности (item, classifier, achievement)']
+  entity_id uuid [not null, note: 'UUID сущности']
+  field_name varchar(50) [not null, note: 'Имя поля (name, description, tooltip)']
+  language_code varchar(5) [not null, ref: > i18n.languages.code, note: 'Код языка']
+  content text [not null, note: 'Переведенный текст']
+  created_at timestamptz [default: `now()`, note: 'Время создания']
+  updated_at timestamptz [default: `now()`, note: 'Время последнего обновления']
+
+  indexes {
+    (entity_type, entity_id, field_name, language_code) [unique, name: 'idx_translations_unique', note: 'Уникальность перевода']
+    (entity_type, entity_id, field_name, language_code) [name: 'idx_translations_lookup', note: 'Основной индекс для поиска переводов']
+    (language_code, entity_type) [name: 'idx_translations_language', note: 'Поиск по языку (для админки)']
+    (entity_type, entity_id) [name: 'idx_translations_entity', note: 'Поиск сущностей без переводов']
+  }
+
+  Note: '''
+    Универсальная таблица переводов для всех типов сущностей.
+    
+    Поддерживаемые entity_type:
+    - item: игровые предметы
+    - classifier: классификаторы 
+    - classifier_item: элементы классификаторов
+    - achievement: достижения
+    - recipe: рецепты производства
+    - user_message: пользовательские сообщения
+    
+    Поддерживаемые field_name:
+    - name: название сущности
+    - description: описание сущности
+    - tooltip: подсказка (для UI элементов)
+    - title: заголовок (для сообщений)
+    - content: содержимое (для сообщений)
+    
+    Кеширование:
+    - Redis ключ: i18n:translations:{entity_type}:{entity_id}:{language_code}
+    - TTL: 24 часа
+    - Инвалидация: при обновлении переводов
+  '''
+}
+
+// ============================================================================
 // PRODUCTION SERVICE SCHEMA - Сервис производства
 // ============================================================================
 

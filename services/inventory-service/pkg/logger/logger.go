@@ -38,7 +38,7 @@ func NewLogger(level string) *slog.Logger {
 
 	// Create JSON handler with specified level
 	opts := &slog.HandlerOptions{
-		Level: logLevel,
+		Level:     logLevel,
 		AddSource: true,
 		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
 			// Customize attribute formatting

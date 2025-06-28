@@ -23,7 +23,7 @@ type classifierStorage struct {
 
 func (s *classifierStorage) GetClassifierByCode(ctx context.Context, code string) (*models.Classifier, error) {
 	s.logger.Info("GetClassifierByCode called", "code", code)
-	
+
 	query := `
 		SELECT 
 			id, 
@@ -34,7 +34,7 @@ func (s *classifierStorage) GetClassifierByCode(ctx context.Context, code string
 		FROM inventory.classifiers 
 		WHERE code = $1
 	`
-	
+
 	var classifier models.Classifier
 	err := s.pool.QueryRow(ctx, query, code).Scan(
 		&classifier.ID,
@@ -43,7 +43,7 @@ func (s *classifierStorage) GetClassifierByCode(ctx context.Context, code string
 		&classifier.CreatedAt,
 		&classifier.UpdatedAt,
 	)
-	
+
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			s.logger.Debug("Classifier not found", "code", code)
@@ -52,13 +52,13 @@ func (s *classifierStorage) GetClassifierByCode(ctx context.Context, code string
 		s.logger.Error("Failed to get classifier by code", "error", err)
 		return nil, err
 	}
-	
+
 	return &classifier, nil
 }
 
 func (s *classifierStorage) GetCodeToUUIDMapping(ctx context.Context, classifierCode string) (map[string]uuid.UUID, error) {
 	s.logger.Info("GetCodeToUUIDMapping called", "classifier_code", classifierCode)
-	
+
 	// Try to get from cache first
 	cacheKey := "classifier:code_to_uuid:" + classifierCode
 	cachedData, err := s.redis.Client().HGetAll(ctx, cacheKey).Result()
@@ -72,7 +72,7 @@ func (s *classifierStorage) GetCodeToUUIDMapping(ctx context.Context, classifier
 		}
 		return mapping, nil
 	}
-	
+
 	// If not in cache, query database
 	query := `
 		SELECT ci.code, ci.id
@@ -80,17 +80,17 @@ func (s *classifierStorage) GetCodeToUUIDMapping(ctx context.Context, classifier
 		JOIN inventory.classifiers c ON ci.classifier_id = c.id
 		WHERE c.code = $1
 	`
-	
+
 	rows, err := s.pool.Query(ctx, query, classifierCode)
 	if err != nil {
 		s.logger.Error("Failed to get code to UUID mapping", "error", err)
 		return nil, err
 	}
 	defer rows.Close()
-	
+
 	mapping := make(map[string]uuid.UUID)
 	cacheData := make(map[string]interface{})
-	
+
 	for rows.Next() {
 		var code string
 		var id uuid.UUID
@@ -101,12 +101,12 @@ func (s *classifierStorage) GetCodeToUUIDMapping(ctx context.Context, classifier
 		mapping[code] = id
 		cacheData[code] = id.String()
 	}
-	
+
 	if err := rows.Err(); err != nil {
 		s.logger.Error("Rows iteration error", "error", err)
 		return nil, err
 	}
-	
+
 	// Cache the result for 1 hour
 	if len(cacheData) > 0 {
 		pipe := s.redis.Client().Pipeline()
@@ -117,14 +117,14 @@ func (s *classifierStorage) GetCodeToUUIDMapping(ctx context.Context, classifier
 			s.logger.Warn("Failed to cache mapping", "error", err)
 		}
 	}
-	
+
 	s.logger.Info("Found classifier mapping", "classifier_code", classifierCode, "count", len(mapping))
 	return mapping, nil
 }
 
 func (s *classifierStorage) GetUUIDToCodeMapping(ctx context.Context, classifierCode string) (map[uuid.UUID]string, error) {
 	s.logger.Info("GetUUIDToCodeMapping called", "classifier_code", classifierCode)
-	
+
 	// Try to get from cache first
 	cacheKey := "classifier:uuid_to_code:" + classifierCode
 	cachedData, err := s.redis.Client().HGetAll(ctx, cacheKey).Result()
@@ -138,7 +138,7 @@ func (s *classifierStorage) GetUUIDToCodeMapping(ctx context.Context, classifier
 		}
 		return mapping, nil
 	}
-	
+
 	// If not in cache, query database
 	query := `
 		SELECT ci.id, ci.code
@@ -146,17 +146,17 @@ func (s *classifierStorage) GetUUIDToCodeMapping(ctx context.Context, classifier
 		JOIN inventory.classifiers c ON ci.classifier_id = c.id
 		WHERE c.code = $1
 	`
-	
+
 	rows, err := s.pool.Query(ctx, query, classifierCode)
 	if err != nil {
 		s.logger.Error("Failed to get UUID to code mapping", "error", err)
 		return nil, err
 	}
 	defer rows.Close()
-	
+
 	mapping := make(map[uuid.UUID]string)
 	cacheData := make(map[string]interface{})
-	
+
 	for rows.Next() {
 		var id uuid.UUID
 		var code string
@@ -167,12 +167,12 @@ func (s *classifierStorage) GetUUIDToCodeMapping(ctx context.Context, classifier
 		mapping[id] = code
 		cacheData[id.String()] = code
 	}
-	
+
 	if err := rows.Err(); err != nil {
 		s.logger.Error("Rows iteration error", "error", err)
 		return nil, err
 	}
-	
+
 	// Cache the result for 1 hour
 	if len(cacheData) > 0 {
 		pipe := s.redis.Client().Pipeline()
@@ -183,31 +183,31 @@ func (s *classifierStorage) GetUUIDToCodeMapping(ctx context.Context, classifier
 			s.logger.Warn("Failed to cache reverse mapping", "error", err)
 		}
 	}
-	
+
 	s.logger.Info("Found reverse classifier mapping", "classifier_code", classifierCode, "count", len(mapping))
 	return mapping, nil
 }
 
 func (s *classifierStorage) InvalidateCache(ctx context.Context, classifierCode string) error {
 	s.logger.Info("InvalidateCache called", "classifier_code", classifierCode)
-	
+
 	// Delete both mapping caches
 	cacheKeys := []string{
 		"classifier:code_to_uuid:" + classifierCode,
 		"classifier:uuid_to_code:" + classifierCode,
 	}
-	
+
 	pipe := s.redis.Client().Pipeline()
 	for _, key := range cacheKeys {
 		pipe.Del(ctx, key)
 	}
-	
+
 	_, err := pipe.Exec(ctx)
 	if err != nil {
 		s.logger.Error("Failed to invalidate cache", "error", err)
 		return err
 	}
-	
+
 	s.logger.Info("Cache invalidated successfully", "classifier_code", classifierCode)
 	return nil
 }

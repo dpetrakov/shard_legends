@@ -25,49 +25,49 @@ func TestServerSeparation(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		name           string
-		endpoint       string
-		method         string
-		publicServer   bool
-		internalServer bool
-		requiresJWT    bool
+		name               string
+		endpoint           string
+		method             string
+		publicServer       bool
+		internalServer     bool
+		requiresJWT        bool
 		requiresServiceJWT bool
-		payload        interface{}
+		payload            interface{}
 	}{
 		{
-			name:           "Health endpoint on internal server",
-			endpoint:       "/health",
-			method:         "GET",
-			publicServer:   false,
-			internalServer: true,
-			requiresJWT:    false,
+			name:               "Health endpoint on internal server",
+			endpoint:           "/health",
+			method:             "GET",
+			publicServer:       false,
+			internalServer:     true,
+			requiresJWT:        false,
 			requiresServiceJWT: false,
 		},
 		{
-			name:           "Metrics endpoint on internal server",
-			endpoint:       "/metrics",
-			method:         "GET",
-			publicServer:   false,
-			internalServer: true,
-			requiresJWT:    false,
+			name:               "Metrics endpoint on internal server",
+			endpoint:           "/metrics",
+			method:             "GET",
+			publicServer:       false,
+			internalServer:     true,
+			requiresJWT:        false,
 			requiresServiceJWT: false,
 		},
 		{
-			name:           "Get user inventory on public server",
-			endpoint:       "/api/inventory",
-			method:         "GET",
-			publicServer:   true,
-			internalServer: false,
-			requiresJWT:    true,
+			name:               "Get user inventory on public server",
+			endpoint:           "/api/inventory",
+			method:             "GET",
+			publicServer:       true,
+			internalServer:     false,
+			requiresJWT:        true,
 			requiresServiceJWT: false,
 		},
 		{
-			name:           "Reserve items on internal server only",
-			endpoint:       "/api/inventory/reserve",
-			method:         "POST",
-			publicServer:   false,
-			internalServer: true,
-			requiresJWT:    false,
+			name:               "Reserve items on internal server only",
+			endpoint:           "/api/inventory/reserve",
+			method:             "POST",
+			publicServer:       false,
+			internalServer:     true,
+			requiresJWT:        false,
 			requiresServiceJWT: true,
 			payload: map[string]interface{}{
 				"user_id":      "123e4567-e89b-12d3-a456-426614174000",
@@ -81,12 +81,12 @@ func TestServerSeparation(t *testing.T) {
 			},
 		},
 		{
-			name:           "Return reserved items on internal server only",
-			endpoint:       "/api/inventory/return-reserve",
-			method:         "POST",
-			publicServer:   false,
-			internalServer: true,
-			requiresJWT:    false,
+			name:               "Return reserved items on internal server only",
+			endpoint:           "/api/inventory/return-reserve",
+			method:             "POST",
+			publicServer:       false,
+			internalServer:     true,
+			requiresJWT:        false,
 			requiresServiceJWT: true,
 			payload: map[string]interface{}{
 				"user_id":      "123e4567-e89b-12d3-a456-426614174000",
@@ -94,12 +94,12 @@ func TestServerSeparation(t *testing.T) {
 			},
 		},
 		{
-			name:           "Consume reserved items on internal server only",
-			endpoint:       "/api/inventory/consume-reserve",
-			method:         "POST",
-			publicServer:   false,
-			internalServer: true,
-			requiresJWT:    false,
+			name:               "Consume reserved items on internal server only",
+			endpoint:           "/api/inventory/consume-reserve",
+			method:             "POST",
+			publicServer:       false,
+			internalServer:     true,
+			requiresJWT:        false,
 			requiresServiceJWT: true,
 			payload: map[string]interface{}{
 				"user_id":      "123e4567-e89b-12d3-a456-426614174000",
@@ -107,12 +107,12 @@ func TestServerSeparation(t *testing.T) {
 			},
 		},
 		{
-			name:           "Add items on internal server only",
-			endpoint:       "/api/inventory/add-items",
-			method:         "POST",
-			publicServer:   false,
-			internalServer: true,
-			requiresJWT:    false,
+			name:               "Add items on internal server only",
+			endpoint:           "/api/inventory/add-items",
+			method:             "POST",
+			publicServer:       false,
+			internalServer:     true,
+			requiresJWT:        false,
 			requiresServiceJWT: true,
 			payload: map[string]interface{}{
 				"user_id":        "123e4567-e89b-12d3-a456-426614174000",
@@ -128,12 +128,12 @@ func TestServerSeparation(t *testing.T) {
 			},
 		},
 		{
-			name:           "Admin adjust on public server",
-			endpoint:       "/api/inventory/admin/adjust",
-			method:         "POST",
-			publicServer:   true,
-			internalServer: false,
-			requiresJWT:    true,
+			name:               "Admin adjust on public server",
+			endpoint:           "/api/inventory/admin/adjust",
+			method:             "POST",
+			publicServer:       true,
+			internalServer:     false,
+			requiresJWT:        true,
 			requiresServiceJWT: false,
 			payload: map[string]interface{}{
 				"user_id": "123e4567-e89b-12d3-a456-426614174000",
@@ -156,19 +156,19 @@ func TestServerSeparation(t *testing.T) {
 				t.Run("Public server accessible", func(t *testing.T) {
 					url := publicBaseURL + tt.endpoint
 					var token string
-					
+
 					if tt.requiresJWT {
 						token = createUserJWT(t, privateKey)
 					}
-					
+
 					resp, err := makeRequest(t, tt.method, url, tt.payload, token)
 					require.NoError(t, err)
 					defer resp.Body.Close()
 
 					// Эндпоинт должен быть доступен (не 404)
-					assert.NotEqual(t, http.StatusNotFound, resp.StatusCode, 
+					assert.NotEqual(t, http.StatusNotFound, resp.StatusCode,
 						"Endpoint %s should be accessible on public server", tt.endpoint)
-					
+
 					if tt.requiresJWT && token == "" {
 						// Без JWT должен возвращать 401
 						assert.Equal(t, http.StatusUnauthorized, resp.StatusCode,
@@ -193,13 +193,13 @@ func TestServerSeparation(t *testing.T) {
 				t.Run("Internal server accessible", func(t *testing.T) {
 					url := internalBaseURL + tt.endpoint
 					var token string
-					
+
 					if tt.requiresServiceJWT {
 						token = createServiceJWT(t, privateKey)
 					} else if tt.requiresJWT {
 						token = createUserJWT(t, privateKey)
 					}
-					
+
 					resp, err := makeRequest(t, tt.method, url, tt.payload, token)
 					require.NoError(t, err)
 					defer resp.Body.Close()
@@ -207,7 +207,7 @@ func TestServerSeparation(t *testing.T) {
 					// Эндпоинт должен быть доступен (не 404)
 					assert.NotEqual(t, http.StatusNotFound, resp.StatusCode,
 						"Endpoint %s should be accessible on internal server", tt.endpoint)
-					
+
 					if tt.requiresServiceJWT && token == "" {
 						// Без Service JWT должен возвращать 401
 						assert.Equal(t, http.StatusUnauthorized, resp.StatusCode,
@@ -233,7 +233,7 @@ func TestServerSeparation(t *testing.T) {
 // TestServiceJWTWithoutInternalRole проверяет, что Service JWT без роли 'internal' отклоняется
 func TestServiceJWTWithoutInternalRole(t *testing.T) {
 	internalBaseURL := "http://localhost:8081"
-	
+
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
 
@@ -306,7 +306,7 @@ func createServiceJWT(t *testing.T, privateKey *rsa.PrivateKey) string {
 // makeRequest выполняет HTTP запрос с опциональным JWT токеном
 func makeRequest(t *testing.T, method, url string, payload interface{}, authToken string) (*http.Response, error) {
 	var body *bytes.Buffer
-	
+
 	if payload != nil {
 		jsonPayload, err := json.Marshal(payload)
 		require.NoError(t, err)
@@ -321,7 +321,7 @@ func makeRequest(t *testing.T, method, url string, payload interface{}, authToke
 	if payload != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	
+
 	if authToken != "" {
 		req.Header.Set("Authorization", authToken)
 	}
@@ -421,7 +421,7 @@ func TestInternalEndpointsRequireServiceJWT(t *testing.T) {
 	for _, endpoint := range internalEndpoints {
 		t.Run(endpoint.endpoint+" without Service-JWT", func(t *testing.T) {
 			url := internalBaseURL + endpoint.endpoint
-			
+
 			// Запрос без токена - должен возвращать 401
 			resp, err := makeRequest(t, endpoint.method, url, endpoint.payload, "")
 			require.NoError(t, err)
@@ -434,10 +434,10 @@ func TestInternalEndpointsRequireServiceJWT(t *testing.T) {
 		t.Run(endpoint.endpoint+" with user JWT (should fail)", func(t *testing.T) {
 			privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 			require.NoError(t, err)
-			
+
 			userToken := createUserJWT(t, privateKey)
 			url := internalBaseURL + endpoint.endpoint
-			
+
 			// Запрос с пользовательским JWT (не Service-JWT) - должен возвращать 401 или 403
 			resp, err := makeRequest(t, endpoint.method, url, endpoint.payload, userToken)
 			require.NoError(t, err)
@@ -450,10 +450,10 @@ func TestInternalEndpointsRequireServiceJWT(t *testing.T) {
 		t.Run(endpoint.endpoint+" with valid Service-JWT", func(t *testing.T) {
 			privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 			require.NoError(t, err)
-			
+
 			serviceToken := createServiceJWT(t, privateKey)
 			url := internalBaseURL + endpoint.endpoint
-			
+
 			// Запрос с валидным Service-JWT - не должен возвращать 401/403 (может быть 400 или 404 из-за некорректных данных)
 			resp, err := makeRequest(t, endpoint.method, url, endpoint.payload, serviceToken)
 			require.NoError(t, err)

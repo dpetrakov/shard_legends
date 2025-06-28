@@ -6,14 +6,14 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	
+
 	"github.com/shard-legends/inventory-service/internal/models"
 )
 
 // inventoryService implements InventoryService interface
 type inventoryService struct {
 	deps *ServiceDependencies
-	
+
 	// Component services
 	balanceCalculator   BalanceCalculator
 	dailyBalanceCreator DailyBalanceCreator
@@ -88,7 +88,6 @@ func (is *inventoryService) GetUserInventory(ctx context.Context, userID, sectio
 	// Record metrics for successful operation
 	if is.deps.Metrics != nil {
 		is.deps.Metrics.RecordInventoryOperation("get_inventory", sectionID.String(), "success")
-		is.deps.Metrics.RecordItemsPerInventory(sectionID.String(), len(result))
 	}
 
 	return result, nil
@@ -162,12 +161,10 @@ func (is *inventoryService) GetUserInventoryLegacy(ctx context.Context, userID, 
 	// Record metrics
 	if is.deps.Metrics != nil {
 		is.deps.Metrics.RecordInventoryOperation("get_inventory_legacy", sectionID.String(), "success")
-		is.deps.Metrics.RecordItemsPerInventory(sectionID.String(), len(result))
 	}
 
 	return result, nil
 }
-
 
 // AddItems adds items to user's inventory
 func (is *inventoryService) AddItems(ctx context.Context, req *models.AddItemsRequest) ([]uuid.UUID, error) {
@@ -555,4 +552,130 @@ func (is *inventoryService) ConsumeReservedItems(ctx context.Context, req *model
 	}
 
 	return nil
+}
+
+// GetItemsDetails gets localized item details with images
+func (is *inventoryService) GetItemsDetails(ctx context.Context, req *models.ItemDetailsRequest, languageCode string) (*models.ItemDetailsResponse, error) {
+	if req == nil {
+		return nil, errors.New("item details request cannot be nil")
+	}
+
+	if len(req.Items) == 0 {
+		return &models.ItemDetailsResponse{Items: []models.ItemDetailResponseItem{}}, nil
+	}
+
+	// Extract item IDs for batch operations
+	itemIDs := make([]uuid.UUID, len(req.Items))
+	for i, item := range req.Items {
+		itemIDs[i] = item.ItemID
+	}
+
+	// Get items batch
+	itemsMap, err := is.deps.Repositories.Item.GetItemsBatch(ctx, itemIDs)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get items batch")
+	}
+
+	// Get translations for requested language
+	translationsMap, err := is.deps.Repositories.Item.GetTranslationsBatch(ctx, models.EntityTypeItem, itemIDs, languageCode)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get translations batch")
+	}
+
+	// Get default language for fallback
+	defaultLang, err := is.deps.Repositories.Item.GetDefaultLanguage(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get default language")
+	}
+
+	// Get fallback translations if needed
+	var fallbackTranslations map[uuid.UUID]map[string]string
+	if defaultLang != nil && defaultLang.Code != languageCode {
+		fallbackTranslations, err = is.deps.Repositories.Item.GetTranslationsBatch(ctx, models.EntityTypeItem, itemIDs, defaultLang.Code)
+		if err != nil {
+			// Log error but continue without fallback
+			fallbackTranslations = make(map[uuid.UUID]map[string]string)
+		}
+	} else {
+		fallbackTranslations = make(map[uuid.UUID]map[string]string)
+	}
+
+	// Get images batch (simplified for now)
+	imagesMap, err := is.deps.Repositories.Item.GetItemImagesBatch(ctx, req.Items)
+	if err != nil {
+		// Log error but continue without images
+		imagesMap = make(map[string]string)
+	}
+
+	// Build response
+	response := &models.ItemDetailsResponse{
+		Items: make([]models.ItemDetailResponseItem, 0, len(req.Items)),
+	}
+
+	for _, requestItem := range req.Items {
+		item, exists := itemsMap[requestItem.ItemID]
+		if !exists {
+			// Skip items that don't exist
+			continue
+		}
+
+		// Get translations with fallback
+		translations := translationsMap[requestItem.ItemID]
+		if translations == nil {
+			translations = make(map[string]string)
+		}
+
+		name := translations[models.FieldNameName]
+		description := translations[models.FieldNameDescription]
+
+		// Apply fallback if translations are missing
+		if name == "" {
+			if fallbackTranslations[requestItem.ItemID] != nil {
+				name = fallbackTranslations[requestItem.ItemID][models.FieldNameName]
+			}
+		}
+		if description == "" {
+			if fallbackTranslations[requestItem.ItemID] != nil {
+				description = fallbackTranslations[requestItem.ItemID][models.FieldNameDescription]
+			}
+		}
+
+		// Create image key for lookup (simplified approach)
+		imageKey := requestItem.ItemID.String()
+		if requestItem.Collection != nil {
+			imageKey += "_" + *requestItem.Collection
+		}
+		if requestItem.QualityLevel != nil {
+			imageKey += "_" + *requestItem.QualityLevel
+		}
+
+		imageURL := imagesMap[imageKey]
+		if imageURL == "" {
+			// Default image fallback
+			imageURL = "/images/items/default.png"
+		}
+
+		responseItem := models.ItemDetailResponseItem{
+			ItemID:       requestItem.ItemID,
+			Code:         item.ItemType, // Using item type as code for now
+			Name:         name,
+			Description:  description,
+			ImageURL:     imageURL,
+			Collection:   requestItem.Collection,
+			QualityLevel: requestItem.QualityLevel,
+		}
+
+		response.Items = append(response.Items, responseItem)
+	}
+
+	// Record metrics
+	if is.deps.Metrics != nil {
+		is.deps.Metrics.RecordInventoryOperation("get_items_details", languageCode, "success")
+	}
+
+	return response, nil
+}
+
+func (is *inventoryService) GetDefaultLanguage(ctx context.Context) (*models.Language, error) {
+	return is.deps.Repositories.Item.GetDefaultLanguage(ctx)
 }

@@ -223,7 +223,7 @@ func TestServiceJWTAuthMiddleware_AuthenticateServiceJWT(t *testing.T) {
 
 			// Создаем запрос
 			req := httptest.NewRequest("POST", "/test", nil)
-			
+
 			// Устанавливаем Authorization header если он есть
 			token := tt.setupToken()
 			if token != "" {

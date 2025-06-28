@@ -13,13 +13,13 @@ func TestItemKey_String(t *testing.T) {
 	itemID := uuid.New()
 	collectionID := uuid.New()
 	qualityLevelID := uuid.New()
-	
+
 	key := NewItemKey(userID, sectionID, itemID, collectionID, qualityLevelID)
-	
-	expected := userID.String() + ":" + sectionID.String() + ":" + 
-		itemID.String() + ":" + collectionID.String() + ":" + 
+
+	expected := userID.String() + ":" + sectionID.String() + ":" +
+		itemID.String() + ":" + collectionID.String() + ":" +
 		qualityLevelID.String()
-	
+
 	assert.Equal(t, expected, key.String())
 }
 
@@ -29,13 +29,13 @@ func TestItemKey_CacheKey(t *testing.T) {
 	itemID := uuid.New()
 	collectionID := uuid.New()
 	qualityLevelID := uuid.New()
-	
+
 	key := NewItemKey(userID, sectionID, itemID, collectionID, qualityLevelID)
-	
-	expected := "inventory:" + userID.String() + ":" + sectionID.String() + ":" + 
-		itemID.String() + ":" + collectionID.String() + ":" + 
+
+	expected := "inventory:" + userID.String() + ":" + sectionID.String() + ":" +
+		itemID.String() + ":" + collectionID.String() + ":" +
 		qualityLevelID.String()
-	
+
 	assert.Equal(t, expected, key.CacheKey())
 }
 
@@ -45,9 +45,9 @@ func TestNewItemKey(t *testing.T) {
 	itemID := uuid.New()
 	collectionID := uuid.New()
 	qualityLevelID := uuid.New()
-	
+
 	key := NewItemKey(userID, sectionID, itemID, collectionID, qualityLevelID)
-	
+
 	assert.Equal(t, userID, key.UserID)
 	assert.Equal(t, sectionID, key.SectionID)
 	assert.Equal(t, itemID, key.ItemID)

@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	
+
 	"github.com/shard-legends/inventory-service/internal/models"
 )
 
@@ -114,6 +114,15 @@ func (m *MockInventoryRepo) CheckAndLockBalances(ctx context.Context, tx interfa
 	return args.Get(0).([]BalanceLockResult), args.Error(1)
 }
 
+// D-15: Add optimized method to mock
+func (m *MockInventoryRepo) GetUserInventoryOptimized(ctx context.Context, userID, sectionID uuid.UUID) ([]*models.InventoryItemResponse, error) {
+	args := m.Called(ctx, userID, sectionID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*models.InventoryItemResponse), args.Error(1)
+}
+
 // Test fixtures
 func createTestBalanceRequest() *BalanceRequest {
 	return &BalanceRequest{
@@ -139,25 +148,25 @@ func TestBalanceCalculator_CalculateCurrentBalance_FromCache(t *testing.T) {
 	ctx := context.Background()
 	req := createTestBalanceRequest()
 	expectedBalance := int64(100)
-	
+
 	cache := new(MockCache)
 	inventoryRepo := new(MockInventoryRepo)
 	deps := createTestDeps(cache, inventoryRepo)
-	
-	cacheKey := "inventory:" + req.UserID.String() + ":" + req.SectionID.String() + ":" + 
+
+	cacheKey := "inventory:" + req.UserID.String() + ":" + req.SectionID.String() + ":" +
 		req.ItemID.String() + ":" + req.CollectionID.String() + ":" + req.QualityLevelID.String()
-	
+
 	cache.On("Get", ctx, cacheKey, mock.AnythingOfType("*int64")).Return(nil).Run(func(args mock.Arguments) {
 		if balance, ok := args.Get(2).(*int64); ok {
 			*balance = expectedBalance
 		}
 	})
-	
+
 	calculator := NewBalanceCalculator(deps)
-	
+
 	// Act
 	result, err := calculator.CalculateCurrentBalance(ctx, req)
-	
+
 	// Assert
 	assert.NoError(t, err)
 	assert.Equal(t, expectedBalance, result)
@@ -169,14 +178,14 @@ func TestBalanceCalculator_CalculateCurrentBalance_FromDatabase_WithDailyBalance
 	// Arrange
 	ctx := context.Background()
 	req := createTestBalanceRequest()
-	
+
 	cache := new(MockCache)
 	inventoryRepo := new(MockInventoryRepo)
 	deps := createTestDeps(cache, inventoryRepo)
-	
-	cacheKey := "inventory:" + req.UserID.String() + ":" + req.SectionID.String() + ":" + 
+
+	cacheKey := "inventory:" + req.UserID.String() + ":" + req.SectionID.String() + ":" +
 		req.ItemID.String() + ":" + req.CollectionID.String() + ":" + req.QualityLevelID.String()
-	
+
 	yesterday := time.Now().UTC().AddDate(0, 0, -1)
 	dailyBalance := &models.DailyBalance{
 		UserID:         req.UserID,
@@ -188,7 +197,7 @@ func TestBalanceCalculator_CalculateCurrentBalance_FromDatabase_WithDailyBalance
 		Quantity:       50,
 		CreatedAt:      time.Now().UTC(),
 	}
-	
+
 	operations := []*models.Operation{
 		{
 			ID:              uuid.New(),
@@ -213,24 +222,24 @@ func TestBalanceCalculator_CalculateCurrentBalance_FromDatabase_WithDailyBalance
 			CreatedAt:       time.Now().UTC(),
 		},
 	}
-	
+
 	expectedBalance := int64(65) // 50 + 25 - 10
-	
+
 	// Mock cache miss
 	cache.On("Get", ctx, cacheKey, mock.AnythingOfType("*int64")).Return(assert.AnError)
-	
+
 	// Mock repository calls
 	inventoryRepo.On("GetLatestDailyBalance", ctx, req.UserID, req.SectionID, req.ItemID, req.CollectionID, req.QualityLevelID, mock.AnythingOfType("time.Time")).Return(dailyBalance, nil)
 	inventoryRepo.On("GetOperations", ctx, req.UserID, req.SectionID, req.ItemID, req.CollectionID, req.QualityLevelID, mock.AnythingOfType("time.Time")).Return(operations, nil)
-	
+
 	// Mock cache set
 	cache.On("Set", ctx, cacheKey, expectedBalance, balanceCacheTTL).Return(nil)
-	
+
 	calculator := NewBalanceCalculator(deps)
-	
+
 	// Act
 	result, err := calculator.CalculateCurrentBalance(ctx, req)
-	
+
 	// Assert
 	assert.NoError(t, err)
 	assert.Equal(t, expectedBalance, result)
@@ -242,14 +251,14 @@ func TestBalanceCalculator_CalculateCurrentBalance_FromDatabase_NoDailyBalance(t
 	// Arrange
 	ctx := context.Background()
 	req := createTestBalanceRequest()
-	
+
 	cache := new(MockCache)
 	inventoryRepo := new(MockInventoryRepo)
 	deps := createTestDeps(cache, inventoryRepo)
-	
-	cacheKey := "inventory:" + req.UserID.String() + ":" + req.SectionID.String() + ":" + 
+
+	cacheKey := "inventory:" + req.UserID.String() + ":" + req.SectionID.String() + ":" +
 		req.ItemID.String() + ":" + req.CollectionID.String() + ":" + req.QualityLevelID.String()
-	
+
 	operations := []*models.Operation{
 		{
 			ID:              uuid.New(),
@@ -263,35 +272,35 @@ func TestBalanceCalculator_CalculateCurrentBalance_FromDatabase_NoDailyBalance(t
 			CreatedAt:       time.Now().UTC(),
 		},
 	}
-	
+
 	expectedBalance := int64(100) // 0 + 100
-	
+
 	// Mock cache miss
 	cache.On("Get", ctx, cacheKey, mock.AnythingOfType("*int64")).Return(assert.AnError)
-	
+
 	// Mock no daily balance found
 	inventoryRepo.On("GetLatestDailyBalance", ctx, req.UserID, req.SectionID, req.ItemID, req.CollectionID, req.QualityLevelID, mock.AnythingOfType("time.Time")).Return(nil, assert.AnError)
-	
+
 	// Mock the GetDailyBalance call from CreateDailyBalance (returns error, meaning no existing daily balance)
 	inventoryRepo.On("GetDailyBalance", ctx, req.UserID, req.SectionID, req.ItemID, req.CollectionID, req.QualityLevelID, mock.AnythingOfType("time.Time")).Return(nil, assert.AnError)
-	
+
 	// Mock get all operations for CreateDailyBalance (called first)
 	inventoryRepo.On("GetOperations", ctx, req.UserID, req.SectionID, req.ItemID, req.CollectionID, req.QualityLevelID, time.Time{}).Return(operations, nil).Once()
-	
+
 	// Mock CreateDailyBalance call
 	inventoryRepo.On("CreateDailyBalance", ctx, mock.AnythingOfType("*models.DailyBalance")).Return(nil)
-	
+
 	// Mock get all operations for balance calculation (called second, with different time parameter)
 	inventoryRepo.On("GetOperations", ctx, req.UserID, req.SectionID, req.ItemID, req.CollectionID, req.QualityLevelID, mock.AnythingOfType("time.Time")).Return(operations, nil).Once()
-	
+
 	// Mock cache set
 	cache.On("Set", ctx, cacheKey, expectedBalance, balanceCacheTTL).Return(nil)
-	
+
 	calculator := NewBalanceCalculator(deps)
-	
+
 	// Act
 	result, err := calculator.CalculateCurrentBalance(ctx, req)
-	
+
 	// Assert
 	assert.NoError(t, err)
 	assert.Equal(t, expectedBalance, result)
@@ -305,12 +314,12 @@ func TestBalanceCalculator_CalculateCurrentBalance_NilRequest(t *testing.T) {
 	cache := new(MockCache)
 	inventoryRepo := new(MockInventoryRepo)
 	deps := createTestDeps(cache, inventoryRepo)
-	
+
 	calculator := NewBalanceCalculator(deps)
-	
+
 	// Act
 	result, err := calculator.CalculateCurrentBalance(ctx, nil)
-	
+
 	// Assert
 	assert.Error(t, err)
 	assert.Equal(t, int64(0), result)
@@ -321,21 +330,21 @@ func TestBalanceCalculator_InvalidateBalanceCache(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
 	req := createTestBalanceRequest()
-	
+
 	cache := new(MockCache)
 	inventoryRepo := new(MockInventoryRepo)
 	deps := createTestDeps(cache, inventoryRepo)
-	
-	cacheKey := "inventory:" + req.UserID.String() + ":" + req.SectionID.String() + ":" + 
+
+	cacheKey := "inventory:" + req.UserID.String() + ":" + req.SectionID.String() + ":" +
 		req.ItemID.String() + ":" + req.CollectionID.String() + ":" + req.QualityLevelID.String()
-	
+
 	cache.On("Delete", ctx, cacheKey).Return(nil)
-	
+
 	calculator := NewBalanceCalculator(deps).(*balanceCalculator)
-	
+
 	// Act
 	err := calculator.InvalidateBalanceCache(ctx, req)
-	
+
 	// Assert
 	assert.NoError(t, err)
 	cache.AssertExpectations(t)
@@ -346,21 +355,21 @@ func TestBalanceCalculator_CacheBalance(t *testing.T) {
 	ctx := context.Background()
 	req := createTestBalanceRequest()
 	balance := int64(150)
-	
+
 	cache := new(MockCache)
 	inventoryRepo := new(MockInventoryRepo)
 	deps := createTestDeps(cache, inventoryRepo)
-	
-	cacheKey := "inventory:" + req.UserID.String() + ":" + req.SectionID.String() + ":" + 
+
+	cacheKey := "inventory:" + req.UserID.String() + ":" + req.SectionID.String() + ":" +
 		req.ItemID.String() + ":" + req.CollectionID.String() + ":" + req.QualityLevelID.String()
-	
+
 	cache.On("Set", ctx, cacheKey, balance, balanceCacheTTL).Return(nil)
-	
+
 	calculator := NewBalanceCalculator(deps).(*balanceCalculator)
-	
+
 	// Act
 	err := calculator.CacheBalance(ctx, req, balance)
-	
+
 	// Assert
 	assert.NoError(t, err)
 	cache.AssertExpectations(t)

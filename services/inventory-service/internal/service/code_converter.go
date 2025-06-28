@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	
+
 	"github.com/shard-legends/inventory-service/internal/models"
 )
 
@@ -63,11 +63,11 @@ func (cc *codeConverter) ConvertClassifierCodes(ctx context.Context, req *CodeCo
 func (cc *codeConverter) convertCodesToUUIDs(ctx context.Context, data map[string]interface{}) error {
 	// Define mapping of field names to their classifier types
 	fieldMappings := map[string]string{
-		"section":         models.ClassifierInventorySection,
-		"item_class":      models.ClassifierItemClass,
-		"collection":      models.ClassifierCollection,
-		"quality_level":   models.ClassifierQualityLevel,
-		"operation_type":  models.ClassifierOperationType,
+		"section":        models.ClassifierInventorySection,
+		"item_class":     models.ClassifierItemClass,
+		"collection":     models.ClassifierCollection,
+		"quality_level":  models.ClassifierQualityLevel,
+		"operation_type": models.ClassifierOperationType,
 	}
 
 	// Handle item_type dynamically based on item_class
@@ -121,11 +121,11 @@ func (cc *codeConverter) convertCodesToUUIDs(ctx context.Context, data map[strin
 func (cc *codeConverter) convertUUIDsToCodes(ctx context.Context, data map[string]interface{}) error {
 	// Define mapping of field names to their classifier types
 	fieldMappings := map[string]string{
-		"section_id":         models.ClassifierInventorySection,
-		"item_class_id":      models.ClassifierItemClass,
-		"collection_id":      models.ClassifierCollection,
-		"quality_level_id":   models.ClassifierQualityLevel,
-		"operation_type_id":  models.ClassifierOperationType,
+		"section_id":        models.ClassifierInventorySection,
+		"item_class_id":     models.ClassifierItemClass,
+		"collection_id":     models.ClassifierCollection,
+		"quality_level_id":  models.ClassifierQualityLevel,
+		"operation_type_id": models.ClassifierOperationType,
 	}
 
 	// Handle item_type_id dynamically based on item_class if available
@@ -267,9 +267,9 @@ func (cc *codeConverter) ConvertInventoryResponse(ctx context.Context, items []*
 	// Note: In the current models.InventoryItemResponse, Collection and QualityLevel are already *string
 	// This suggests they should contain codes, not UUIDs
 	// The conversion would happen in the repository layer when building the response
-	
+
 	// For future implementation when UUIDs need to be converted to codes
-	_ = ctx  // Use context parameter
+	_ = ctx   // Use context parameter
 	_ = items // Use items parameter
 
 	return nil
@@ -280,7 +280,7 @@ func getStringValue(value interface{}) (string, bool) {
 	if value == nil {
 		return "", false
 	}
-	
+
 	str, ok := value.(string)
 	return str, ok && str != ""
 }
@@ -290,7 +290,7 @@ func getUUIDValue(value interface{}) (uuid.UUID, bool) {
 	if value == nil {
 		return uuid.Nil, false
 	}
-	
+
 	switch v := value.(type) {
 	case uuid.UUID:
 		return v, true
@@ -299,6 +299,6 @@ func getUUIDValue(value interface{}) (uuid.UUID, bool) {
 			return parsed, true
 		}
 	}
-	
+
 	return uuid.Nil, false
 }

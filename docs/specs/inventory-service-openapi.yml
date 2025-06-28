@@ -11,7 +11,7 @@ info:
     - Административные операции
     
     Публичные эндпоинты требуют JWT токен для аутентификации.
-    Внутренние эндпоинты требуют Service JWT с ролью 'internal'.
+    Внутренние эндпоинты изолированы сетью и не требуют аутентификации.
     
     ## JWT Аутентификация
     
@@ -41,8 +41,8 @@ info:
 servers:
   - url: http://localhost:8080/api/inventory
     description: Публичный API (порт 8080)
-  - url: http://localhost:8081/api/inventory
-    description: Внутренний API (порт 8081)
+  - url: http://localhost:8090/api/inventory
+    description: Внутренний API (порт 8090)
   - url: https://api.shardlegends.com/api/inventory
     description: Продуктивный публичный API
   - url: https://internal.shardlegends.com/api/inventory
@@ -55,9 +55,9 @@ tags:
   - name: Public
     description: Публичные эндпоинты для фронтенда (порт 8080, требуют пользовательский JWT)
   - name: Internal
-    description: Внутренние эндпоинты для других сервисов (порт 8081, требуют Service JWT с ролью 'internal')
+    description: Внутренние эндпоинты для других сервисов (порт 8090, изолированы сетью)
   - name: Admin
-    description: Административные эндпоинты (порт 8080, требуют администраторский JWT)
+    description: Административные эндпоинты (порт 8090, изолированы сетью)
 
 paths:
   /inventory:
@@ -99,11 +99,10 @@ paths:
         Резервирует предметы для производственного задания.
         Перемещает предметы из основного в фабричный инвентарь.
         
-        **Доступен только на внутреннем порту (8081).**
-        **Требует Service JWT с ролью 'internal'.**
+        **Доступен только на внутреннем порту (8090).**
+        **Изолирован сетью, аутентификация не требуется.**
       operationId: reserveItems
-      security:
-        - serviceAuth: []
+      security: []
       requestBody:
         required: true
         content:
@@ -137,11 +136,10 @@ paths:
         Возвращает зарезервированные предметы из фабричного в основной инвентарь.
         Используется при отмене производственного задания.
         
-        **Доступен только на внутреннем порту (8081).**
-        **Требует Service JWT с ролью 'internal'.**
+        **Доступен только на внутреннем порту (8090).**
+        **Изолирован сетью, аутентификация не требуется.**
       operationId: returnReservedItems
-      security:
-        - serviceAuth: []
+      security: []
       requestBody:
         required: true
         content:
@@ -175,11 +173,10 @@ paths:
         Уничтожает зарезервированные предметы при успешном завершении производства.
         Предметы списываются из фабричного инвентаря без возврата.
         
-        **Доступен только на внутреннем порту (8081).**
-        **Требует Service JWT с ролью 'internal'.**
+        **Доступен только на внутреннем порту (8090).**
+        **Изолирован сетью, аутентификация не требуется.**
       operationId: consumeReservedItems
-      security:
-        - serviceAuth: []
+      security: []
       requestBody:
         required: true
         content:
@@ -213,11 +210,10 @@ paths:
         Добавляет предметы в инвентарь пользователя.
         Используется для начисления наград, покупок, результатов производства.
         
-        **Доступен только на внутреннем порту (8081).**
-        **Требует Service JWT с ролью 'internal'.**
+        **Доступен только на внутреннем порту (8090).**
+        **Изолирован сетью, аутентификация не требуется.**
       operationId: addItems
-      security:
-        - serviceAuth: []
+      security: []
       requestBody:
         required: true
         content:
@@ -246,7 +242,7 @@ paths:
       description: |
         Возвращает состояние сервиса и готовность к обработке запросов.
         
-        **Доступен только на внутреннем порту (8081).**
+        **Доступен только на внутреннем порту (8090).**
         **Не требует аутентификации.**
       operationId: healthCheck
       security: []
@@ -302,7 +298,7 @@ paths:
       description: |
         Возвращает метрики в формате Prometheus для мониторинга.
         
-        **Доступен только на внутреннем порту (8081).**
+        **Доступен только на внутреннем порту (8090).**
         **Не требует аутентификации.**
       operationId: getMetrics
       security: []
@@ -322,15 +318,58 @@ paths:
                   # TYPE inventory_service_request_duration_seconds histogram
                   inventory_service_request_duration_seconds_bucket{le="0.005"} 10
 
-  /admin/inventory/adjust:
+  /items/details:
+    post:
+      tags:
+        - Public
+      summary: Получить локализованную информацию о предметах
+      description: |
+        Возвращает локализованные названия, описания и изображения для списка предметов.
+        Поддерживает fallback на дефолтный язык при отсутствии перевода.
+        Использует кеширование для оптимизации производительности.
+      operationId: getItemsDetails
+      parameters:
+        - name: lang
+          in: query
+          description: Код языка (ru, en)
+          required: false
+          schema:
+            type: string
+            default: ru
+            enum: [ru, en]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemDetailsRequest'
+      responses:
+        '200':
+          description: Успешный ответ с локализованной информацией
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemDetailsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /admin/adjust:
     post:
       tags:
         - Admin
       summary: Административная корректировка инвентаря
       description: |
         Позволяет администраторам корректировать инвентарь пользователей.
-        Требует административные права доступа.
+        Доступ контролируется изоляцией сети.
+        
+        **Доступен только на внутреннем порту (8090).**
+        **Изолирован сетью, аутентификация не требуется.**
       operationId: adjustInventory
+      security: []
       requestBody:
         required: true
         content:
@@ -369,7 +408,7 @@ components:
         
         Процесс валидации:
         1. Проверка Bearer формата
-        2. Валидация RS256 подписи (публичный ключ от auth-service:8081/public-key.pem)
+        2. Валидация RS256 подписи (публичный ключ от auth-service:8090/public-key.pem)
         3. Проверка времени действия (exp claim)  
         4. Проверка отзыва в Redis (EXISTS revoked:{jti})
         5. Извлечение user_id из sub claim
@@ -381,18 +420,10 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: |
-        Service JWT токен с RS256 подписью от Auth Service.
-        Используется для внутренних эндпоинтов (порт 8081).
+        УСТАРЕЛО: Service JWT токен больше не используется для внутренних эндпоинтов.
         
-        Процесс валидации:
-        1. Проверка Bearer формата
-        2. Валидация RS256 подписи (публичный ключ от auth-service:8081/public-key.pem)
-        3. Проверка времени действия (exp claim)
-        4. Проверка отзыва в Redis (EXISTS revoked:{jti})
-        5. Проверка наличия роли 'internal' в claims.roles
-        6. Извлечение service_name из claims
-        
-        Формат: Authorization: Bearer <service_jwt_token>
+        Внутренние эндпоинты (порт 8090) изолированы сетью и не требуют аутентификации.
+        Схема оставлена для обратной совместимости спецификации.
 
   schemas:
     # Базовые типы
@@ -629,6 +660,80 @@ components:
           description: Причина административной корректировки
           minLength: 10
           maxLength: 500
+
+    ItemDetailsRequest:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          minItems: 1
+          maxItems: 100
+          description: Список предметов для получения информации (максимум 100)
+          items:
+            type: object
+            required:
+              - item_id
+            properties:
+              item_id:
+                type: string
+                format: uuid
+                description: UUID предмета
+              collection:
+                type: string
+                description: Код коллекции (опционально)
+                example: winter_2025
+              quality_level:
+                type: string
+                description: Код уровня качества (опционально)
+                example: stone
+
+    ItemDetailsResponse:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required:
+              - item_id
+              - code
+              - name
+              - description
+              - image_url
+            properties:
+              item_id:
+                type: string
+                format: uuid
+                description: UUID предмета
+              code:
+                type: string
+                description: Код типа предмета
+                example: stone
+              name:
+                type: string
+                description: Локализованное название предмета
+                example: Камень
+              description:
+                type: string
+                description: Локализованное описание предмета
+                example: Базовый строительный материал
+              image_url:
+                type: string
+                format: uri
+                description: URL изображения предмета
+                example: https://cdn.example.com/items/stone_winter_2025_stone.png
+              collection:
+                type: string
+                description: Код коллекции (если указан в запросе)
+                example: winter_2025
+              quality_level:
+                type: string
+                description: Код уровня качества (если указан в запросе)
+                example: stone
 
     # Ошибки
     ErrorResponse:

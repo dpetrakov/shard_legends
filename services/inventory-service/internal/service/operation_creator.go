@@ -8,9 +8,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	
-	"github.com/shard-legends/inventory-service/internal/models"
+
 	internalerrors "github.com/shard-legends/inventory-service/internal/errors"
+	"github.com/shard-legends/inventory-service/internal/models"
 )
 
 // operationCreator implements OperationCreator interface
@@ -28,7 +28,7 @@ func NewOperationCreator(deps *ServiceDependencies) OperationCreator {
 // CreateOperationsInTransaction creates multiple operations within a database transaction
 func (oc *operationCreator) CreateOperationsInTransaction(ctx context.Context, operations []*models.Operation) ([]uuid.UUID, error) {
 	start := time.Now()
-	
+
 	if len(operations) == 0 {
 		return nil, errors.New("operations list cannot be empty")
 	}
@@ -62,10 +62,10 @@ func (oc *operationCreator) CreateOperationsInTransaction(ctx context.Context, o
 		if op.ID == uuid.Nil {
 			op.ID = uuid.New()
 		}
-		
+
 		// Set creation time
 		op.CreatedAt = now
-		
+
 		operationIDs = append(operationIDs, op.ID)
 	}
 
@@ -214,7 +214,7 @@ func (oc *operationCreator) CreateReservationOperations(ctx context.Context, req
 		}
 	}
 
-	// Get section IDs 
+	// Get section IDs
 	sectionMapping, err := oc.deps.Repositories.Classifier.GetCodeToUUIDMapping(ctx, models.ClassifierInventorySection)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get section mapping")
@@ -282,16 +282,16 @@ func (oc *operationCreator) CreateReservationOperations(ctx context.Context, req
 		if result.Error != nil {
 			return nil, errors.Wrapf(result.Error, "failed to check balance for item %s", result.ItemID.String())
 		}
-		
+
 		if !result.Sufficient {
-			insufficientItems = append(insufficientItems, 
-				fmt.Sprintf("item %s: required %d, available %d", 
+			insufficientItems = append(insufficientItems,
+				fmt.Sprintf("item %s: required %d, available %d",
 					result.ItemID.String(), result.RequiredQty, result.AvailableQty))
 		}
 	}
 
 	if len(insufficientItems) > 0 {
-		return nil, errors.Errorf("insufficient balance for reservation: %s", 
+		return nil, errors.Errorf("insufficient balance for reservation: %s",
 			strings.Join(insufficientItems, "; "))
 	}
 
@@ -412,8 +412,8 @@ func (oc *operationCreator) CreateReturnOperations(ctx context.Context, req *mod
 
 	// Check if this reservation has already been returned or consumed
 	for _, op := range reservedOps {
-		if op.OperationTypeID == returnTypeID || 
-		   (consumeFound && op.OperationTypeID == consumeTypeID) {
+		if op.OperationTypeID == returnTypeID ||
+			(consumeFound && op.OperationTypeID == consumeTypeID) {
 			return errors.Errorf("operation_id %s has already been returned or consumed", req.OperationID.String())
 		}
 	}
@@ -505,8 +505,8 @@ func (oc *operationCreator) CreateConsumptionOperations(ctx context.Context, req
 
 	// Check if this reservation has already been returned or consumed
 	for _, op := range reservedOps {
-		if op.OperationTypeID == consumeTypeID || 
-		   (returnFound && op.OperationTypeID == returnTypeID) {
+		if op.OperationTypeID == consumeTypeID ||
+			(returnFound && op.OperationTypeID == returnTypeID) {
 			return errors.Errorf("operation_id %s has already been returned or consumed", req.OperationID.String())
 		}
 	}
@@ -560,7 +560,7 @@ func (oc *operationCreator) getDefaultCollectionID() uuid.UUID {
 	return uuid.MustParse("00000000-0000-0000-0000-000000000001") // Default collection
 }
 
-// getDefaultQualityLevelID returns the default quality level UUID  
+// getDefaultQualityLevelID returns the default quality level UUID
 // In practice, this should retrieve the standard quality level from config or constants
 func (oc *operationCreator) getDefaultQualityLevelID() uuid.UUID {
 	// Using predefined default UUIDs as per the inventory service design

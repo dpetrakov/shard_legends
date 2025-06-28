@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	
+
 	"github.com/shard-legends/inventory-service/internal/models"
 )
 
@@ -27,29 +27,29 @@ func TestDailyBalanceCreator_CreateDailyBalance_AlreadyExists(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
 	req := createTestDailyBalanceRequest()
-	
+
 	cache := new(MockCache)
 	inventoryRepo := new(MockInventoryRepo)
 	deps := createTestDeps(cache, inventoryRepo)
-	
+
 	existingBalance := &models.DailyBalance{
 		UserID:         req.UserID,
 		SectionID:      req.SectionID,
 		ItemID:         req.ItemID,
 		CollectionID:   req.CollectionID,
 		QualityLevelID: req.QualityLevelID,
-		BalanceDate:    req.TargetDate.UTC().Truncate(24*time.Hour).Add(24*time.Hour - time.Second),
+		BalanceDate:    req.TargetDate.UTC().Truncate(24 * time.Hour).Add(24*time.Hour - time.Second),
 		Quantity:       75,
 		CreatedAt:      time.Now().UTC(),
 	}
-	
+
 	inventoryRepo.On("GetDailyBalance", ctx, req.UserID, req.SectionID, req.ItemID, req.CollectionID, req.QualityLevelID, mock.AnythingOfType("time.Time")).Return(existingBalance, nil)
-	
+
 	creator := NewDailyBalanceCreator(deps)
-	
+
 	// Act
 	result, err := creator.CreateDailyBalance(ctx, req)
-	
+
 	// Assert
 	assert.NoError(t, err)
 	assert.Equal(t, existingBalance, result)
@@ -61,11 +61,11 @@ func TestDailyBalanceCreator_CreateDailyBalance_WithPreviousBalance(t *testing.T
 	// Arrange
 	ctx := context.Background()
 	req := createTestDailyBalanceRequest()
-	
+
 	cache := new(MockCache)
 	inventoryRepo := new(MockInventoryRepo)
 	deps := createTestDeps(cache, inventoryRepo)
-	
+
 	twoDaysAgo := req.TargetDate.AddDate(0, 0, -2)
 	previousBalance := &models.DailyBalance{
 		UserID:         req.UserID,
@@ -77,7 +77,7 @@ func TestDailyBalanceCreator_CreateDailyBalance_WithPreviousBalance(t *testing.T
 		Quantity:       50,
 		CreatedAt:      time.Now().UTC(),
 	}
-	
+
 	operations := []*models.Operation{
 		{
 			ID:              uuid.New(),
@@ -102,30 +102,30 @@ func TestDailyBalanceCreator_CreateDailyBalance_WithPreviousBalance(t *testing.T
 			CreatedAt:       req.TargetDate.Add(-1 * time.Hour), // Within target date
 		},
 	}
-	
+
 	expectedQuantity := int64(75) // 50 + 30 - 5
-	
+
 	// Mock daily balance doesn't exist
 	inventoryRepo.On("GetDailyBalance", ctx, req.UserID, req.SectionID, req.ItemID, req.CollectionID, req.QualityLevelID, mock.AnythingOfType("time.Time")).Return(nil, assert.AnError)
-	
+
 	// Mock previous balance found
 	inventoryRepo.On("GetLatestDailyBalance", ctx, req.UserID, req.SectionID, req.ItemID, req.CollectionID, req.QualityLevelID, mock.AnythingOfType("time.Time")).Return(previousBalance, nil)
-	
+
 	// Mock operations
 	inventoryRepo.On("GetOperations", ctx, req.UserID, req.SectionID, req.ItemID, req.CollectionID, req.QualityLevelID, mock.AnythingOfType("time.Time")).Return(operations, nil)
-	
+
 	// Mock create balance
 	inventoryRepo.On("CreateDailyBalance", ctx, mock.MatchedBy(func(balance *models.DailyBalance) bool {
 		return balance.Quantity == expectedQuantity &&
 			balance.UserID == req.UserID &&
 			balance.ItemID == req.ItemID
 	})).Return(nil)
-	
+
 	creator := NewDailyBalanceCreator(deps)
-	
+
 	// Act
 	result, err := creator.CreateDailyBalance(ctx, req)
-	
+
 	// Assert
 	assert.NoError(t, err)
 	assert.Equal(t, expectedQuantity, result.Quantity)
@@ -138,11 +138,11 @@ func TestDailyBalanceCreator_CreateDailyBalance_NoPreviousBalance(t *testing.T) 
 	// Arrange
 	ctx := context.Background()
 	req := createTestDailyBalanceRequest()
-	
+
 	cache := new(MockCache)
 	inventoryRepo := new(MockInventoryRepo)
 	deps := createTestDeps(cache, inventoryRepo)
-	
+
 	operations := []*models.Operation{
 		{
 			ID:              uuid.New(),
@@ -156,28 +156,28 @@ func TestDailyBalanceCreator_CreateDailyBalance_NoPreviousBalance(t *testing.T) 
 			CreatedAt:       req.TargetDate.Add(-1 * time.Hour),
 		},
 	}
-	
+
 	expectedQuantity := int64(100) // 0 + 100
-	
+
 	// Mock daily balance doesn't exist
 	inventoryRepo.On("GetDailyBalance", ctx, req.UserID, req.SectionID, req.ItemID, req.CollectionID, req.QualityLevelID, mock.AnythingOfType("time.Time")).Return(nil, assert.AnError)
-	
+
 	// Mock no previous balance found
 	inventoryRepo.On("GetLatestDailyBalance", ctx, req.UserID, req.SectionID, req.ItemID, req.CollectionID, req.QualityLevelID, mock.AnythingOfType("time.Time")).Return(nil, assert.AnError)
-	
+
 	// Mock operations from beginning of time
 	inventoryRepo.On("GetOperations", ctx, req.UserID, req.SectionID, req.ItemID, req.CollectionID, req.QualityLevelID, time.Time{}).Return(operations, nil)
-	
+
 	// Mock create balance
 	inventoryRepo.On("CreateDailyBalance", ctx, mock.MatchedBy(func(balance *models.DailyBalance) bool {
 		return balance.Quantity == expectedQuantity
 	})).Return(nil)
-	
+
 	creator := NewDailyBalanceCreator(deps)
-	
+
 	// Act
 	result, err := creator.CreateDailyBalance(ctx, req)
-	
+
 	// Assert
 	assert.NoError(t, err)
 	assert.Equal(t, expectedQuantity, result.Quantity)
@@ -188,13 +188,13 @@ func TestDailyBalanceCreator_CreateDailyBalance_FilterOperationsByDate(t *testin
 	// Arrange
 	ctx := context.Background()
 	req := createTestDailyBalanceRequest()
-	
+
 	cache := new(MockCache)
 	inventoryRepo := new(MockInventoryRepo)
 	deps := createTestDeps(cache, inventoryRepo)
-	
-	targetEndDate := req.TargetDate.UTC().Truncate(24*time.Hour).Add(24*time.Hour - time.Second)
-	
+
+	targetEndDate := req.TargetDate.UTC().Truncate(24 * time.Hour).Add(24*time.Hour - time.Second)
+
 	operations := []*models.Operation{
 		{
 			ID:              uuid.New(),
@@ -219,28 +219,28 @@ func TestDailyBalanceCreator_CreateDailyBalance_FilterOperationsByDate(t *testin
 			CreatedAt:       targetEndDate.Add(1 * time.Hour), // After end of target date (should be ignored)
 		},
 	}
-	
+
 	expectedQuantity := int64(50) // Only first operation should be counted
-	
+
 	// Mock daily balance doesn't exist
 	inventoryRepo.On("GetDailyBalance", ctx, req.UserID, req.SectionID, req.ItemID, req.CollectionID, req.QualityLevelID, mock.AnythingOfType("time.Time")).Return(nil, assert.AnError)
-	
+
 	// Mock no previous balance
 	inventoryRepo.On("GetLatestDailyBalance", ctx, req.UserID, req.SectionID, req.ItemID, req.CollectionID, req.QualityLevelID, mock.AnythingOfType("time.Time")).Return(nil, assert.AnError)
-	
+
 	// Mock operations
 	inventoryRepo.On("GetOperations", ctx, req.UserID, req.SectionID, req.ItemID, req.CollectionID, req.QualityLevelID, time.Time{}).Return(operations, nil)
-	
+
 	// Mock create balance
 	inventoryRepo.On("CreateDailyBalance", ctx, mock.MatchedBy(func(balance *models.DailyBalance) bool {
 		return balance.Quantity == expectedQuantity
 	})).Return(nil)
-	
+
 	creator := NewDailyBalanceCreator(deps)
-	
+
 	// Act
 	result, err := creator.CreateDailyBalance(ctx, req)
-	
+
 	// Assert
 	assert.NoError(t, err)
 	assert.Equal(t, expectedQuantity, result.Quantity)
@@ -253,12 +253,12 @@ func TestDailyBalanceCreator_CreateDailyBalance_NilRequest(t *testing.T) {
 	cache := new(MockCache)
 	inventoryRepo := new(MockInventoryRepo)
 	deps := createTestDeps(cache, inventoryRepo)
-	
+
 	creator := NewDailyBalanceCreator(deps)
-	
+
 	// Act
 	result, err := creator.CreateDailyBalance(ctx, nil)
-	
+
 	// Assert
 	assert.Error(t, err)
 	assert.Nil(t, result)
@@ -280,25 +280,25 @@ func TestDailyBalanceCreator_CreateDailyBalance_ValidationFails(t *testing.T) {
 		QualityLevelID: uuid.New(),
 		TargetDate:     time.Now().UTC().AddDate(0, 0, -1),
 	}
-	
+
 	cache := new(MockCache)
 	inventoryRepo := new(MockInventoryRepo)
 	deps := createTestDeps(cache, inventoryRepo)
-	
+
 	// Mock daily balance doesn't exist
 	inventoryRepo.On("GetDailyBalance", ctx, req.UserID, req.SectionID, req.ItemID, req.CollectionID, req.QualityLevelID, mock.AnythingOfType("time.Time")).Return(nil, assert.AnError)
-	
+
 	// Mock no previous balance
 	inventoryRepo.On("GetLatestDailyBalance", ctx, req.UserID, req.SectionID, req.ItemID, req.CollectionID, req.QualityLevelID, mock.AnythingOfType("time.Time")).Return(nil, assert.AnError)
-	
+
 	// Mock operations
 	inventoryRepo.On("GetOperations", ctx, req.UserID, req.SectionID, req.ItemID, req.CollectionID, req.QualityLevelID, time.Time{}).Return([]*models.Operation{}, nil)
-	
+
 	creator := NewDailyBalanceCreator(deps)
-	
+
 	// Act
 	result, err := creator.CreateDailyBalance(ctx, req)
-	
+
 	// Assert
 	assert.Error(t, err)
 	assert.Nil(t, result)

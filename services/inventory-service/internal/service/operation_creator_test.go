@@ -21,7 +21,7 @@ func TestOperationCreator_CreateOperationsInTransaction(t *testing.T) {
 
 		userID := uuid.New()
 		sectionID := uuid.New()
-		
+
 		operations := []*models.Operation{
 			{
 				UserID:          userID,
@@ -63,7 +63,7 @@ func TestOperationCreator_CreateOperationsInTransaction(t *testing.T) {
 
 		userID := uuid.New()
 		sectionID := uuid.New()
-		
+
 		operations := []*models.Operation{
 			{
 				UserID:          userID,
@@ -180,10 +180,6 @@ func TestOperationCreator_CreateOperationsInTransaction(t *testing.T) {
 		assert.Contains(t, err.Error(), "quantity_change cannot be zero")
 	})
 }
-
-
-
-
 
 func TestOperationCreator_GetDefaultValues(t *testing.T) {
 	t.Run("Default collection ID", func(t *testing.T) {

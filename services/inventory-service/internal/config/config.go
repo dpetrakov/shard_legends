@@ -30,6 +30,7 @@ type Config struct {
 
 	// JWT configuration
 	JWTPublicKeyPath string
+	AuthServiceURL   string
 }
 
 // Load loads configuration from environment variables
@@ -109,6 +110,11 @@ func Load() (*Config, error) {
 		cfg.JWTPublicKeyPath = "/etc/auth/public_key.pem"
 	}
 
+	cfg.AuthServiceURL = os.Getenv("AUTH_SERVICE_URL")
+	if cfg.AuthServiceURL == "" {
+		cfg.AuthServiceURL = "http://auth-service:8090"
+	}
+
 	return cfg, nil
 }
 
@@ -152,8 +158,8 @@ func (c *Config) Validate() error {
 // String returns a string representation of the config (for logging, without sensitive data)
 func (c *Config) String() string {
 	return fmt.Sprintf(
-		"Config{Host: %s, Port: %s, InternalPort: %s, LogLevel: %s, MetricsPort: %s, DB: %s, Redis: %s}",
-		c.ServiceHost, c.ServicePort, c.InternalServicePort, c.LogLevel, c.MetricsPort,
+		"Config{Host: %s, Port: %s, InternalPort: %s, LogLevel: %s, MetricsPort: %s, AuthService: %s, DB: %s, Redis: %s}",
+		c.ServiceHost, c.ServicePort, c.InternalServicePort, c.LogLevel, c.MetricsPort, c.AuthServiceURL,
 		maskURL(c.DatabaseURL), maskURL(c.RedisURL),
 	)
 }

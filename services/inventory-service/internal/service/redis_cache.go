@@ -26,7 +26,7 @@ func (c *redisCache) Get(ctx context.Context, key string, value interface{}) err
 	if err != nil {
 		return err
 	}
-	
+
 	return json.Unmarshal([]byte(result), value)
 }
 
@@ -36,7 +36,7 @@ func (c *redisCache) Set(ctx context.Context, key string, value interface{}, ttl
 	if err != nil {
 		return err
 	}
-	
+
 	return c.redis.Set(ctx, key, data, ttl)
 }
 
@@ -52,11 +52,11 @@ func (c *redisCache) DeletePattern(ctx context.Context, pattern string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	if len(keys) > 0 {
 		_, err := c.redis.Del(ctx, keys...)
 		return err
 	}
-	
+
 	return nil
 }

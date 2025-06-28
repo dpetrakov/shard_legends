@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
-	
+
 	"github.com/shard-legends/inventory-service/internal/models"
 )
 
@@ -146,7 +146,7 @@ func TestClassifierService_RefreshClassifierCache(t *testing.T) {
 		service := NewClassifierService(deps)
 
 		classifierCode := models.ClassifierInventorySection
-		
+
 		// Mock invalidate cache
 		classifierRepo.On("InvalidateCache", ctx, classifierCode).Return(nil)
 
@@ -165,7 +165,7 @@ func TestClassifierService_RefreshClassifierCache(t *testing.T) {
 		service := NewClassifierService(deps)
 
 		classifierCode := models.ClassifierOperationType
-		
+
 		// Mock invalidate cache error
 		classifierRepo.On("InvalidateCache", ctx, classifierCode).Return(errors.New("db error"))
 

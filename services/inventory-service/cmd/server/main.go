@@ -92,7 +92,7 @@ func main() {
 	internalRouter.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	// Initialize API with JWT authentication for both routers
-	if err := setupAPIWithJWT(publicRouter, internalRouter, postgres, redis, log, metricsCollector); err != nil {
+	if err := setupAPIWithJWT(cfg, publicRouter, internalRouter, postgres, redis, log, metricsCollector); err != nil {
 		log.Error("Failed to setup API with JWT", "error", err)
 		os.Exit(1)
 	}
@@ -208,24 +208,23 @@ func requestLogger(logger *slog.Logger) gin.HandlerFunc {
 }
 
 // setupAPIWithJWT initializes the API with JWT authentication and real services
-func setupAPIWithJWT(publicRouter *gin.Engine, internalRouter *gin.Engine, postgres *database.PostgresDB, redis *database.RedisDB, logger *slog.Logger, metricsCollector *metrics.Metrics) error {
-	// Load JWT public key directly from auth-service container
-	publicKey, err := jwt.LoadPublicKeyFromAuthService("http://auth-service:8080")
+func setupAPIWithJWT(cfg *config.Config, publicRouter *gin.Engine, internalRouter *gin.Engine, postgres *database.PostgresDB, redis *database.RedisDB, logger *slog.Logger, metricsCollector *metrics.Metrics) error {
+	// Load JWT public key from auth-service using configured URL
+	publicKey, err := jwt.LoadPublicKeyFromAuthService(cfg.AuthServiceURL)
 	if err != nil {
-		logger.Warn("Failed to load JWT public key from auth-service container, JWT auth will be disabled", "error", err)
-		publicKey = nil
-	} else {
-		logger.Info("Successfully loaded JWT public key from auth-service container")
+		logger.Error("Failed to load JWT public key from auth-service - this is required for authentication", "error", err)
+		return fmt.Errorf("JWT public key is required: %w", err)
 	}
-
-	// Initialize storage layer
-	inventoryRepo := storage.NewInventoryStorage(postgres.Pool(), redis, logger, metricsCollector)
-	classifierRepo := storage.NewClassifierStorage(postgres.Pool(), redis, logger, metricsCollector)
-	itemRepo := storage.NewItemStorage(postgres.Pool(), logger, metricsCollector)
+	logger.Info("Successfully loaded JWT public key from auth-service")
 
 	// Create service implementations for interface compatibility
 	cacheImpl := service.NewRedisCache(redis)
 	var metricsImpl service.MetricsInterface = metrics.NewServiceMetrics(metricsCollector)
+
+	// Initialize storage layer
+	inventoryRepo := storage.NewInventoryStorage(postgres.Pool(), redis, logger, metricsCollector)
+	classifierRepo := storage.NewClassifierStorage(postgres.Pool(), redis, logger, metricsCollector)
+	itemRepo := storage.NewItemStorage(postgres.Pool(), logger, metricsImpl, cacheImpl)
 
 	// Create repository interfaces wrapper
 	repoInterfaces := &service.RepositoryInterfaces{
@@ -249,13 +248,8 @@ func setupAPIWithJWT(publicRouter *gin.Engine, internalRouter *gin.Engine, postg
 	inventoryService := service.NewInventoryService(serviceDeps)
 	classifierService := service.NewClassifierService(serviceDeps)
 
-	// Initialize JWT middleware
-	var jwtMiddleware *middleware.JWTAuthMiddleware
-	var serviceJWTMiddleware *middleware.ServiceJWTAuthMiddleware
-	if publicKey != nil {
-		jwtMiddleware = middleware.NewJWTAuthMiddleware(publicKey, redis, logger)
-		serviceJWTMiddleware = middleware.NewServiceJWTAuthMiddleware(publicKey, redis, logger)
-	}
+	// Initialize JWT middleware (required for public endpoints only)
+	jwtMiddleware := middleware.NewJWTAuthMiddleware(publicKey, redis, logger)
 
 	// Initialize handlers
 	inventoryHandler := handlers.NewInventoryHandler(inventoryService, classifierService, logger)
@@ -264,47 +258,31 @@ func setupAPIWithJWT(publicRouter *gin.Engine, internalRouter *gin.Engine, postg
 	publicAPI := publicRouter.Group("/api/inventory")
 
 	// Public endpoints (require JWT authentication)
-	if jwtMiddleware != nil {
-		public := publicAPI.Group("")
-		public.Use(jwtMiddleware.AuthenticateJWT())
-		{
-			public.GET("", inventoryHandler.GetUserInventory)
-			public.GET("/items", inventoryHandler.GetUserInventory) // alias for compatibility
-		}
-	} else {
-		// Fallback without JWT for development
-		publicAPI.GET("", inventoryHandler.GetUserInventoryNoAuth)
-		publicAPI.GET("/items", inventoryHandler.GetUserInventoryNoAuth)
+	public := publicAPI.Group("")
+	public.Use(jwtMiddleware.AuthenticateJWT())
+	{
+		public.GET("", inventoryHandler.GetUserInventory)
+		public.GET("/items", inventoryHandler.GetUserInventory)         // alias for compatibility
+		public.POST("/items/details", inventoryHandler.GetItemsDetails) // localized item details
 	}
 
-	// Administrative endpoints on public API (require admin authentication)
-	admin := publicAPI.Group("/admin")
-	{
-		admin.POST("/adjust", inventoryHandler.AdjustInventory)
-	}
 
 	// Setup internal API routes
 	internalAPI := internalRouter.Group("/api/inventory")
 
-	// Internal endpoints (require service JWT with 'internal' role)
-	if serviceJWTMiddleware != nil {
-		internal := internalAPI.Group("")
-		internal.Use(serviceJWTMiddleware.AuthenticateServiceJWT())
-		{
-			internal.POST("/add-items", inventoryHandler.AddItems)
-			internal.POST("/reserve", inventoryHandler.ReserveItems)
-			internal.POST("/return-reserve", inventoryHandler.ReturnReservedItems)
-			internal.POST("/consume-reserve", inventoryHandler.ConsumeReservedItems)
-		}
-	} else {
-		// Fallback without service JWT for development
-		internal := internalAPI.Group("")
-		{
-			internal.POST("/add-items", inventoryHandler.AddItems)
-			internal.POST("/reserve", inventoryHandler.ReserveItems)
-			internal.POST("/return-reserve", inventoryHandler.ReturnReservedItems)
-			internal.POST("/consume-reserve", inventoryHandler.ConsumeReservedItems)
-		}
+	// Internal endpoints (no authentication required - isolated by network)
+	internal := internalAPI.Group("")
+	{
+		internal.POST("/add-items", inventoryHandler.AddItems)
+		internal.POST("/reserve", inventoryHandler.ReserveItems)
+		internal.POST("/return-reserve", inventoryHandler.ReturnReservedItems)
+		internal.POST("/consume-reserve", inventoryHandler.ConsumeReservedItems)
+	}
+
+	// Administrative endpoints on internal API (no authentication required - isolated by network)
+	admin := internalAPI.Group("/admin")
+	{
+		admin.POST("/adjust", inventoryHandler.AdjustInventory)
 	}
 
 	return nil

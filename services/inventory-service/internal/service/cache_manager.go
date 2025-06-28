@@ -10,9 +10,9 @@ import (
 
 const (
 	// Cache key patterns for different types of data
-	userCachePattern         = "inventory:%s:*"
-	classifierCachePattern   = "inventory:classifier:%s*"
-	balanceCachePattern      = "inventory:%s:%s:*"
+	userCachePattern       = "inventory:%s:*"
+	classifierCachePattern = "inventory:classifier:%s*"
+	balanceCachePattern    = "inventory:%s:%s:*"
 )
 
 // cacheManager implements CacheManager interface
@@ -85,7 +85,7 @@ func (cm *cacheManager) InvalidateUserSectionCache(ctx context.Context, userID, 
 func (cm *cacheManager) InvalidateSpecificItemCache(ctx context.Context, userID, sectionID, itemID, collectionID, qualityLevelID uuid.UUID) error {
 	// Use the balance calculator's invalidation method
 	calculator := NewBalanceCalculator(cm.deps)
-	
+
 	req := &BalanceRequest{
 		UserID:         userID,
 		SectionID:      sectionID,
@@ -146,17 +146,17 @@ func (cm *cacheManager) GetCacheStats(ctx context.Context, userID uuid.UUID) (*C
 	// This would require cache implementation to support stats
 	// For now, return a placeholder
 	return &CacheStats{
-		UserID:     userID,
-		TotalKeys:  0, // Would need to count keys with pattern
-		HitRate:    0.0,
-		MissRate:   0.0,
+		UserID:    userID,
+		TotalKeys: 0, // Would need to count keys with pattern
+		HitRate:   0.0,
+		MissRate:  0.0,
 	}, nil
 }
 
 // ClearAllUserCaches clears all user-related caches (admin operation)
 func (cm *cacheManager) ClearAllUserCaches(ctx context.Context) error {
 	pattern := "inventory:*"
-	
+
 	err := cm.deps.Cache.DeletePattern(ctx, pattern)
 	if err != nil {
 		return errors.Wrap(err, "failed to clear all user caches")
@@ -196,10 +196,10 @@ func (cm *cacheManager) RefreshClassifierCaches(ctx context.Context) error {
 
 // CacheStats represents cache statistics for a user
 type CacheStats struct {
-	UserID     uuid.UUID `json:"user_id"`
-	TotalKeys  int       `json:"total_keys"`
-	HitRate    float64   `json:"hit_rate"`
-	MissRate   float64   `json:"miss_rate"`
+	UserID    uuid.UUID `json:"user_id"`
+	TotalKeys int       `json:"total_keys"`
+	HitRate   float64   `json:"hit_rate"`
+	MissRate  float64   `json:"miss_rate"`
 }
 
 // InvalidateCacheForOperations invalidates cache for all users affected by operations

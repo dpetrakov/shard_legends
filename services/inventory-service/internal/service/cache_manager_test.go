@@ -198,8 +198,8 @@ func TestCacheManager_InvalidateSpecificItemCache(t *testing.T) {
 		qualityLevelID := uuid.New()
 
 		// Expected cache key format
-		expectedCacheKey := "inventory:" + userID.String() + ":" + 
-			sectionID.String() + ":" + itemID.String() + ":" + 
+		expectedCacheKey := "inventory:" + userID.String() + ":" +
+			sectionID.String() + ":" + itemID.String() + ":" +
 			collectionID.String() + ":" + qualityLevelID.String()
 
 		// Mock cache deletion (fallback path)
@@ -383,7 +383,7 @@ func TestCacheManager_InvalidateCacheForOperations(t *testing.T) {
 
 		userID1 := uuid.New()
 		userID2 := uuid.New()
-		
+
 		operations := []*Operation{
 			{UserID: userID1},
 			{UserID: userID2},
@@ -393,7 +393,7 @@ func TestCacheManager_InvalidateCacheForOperations(t *testing.T) {
 		// Mock cache deletions for unique users
 		pattern1 := "inventory:" + userID1.String() + ":*"
 		pattern2 := "inventory:" + userID2.String() + ":*"
-		
+
 		cache.On("DeletePattern", ctx, pattern1).Return(nil)
 		cache.On("DeletePattern", ctx, pattern2).Return(nil)
 

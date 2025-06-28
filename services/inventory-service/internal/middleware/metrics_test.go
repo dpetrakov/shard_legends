@@ -197,10 +197,10 @@ func TestMetricsMiddleware_InFlightRequests(t *testing.T) {
 
 		router := gin.New()
 		router.Use(middleware)
-		
+
 		requestStarted := make(chan struct{})
 		requestCanFinish := make(chan struct{})
-		
+
 		router.GET("/slow", func(c *gin.Context) {
 			close(requestStarted)
 			<-requestCanFinish
@@ -332,11 +332,11 @@ func TestMetricsMiddleware_EdgeCases(t *testing.T) {
 		middleware := MetricsMiddleware(metricsCollector)
 
 		router := gin.New()
-		
+
 		// Recovery middleware to handle panics
 		router.Use(gin.Recovery())
 		router.Use(middleware)
-		
+
 		router.GET("/panic", func(c *gin.Context) {
 			panic("test panic")
 		})

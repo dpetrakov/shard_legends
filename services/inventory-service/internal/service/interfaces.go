@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	
+
 	"github.com/shard-legends/inventory-service/internal/models"
 )
 
@@ -16,20 +16,28 @@ type InventoryService interface {
 	CreateDailyBalance(ctx context.Context, req *DailyBalanceRequest) (*models.DailyBalance, error)
 	CheckSufficientBalance(ctx context.Context, req *SufficientBalanceRequest) error
 	CreateOperationsInTransaction(ctx context.Context, operations []*models.Operation) ([]uuid.UUID, error)
-	
+
 	// Utility operations
 	ConvertClassifierCodes(ctx context.Context, req *CodeConversionRequest) (*CodeConversionResponse, error)
 	InvalidateUserCache(ctx context.Context, userID uuid.UUID) error
-	
+
 	// High-level business operations
 	GetUserInventory(ctx context.Context, userID, sectionID uuid.UUID) ([]*models.InventoryItemResponse, error)
+	// D-15: Legacy method for performance comparison (not in public interface)
+	GetUserInventoryLegacy(ctx context.Context, userID, sectionID uuid.UUID) ([]*models.InventoryItemResponse, error)
 	AddItems(ctx context.Context, req *models.AddItemsRequest) ([]uuid.UUID, error)
 	AdjustInventory(ctx context.Context, req *models.AdjustInventoryRequest) (*models.AdjustInventoryResponse, error)
-	
-	// Reservation operations  
+
+	// Reservation operations
 	ReserveItems(ctx context.Context, req *models.ReserveItemsRequest) ([]uuid.UUID, error)
 	ReturnReservedItems(ctx context.Context, req *models.ReturnReserveRequest) error
 	ConsumeReservedItems(ctx context.Context, req *models.ConsumeReserveRequest) error
+
+	// Item details with i18n
+	GetItemsDetails(ctx context.Context, req *models.ItemDetailsRequest, languageCode string) (*models.ItemDetailsResponse, error)
+
+	// I18n utilities
+	GetDefaultLanguage(ctx context.Context) (*models.Language, error)
 }
 
 // ClassifierService defines methods for working with classifiers and their mappings
@@ -161,6 +169,12 @@ type ClassifierRepositoryInterface interface {
 type ItemRepositoryInterface interface {
 	GetItemByID(ctx context.Context, itemID uuid.UUID) (*models.Item, error)
 	GetItemWithDetails(ctx context.Context, itemID uuid.UUID) (*models.ItemWithDetails, error)
+
+	// I18n and batch operations
+	GetItemsBatch(ctx context.Context, itemIDs []uuid.UUID) (map[uuid.UUID]*models.ItemWithDetails, error)
+	GetTranslationsBatch(ctx context.Context, entityType string, entityIDs []uuid.UUID, languageCode string) (map[uuid.UUID]map[string]string, error)
+	GetDefaultLanguage(ctx context.Context) (*models.Language, error)
+	GetItemImagesBatch(ctx context.Context, requests []models.ItemDetailRequestItem) (map[string]string, error)
 }
 
 // InventoryRepositoryInterface defines the inventory repository interface
@@ -175,9 +189,12 @@ type InventoryRepositoryInterface interface {
 	BeginTransaction(ctx context.Context) (interface{}, error)
 	CommitTransaction(tx interface{}) error
 	RollbackTransaction(tx interface{}) error
-	
+
 	// Atomic balance checking with row-level locking
 	CheckAndLockBalances(ctx context.Context, tx interface{}, items []BalanceLockRequest) ([]BalanceLockResult, error)
+
+	// D-15: Optimized methods to eliminate N+1 queries
+	GetUserInventoryOptimized(ctx context.Context, userID, sectionID uuid.UUID) ([]*models.InventoryItemResponse, error)
 }
 
 // CacheInterface defines the caching interface

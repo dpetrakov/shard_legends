@@ -19,7 +19,7 @@ func MetricsMiddleware(metricsCollector *metrics.Metrics) gin.HandlerFunc {
 		start := time.Now()
 		method := c.Request.Method
 		path := c.FullPath()
-		
+
 		// If path is empty, use the raw path (useful for 404s)
 		if path == "" {
 			path = c.Request.URL.Path

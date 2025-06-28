@@ -75,16 +75,16 @@ CREATE TRIGGER check_balance_before_operation
 
 -- Индекс для атомарных блокировок строк daily_balances
 -- Критичен для SELECT ... FOR UPDATE операций
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_daily_balances_user_item_lock 
+CREATE INDEX IF NOT EXISTS idx_daily_balances_user_item_lock 
 ON inventory.daily_balances (user_id, section_id, item_id, collection_id, quality_level_id);
 
--- Индекс для быстрого поиска операций текущего дня при расчете баланса
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_operations_current_day
-ON inventory.operations (user_id, section_id, item_id, collection_id, quality_level_id)
-WHERE DATE(created_at) = CURRENT_DATE;
+-- Индекс для быстрого поиска операций при расчете баланса
+-- Убираем проблематичное условие WHERE с функцией DATE
+CREATE INDEX IF NOT EXISTS idx_operations_current_day
+ON inventory.operations (user_id, section_id, item_id, collection_id, quality_level_id, created_at);
 
 -- Составной индекс для оптимизации проверки баланса
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_operations_balance_check
+CREATE INDEX IF NOT EXISTS idx_operations_balance_check
 ON inventory.operations (user_id, section_id, item_id, collection_id, quality_level_id, created_at)
 INCLUDE (quantity_change);
 

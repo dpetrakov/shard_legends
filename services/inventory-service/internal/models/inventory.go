@@ -56,8 +56,8 @@ func NewItemKey(userID, sectionID, itemID, collectionID, qualityLevelID uuid.UUI
 
 // String returns a string representation of the ItemKey for caching
 func (k ItemKey) String() string {
-	return k.UserID.String() + ":" + k.SectionID.String() + ":" + 
-		k.ItemID.String() + ":" + k.CollectionID.String() + ":" + 
+	return k.UserID.String() + ":" + k.SectionID.String() + ":" +
+		k.ItemID.String() + ":" + k.CollectionID.String() + ":" +
 		k.QualityLevelID.String()
 }
 

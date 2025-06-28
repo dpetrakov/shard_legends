@@ -11,10 +11,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/shard-legends/inventory-service/internal/database"
+	internalerrors "github.com/shard-legends/inventory-service/internal/errors"
 	"github.com/shard-legends/inventory-service/internal/models"
 	"github.com/shard-legends/inventory-service/internal/service"
 	"github.com/shard-legends/inventory-service/pkg/metrics"
-	internalerrors "github.com/shard-legends/inventory-service/internal/errors"
 )
 
 // InventoryStorage implements inventory data access using PostgreSQL and Redis
@@ -32,21 +32,21 @@ type InventoryRepository interface {
 	GetDailyBalance(ctx context.Context, userID, sectionID, itemID, collectionID, qualityLevelID uuid.UUID, date time.Time) (*models.DailyBalance, error)
 	GetLatestDailyBalance(ctx context.Context, userID, sectionID, itemID, collectionID, qualityLevelID uuid.UUID, beforeDate time.Time) (*models.DailyBalance, error)
 	CreateDailyBalance(ctx context.Context, balance *models.DailyBalance) error
-	
+
 	// Operations
 	GetOperations(ctx context.Context, userID, sectionID, itemID, collectionID, qualityLevelID uuid.UUID, fromDate time.Time) ([]*models.Operation, error)
 	GetOperationsByExternalID(ctx context.Context, operationID uuid.UUID) ([]*models.Operation, error)
 	CreateOperations(ctx context.Context, operations []*models.Operation) error
 	CreateOperationsInTransaction(ctx context.Context, tx interface{}, operations []*models.Operation) error
-	
+
 	// Transactions (matching service interface)
 	BeginTransaction(ctx context.Context) (interface{}, error)
 	CommitTransaction(tx interface{}) error
 	RollbackTransaction(tx interface{}) error
-	
+
 	// Atomic balance checking with row-level locking
 	CheckAndLockBalances(ctx context.Context, tx interface{}, items []service.BalanceLockRequest) ([]service.BalanceLockResult, error)
-	
+
 	// D-15: Optimized methods to eliminate N+1 queries
 	GetUserInventoryOptimized(ctx context.Context, userID, sectionID uuid.UUID) ([]*models.InventoryItemResponse, error)
 }
@@ -64,8 +64,12 @@ type ItemRepository interface {
 	GetItemByID(ctx context.Context, itemID uuid.UUID) (*models.Item, error)
 	GetItemsByClass(ctx context.Context, classCode string) ([]*models.Item, error)
 	GetItemWithDetails(ctx context.Context, itemID uuid.UUID) (*models.ItemWithDetails, error)
-	// D-15: Batch method to eliminate N+1 queries
-	GetItemsWithDetailsBatch(ctx context.Context, itemIDs []uuid.UUID) (map[uuid.UUID]*models.ItemWithDetails, error)
+
+	// I18n and batch operations
+	GetItemsBatch(ctx context.Context, itemIDs []uuid.UUID) (map[uuid.UUID]*models.ItemWithDetails, error)
+	GetTranslationsBatch(ctx context.Context, entityType string, entityIDs []uuid.UUID, languageCode string) (map[uuid.UUID]map[string]string, error)
+	GetDefaultLanguage(ctx context.Context) (*models.Language, error)
+	GetItemImagesBatch(ctx context.Context, requests []models.ItemDetailRequestItem) (map[string]string, error)
 }
 
 // NewInventoryStorage creates a new inventory storage instance
@@ -89,11 +93,12 @@ func NewClassifierStorage(pool *pgxpool.Pool, redis *database.RedisDB, logger *s
 }
 
 // NewItemStorage creates a new item storage instance
-func NewItemStorage(pool *pgxpool.Pool, logger *slog.Logger, metrics *metrics.Metrics) ItemRepository {
+func NewItemStorage(pool *pgxpool.Pool, logger *slog.Logger, metrics service.MetricsInterface, cache service.CacheInterface) ItemRepository {
 	return &itemStorage{
 		pool:    pool,
 		logger:  logger,
 		metrics: metrics,
+		cache:   cache,
 	}
 }
 
@@ -101,7 +106,7 @@ func NewItemStorage(pool *pgxpool.Pool, logger *slog.Logger, metrics *metrics.Me
 
 func (s *InventoryStorage) GetUserInventoryItems(ctx context.Context, userID, sectionID uuid.UUID) ([]*models.ItemKey, error) {
 	s.logger.Info("GetUserInventoryItems called", "user_id", userID, "section_id", sectionID)
-	
+
 	query := `
 		SELECT DISTINCT 
 			user_id, 
@@ -110,7 +115,7 @@ func (s *InventoryStorage) GetUserInventoryItems(ctx context.Context, userID, se
 			collection_id, 
 			quality_level_id
 		FROM inventory.daily_balances 
-		WHERE user_id = $1 AND section_id = $2 AND quantity > 0
+		WHERE user_id = $1 AND section_id = $2
 		UNION
 		SELECT DISTINCT 
 			user_id, 
@@ -121,14 +126,14 @@ func (s *InventoryStorage) GetUserInventoryItems(ctx context.Context, userID, se
 		FROM inventory.operations 
 		WHERE user_id = $1 AND section_id = $2 AND created_at >= CURRENT_DATE
 	`
-	
+
 	rows, err := s.pool.Query(ctx, query, userID, sectionID)
 	if err != nil {
 		s.logger.Error("Failed to get user inventory items", "error", err)
 		return nil, err
 	}
 	defer rows.Close()
-	
+
 	var items []*models.ItemKey
 	for rows.Next() {
 		var item models.ItemKey
@@ -144,19 +149,19 @@ func (s *InventoryStorage) GetUserInventoryItems(ctx context.Context, userID, se
 		}
 		items = append(items, &item)
 	}
-	
+
 	if err := rows.Err(); err != nil {
 		s.logger.Error("Rows iteration error", "error", err)
 		return nil, err
 	}
-	
+
 	s.logger.Info("Found inventory items", "count", len(items))
 	return items, nil
 }
 
 func (s *InventoryStorage) GetDailyBalance(ctx context.Context, userID, sectionID, itemID, collectionID, qualityLevelID uuid.UUID, date time.Time) (*models.DailyBalance, error) {
 	s.logger.Info("GetDailyBalance called", "user_id", userID, "date", date.Format("2006-01-02"))
-	
+
 	query := `
 		SELECT 
 			user_id, 
@@ -175,7 +180,7 @@ func (s *InventoryStorage) GetDailyBalance(ctx context.Context, userID, sectionI
 			AND quality_level_id = $5 
 			AND balance_date = $6
 	`
-	
+
 	var balance models.DailyBalance
 	err := s.pool.QueryRow(ctx, query, userID, sectionID, itemID, collectionID, qualityLevelID, date.Truncate(24*time.Hour)).Scan(
 		&balance.UserID,
@@ -187,7 +192,7 @@ func (s *InventoryStorage) GetDailyBalance(ctx context.Context, userID, sectionI
 		&balance.Quantity,
 		&balance.CreatedAt,
 	)
-	
+
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			s.logger.Debug("No daily balance found", "date", date.Format("2006-01-02"))
@@ -196,13 +201,13 @@ func (s *InventoryStorage) GetDailyBalance(ctx context.Context, userID, sectionI
 		s.logger.Error("Failed to get daily balance", "error", err)
 		return nil, err
 	}
-	
+
 	return &balance, nil
 }
 
 func (s *InventoryStorage) GetLatestDailyBalance(ctx context.Context, userID, sectionID, itemID, collectionID, qualityLevelID uuid.UUID, beforeDate time.Time) (*models.DailyBalance, error) {
 	s.logger.Info("GetLatestDailyBalance called", "user_id", userID, "before_date", beforeDate.Format("2006-01-02"))
-	
+
 	query := `
 		SELECT 
 			user_id, 
@@ -223,7 +228,7 @@ func (s *InventoryStorage) GetLatestDailyBalance(ctx context.Context, userID, se
 		ORDER BY balance_date DESC
 		LIMIT 1
 	`
-	
+
 	var balance models.DailyBalance
 	err := s.pool.QueryRow(ctx, query, userID, sectionID, itemID, collectionID, qualityLevelID, beforeDate.Truncate(24*time.Hour)).Scan(
 		&balance.UserID,
@@ -235,7 +240,7 @@ func (s *InventoryStorage) GetLatestDailyBalance(ctx context.Context, userID, se
 		&balance.Quantity,
 		&balance.CreatedAt,
 	)
-	
+
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			s.logger.Debug("No latest daily balance found", "before_date", beforeDate.Format("2006-01-02"))
@@ -244,13 +249,13 @@ func (s *InventoryStorage) GetLatestDailyBalance(ctx context.Context, userID, se
 		s.logger.Error("Failed to get latest daily balance", "error", err)
 		return nil, err
 	}
-	
+
 	return &balance, nil
 }
 
 func (s *InventoryStorage) CreateDailyBalance(ctx context.Context, balance *models.DailyBalance) error {
 	s.logger.Info("CreateDailyBalance called", "user_id", balance.UserID, "quantity", balance.Quantity)
-	
+
 	query := `
 		INSERT INTO inventory.daily_balances (
 			user_id, 
@@ -264,7 +269,7 @@ func (s *InventoryStorage) CreateDailyBalance(ctx context.Context, balance *mode
 		ON CONFLICT (user_id, section_id, item_id, collection_id, quality_level_id, balance_date)
 		DO UPDATE SET quantity = EXCLUDED.quantity
 	`
-	
+
 	_, err := s.pool.Exec(ctx, query,
 		balance.UserID,
 		balance.SectionID,
@@ -274,19 +279,19 @@ func (s *InventoryStorage) CreateDailyBalance(ctx context.Context, balance *mode
 		balance.BalanceDate.Truncate(24*time.Hour),
 		balance.Quantity,
 	)
-	
+
 	if err != nil {
 		s.logger.Error("Failed to create daily balance", "error", err)
 		return err
 	}
-	
+
 	s.logger.Debug("Daily balance created successfully")
 	return nil
 }
 
 func (s *InventoryStorage) GetOperations(ctx context.Context, userID, sectionID, itemID, collectionID, qualityLevelID uuid.UUID, fromDate time.Time) ([]*models.Operation, error) {
 	s.logger.Info("GetOperations called", "user_id", userID, "from_date", fromDate.Format("2006-01-02 15:04:05"))
-	
+
 	query := `
 		SELECT 
 			id, 
@@ -310,14 +315,14 @@ func (s *InventoryStorage) GetOperations(ctx context.Context, userID, sectionID,
 			AND created_at >= $6
 		ORDER BY created_at ASC
 	`
-	
+
 	rows, err := s.pool.Query(ctx, query, userID, sectionID, itemID, collectionID, qualityLevelID, fromDate)
 	if err != nil {
 		s.logger.Error("Failed to get operations", "error", err)
 		return nil, err
 	}
 	defer rows.Close()
-	
+
 	var operations []*models.Operation
 	for rows.Next() {
 		var op models.Operation
@@ -340,19 +345,19 @@ func (s *InventoryStorage) GetOperations(ctx context.Context, userID, sectionID,
 		}
 		operations = append(operations, &op)
 	}
-	
+
 	if err := rows.Err(); err != nil {
 		s.logger.Error("Rows iteration error", "error", err)
 		return nil, err
 	}
-	
+
 	s.logger.Info("Found operations", "count", len(operations))
 	return operations, nil
 }
 
 func (s *InventoryStorage) GetOperationsByExternalID(ctx context.Context, operationID uuid.UUID) ([]*models.Operation, error) {
 	s.logger.Info("GetOperationsByExternalID called", "operation_id", operationID)
-	
+
 	query := `
 		SELECT 
 			id, 
@@ -371,14 +376,14 @@ func (s *InventoryStorage) GetOperationsByExternalID(ctx context.Context, operat
 		WHERE operation_id = $1
 		ORDER BY created_at ASC
 	`
-	
+
 	rows, err := s.pool.Query(ctx, query, operationID)
 	if err != nil {
 		s.logger.Error("Failed to get operations by external ID", "error", err)
 		return nil, err
 	}
 	defer rows.Close()
-	
+
 	var operations []*models.Operation
 	for rows.Next() {
 		var op models.Operation
@@ -401,23 +406,23 @@ func (s *InventoryStorage) GetOperationsByExternalID(ctx context.Context, operat
 		}
 		operations = append(operations, &op)
 	}
-	
+
 	if err := rows.Err(); err != nil {
 		s.logger.Error("Rows iteration error", "error", err)
 		return nil, err
 	}
-	
+
 	s.logger.Info("Found operations by external ID", "count", len(operations))
 	return operations, nil
 }
 
 func (s *InventoryStorage) CreateOperations(ctx context.Context, operations []*models.Operation) error {
 	s.logger.Info("CreateOperations called", "count", len(operations))
-	
+
 	if len(operations) == 0 {
 		return nil
 	}
-	
+
 	// Use batch insert for better performance
 	query := `
 		INSERT INTO inventory.operations (
@@ -434,14 +439,14 @@ func (s *InventoryStorage) CreateOperations(ctx context.Context, operations []*m
 			comment
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 	`
-	
+
 	batch := &pgx.Batch{}
 	for _, op := range operations {
 		// Generate ID if not provided
 		if op.ID == uuid.Nil {
 			op.ID = uuid.New()
 		}
-		
+
 		batch.Queue(query,
 			op.ID,
 			op.UserID,
@@ -456,10 +461,10 @@ func (s *InventoryStorage) CreateOperations(ctx context.Context, operations []*m
 			op.Comment,
 		)
 	}
-	
+
 	br := s.pool.SendBatch(ctx, batch)
 	defer br.Close()
-	
+
 	for i := 0; i < len(operations); i++ {
 		_, err := br.Exec()
 		if err != nil {
@@ -471,7 +476,7 @@ func (s *InventoryStorage) CreateOperations(ctx context.Context, operations []*m
 			return err
 		}
 	}
-	
+
 	s.logger.Info("Operations created successfully", "count", len(operations))
 	return nil
 }
@@ -498,7 +503,7 @@ func (s *InventoryStorage) RollbackTransaction(tx interface{}) error {
 // Uses SELECT ... FOR UPDATE to prevent race conditions
 func (s *InventoryStorage) CheckAndLockBalances(ctx context.Context, tx interface{}, items []service.BalanceLockRequest) ([]service.BalanceLockResult, error) {
 	s.logger.Info("CheckAndLockBalances called", "items_count", len(items))
-	
+
 	if len(items) == 0 {
 		return nil, nil
 	}
@@ -510,12 +515,12 @@ func (s *InventoryStorage) CheckAndLockBalances(ctx context.Context, tx interfac
 	}
 
 	results := make([]service.BalanceLockResult, len(items))
-	
+
 	for i, item := range items {
 		result := service.BalanceLockResult{
 			BalanceLockRequest: item,
 		}
-		
+
 		// Lock the daily balance row for this item (if exists)
 		// This prevents concurrent modifications to the same item
 		lockQuery := `
@@ -531,12 +536,12 @@ func (s *InventoryStorage) CheckAndLockBalances(ctx context.Context, tx interfac
 			LIMIT 1
 			FOR UPDATE NOWAIT
 		`
-		
+
 		var dailyBalance int64 = 0
-		err := pgxTx.QueryRow(ctx, lockQuery, 
-			item.UserID, item.SectionID, item.ItemID, 
+		err := pgxTx.QueryRow(ctx, lockQuery,
+			item.UserID, item.SectionID, item.ItemID,
 			item.CollectionID, item.QualityLevelID).Scan(&dailyBalance)
-		
+
 		if err != nil && err != pgx.ErrNoRows {
 			// Handle database errors appropriately
 			if dbErr := internalerrors.HandleDatabaseError(err, "lock_balance_row"); dbErr != nil {
@@ -547,7 +552,7 @@ func (s *InventoryStorage) CheckAndLockBalances(ctx context.Context, tx interfac
 			results[i] = result
 			continue
 		}
-		
+
 		// Calculate operations sum for today within the same transaction
 		operationsQuery := `
 			SELECT COALESCE(SUM(quantity_change), 0)
@@ -559,25 +564,25 @@ func (s *InventoryStorage) CheckAndLockBalances(ctx context.Context, tx interfac
 			  AND quality_level_id = $5 
 			  AND DATE(created_at) = CURRENT_DATE
 		`
-		
+
 		var operationsSum int64 = 0
 		err = pgxTx.QueryRow(ctx, operationsQuery,
 			item.UserID, item.SectionID, item.ItemID,
 			item.CollectionID, item.QualityLevelID).Scan(&operationsSum)
-		
+
 		if err != nil {
 			result.Error = err
 			results[i] = result
 			continue
 		}
-		
+
 		// Calculate available balance
 		availableBalance := dailyBalance + operationsSum
 		result.AvailableQty = availableBalance
 		result.Sufficient = availableBalance >= item.RequiredQty
-		
+
 		results[i] = result
-		
+
 		s.logger.Debug("Balance locked and checked",
 			"user_id", item.UserID,
 			"item_id", item.ItemID,
@@ -587,29 +592,29 @@ func (s *InventoryStorage) CheckAndLockBalances(ctx context.Context, tx interfac
 			"required", item.RequiredQty,
 			"sufficient", result.Sufficient)
 	}
-	
+
 	return results, nil
 }
 
 func (s *InventoryStorage) CreateOperationsInTransaction(ctx context.Context, tx interface{}, operations []*models.Operation) error {
 	s.logger.Info("CreateOperationsInTransaction called", "count", len(operations))
-	
+
 	if len(operations) == 0 {
 		return nil
 	}
-	
+
 	// If no transaction provided, create operations normally
 	if tx == nil {
 		return s.CreateOperations(ctx, operations)
 	}
-	
+
 	// Cast to pgx.Tx
 	pgxTx, ok := tx.(pgx.Tx)
 	if !ok {
 		s.logger.Error("Invalid transaction type")
 		return fmt.Errorf("invalid transaction type")
 	}
-	
+
 	// Use batch insert for better performance within transaction
 	query := `
 		INSERT INTO inventory.operations (
@@ -626,14 +631,14 @@ func (s *InventoryStorage) CreateOperationsInTransaction(ctx context.Context, tx
 			comment
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 	`
-	
+
 	batch := &pgx.Batch{}
 	for _, op := range operations {
 		// Generate ID if not provided
 		if op.ID == uuid.Nil {
 			op.ID = uuid.New()
 		}
-		
+
 		batch.Queue(query,
 			op.ID,
 			op.UserID,
@@ -648,10 +653,10 @@ func (s *InventoryStorage) CreateOperationsInTransaction(ctx context.Context, tx
 			op.Comment,
 		)
 	}
-	
+
 	br := pgxTx.SendBatch(ctx, batch)
 	defer br.Close()
-	
+
 	for i := 0; i < len(operations); i++ {
 		_, err := br.Exec()
 		if err != nil {
@@ -663,7 +668,7 @@ func (s *InventoryStorage) CreateOperationsInTransaction(ctx context.Context, tx
 			return err
 		}
 	}
-	
+
 	s.logger.Info("Operations created successfully in transaction", "count", len(operations))
 	return nil
 }
@@ -672,13 +677,13 @@ func (s *InventoryStorage) CreateOperationsInTransaction(ctx context.Context, tx
 // Использует единый JOIN запрос вместо множественных отдельных запросов
 func (s *InventoryStorage) GetUserInventoryOptimized(ctx context.Context, userID, sectionID uuid.UUID) ([]*models.InventoryItemResponse, error) {
 	s.logger.Info("GetUserInventoryOptimized called", "user_id", userID, "section_id", sectionID)
-	
+
 	// Единый запрос с JOIN для получения всех данных за раз
 	// Устраняет N+1 проблему путем объединения:
 	// 1. daily_balances и operations для расчета текущего баланса
 	// 2. items, classifier_items для получения деталей предмета и кодов
 	query := `
-		WITH current_balances AS (
+		WITH daily_balances_latest AS (
 			-- Получаем актуальные остатки на конец дня
 			SELECT DISTINCT ON (db.user_id, db.section_id, db.item_id, db.collection_id, db.quality_level_id)
 				db.user_id,
@@ -689,11 +694,10 @@ func (s *InventoryStorage) GetUserInventoryOptimized(ctx context.Context, userID
 				db.quantity as daily_quantity,
 				db.balance_date
 			FROM inventory.daily_balances db
-			WHERE db.user_id = $1 AND db.section_id = $2 AND db.quantity > 0
+			WHERE db.user_id = $1 AND db.section_id = $2
 			ORDER BY db.user_id, db.section_id, db.item_id, db.collection_id, db.quality_level_id, db.balance_date DESC
-			
-			UNION
-			
+		),
+		operations_only AS (
 			-- Добавляем предметы, которые есть только в операциях за сегодня
 			SELECT DISTINCT 
 				op.user_id,
@@ -714,6 +718,11 @@ func (s *InventoryStorage) GetUserInventoryOptimized(ctx context.Context, userID
 						AND db2.collection_id = op.collection_id
 						AND db2.quality_level_id = op.quality_level_id
 				)
+		),
+		current_balances AS (
+			SELECT * FROM daily_balances_latest
+			UNION ALL
+			SELECT * FROM operations_only
 		),
 		operations_sum AS (
 			-- Сумма операций за сегодня для каждого предмета
@@ -773,7 +782,7 @@ func (s *InventoryStorage) GetUserInventoryOptimized(ctx context.Context, userID
 		INNER JOIN inventory.classifier_items qual ON fb.quality_level_id = qual.id
 		ORDER BY fb.item_id
 	`
-	
+
 	rows, err := s.pool.Query(ctx, query, userID, sectionID)
 	if err != nil {
 		s.logger.Error("Failed to execute optimized inventory query", "error", err)
@@ -783,12 +792,12 @@ func (s *InventoryStorage) GetUserInventoryOptimized(ctx context.Context, userID
 		return nil, err
 	}
 	defer rows.Close()
-	
+
 	var result []*models.InventoryItemResponse
 	for rows.Next() {
 		var item models.InventoryItemResponse
 		var collectionCode, qualityCode string
-		
+
 		if err := rows.Scan(
 			&item.ItemID,
 			&item.Quantity,
@@ -803,30 +812,28 @@ func (s *InventoryStorage) GetUserInventoryOptimized(ctx context.Context, userID
 			s.logger.Error("Failed to scan optimized inventory item", "error", err)
 			return nil, err
 		}
-		
+
 		// Устанавливаем коды коллекции и качества
 		item.Collection = &collectionCode
 		item.QualityLevel = &qualityCode
-		
+
 		result = append(result, &item)
 	}
-	
+
 	if err := rows.Err(); err != nil {
 		s.logger.Error("Rows iteration error in optimized inventory", "error", err)
 		return nil, err
 	}
-	
+
 	// Записываем метрики успеха
 	if s.metrics != nil {
 		s.metrics.RecordInventoryOperation("get_inventory_optimized", sectionID.String(), "success")
-		s.metrics.RecordItemsPerInventory(sectionID.String(), len(result))
 	}
-	
-	s.logger.Info("Optimized inventory query completed", 
-		"user_id", userID, 
-		"section_id", sectionID, 
+
+	s.logger.Info("Optimized inventory query completed",
+		"user_id", userID,
+		"section_id", sectionID,
 		"items_count", len(result))
-	
+
 	return result, nil
 }
-

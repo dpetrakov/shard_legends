@@ -13,7 +13,7 @@ import (
 const (
 	// Check violation (constraint failed)
 	PgErrorCodeCheckViolation = "23514"
-	// Unique violation 
+	// Unique violation
 	PgErrorCodeUniqueViolation = "23505"
 	// Foreign key violation
 	PgErrorCodeForeignKeyViolation = "23503"
@@ -66,7 +66,7 @@ func HandleDatabaseError(err error, operation string) error {
 
 	// Handle string-based error messages (for compatibility)
 	errMsg := err.Error()
-	
+
 	// Check for insufficient balance from trigger
 	if strings.Contains(errMsg, "Insufficient balance") {
 		return parseInsufficientBalanceError(errMsg)
@@ -94,23 +94,23 @@ func handlePostgreSQLError(pgErr *pgconn.PgError, operation string) error {
 			return parseInsufficientBalanceError(pgErr.Message)
 		}
 		return errors.Errorf("constraint violation during %s: %s", operation, pgErr.Message)
-		
+
 	case PgErrorCodeLockNotAvailable:
 		return &ConcurrentOperationError{
 			Operation: operation,
 			Resource:  extractResourceFromConstraint(pgErr.ConstraintName),
 			Message:   "Resource is currently locked by another transaction. Please retry.",
 		}
-		
+
 	case PgErrorCodeUniqueViolation:
 		return errors.Errorf("duplicate %s: %s", operation, pgErr.Message)
-		
+
 	case PgErrorCodeForeignKeyViolation:
 		return errors.Errorf("invalid reference during %s: %s", operation, pgErr.Message)
-		
+
 	case PgErrorCodeNotNullViolation:
 		return errors.Errorf("missing required field during %s: %s", operation, pgErr.Message)
-		
+
 	default:
 		return errors.Errorf("database error during %s: %s", operation, pgErr.Message)
 	}
@@ -139,7 +139,7 @@ func extractResourceFromConstraint(constraintName string) string {
 	if constraintName == "" {
 		return "unknown_resource"
 	}
-	
+
 	// Convert constraint names to resource names
 	switch {
 	case strings.Contains(constraintName, "balance"):
@@ -159,22 +159,22 @@ func extractUUIDAfterText(message, text string) string {
 	if index == -1 {
 		return ""
 	}
-	
+
 	start := index + len(text)
 	if start >= len(message) {
 		return ""
 	}
-	
+
 	// Look for space or colon that ends the UUID
 	end := start
 	for end < len(message) && message[end] != ' ' && message[end] != ':' {
 		end++
 	}
-	
+
 	if end > start {
 		return message[start:end]
 	}
-	
+
 	return ""
 }
 
@@ -184,18 +184,18 @@ func extractNumberAfterText(message, text string) int64 {
 	if index == -1 {
 		return 0
 	}
-	
+
 	start := index + len(text)
 	if start >= len(message) {
 		return 0
 	}
-	
+
 	// Extract digits
 	end := start
 	for end < len(message) && message[end] >= '0' && message[end] <= '9' {
 		end++
 	}
-	
+
 	if end > start {
 		var num int64
 		_, err := fmt.Sscanf(message[start:end], "%d", &num)
@@ -203,7 +203,7 @@ func extractNumberAfterText(message, text string) int64 {
 			return num
 		}
 	}
-	
+
 	return 0
 }
 

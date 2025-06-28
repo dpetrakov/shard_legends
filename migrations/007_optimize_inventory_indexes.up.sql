@@ -29,10 +29,9 @@ CREATE INDEX IF NOT EXISTS idx_daily_balances_full_lookup
 ON inventory.daily_balances (user_id, section_id, item_id, collection_id, quality_level_id, balance_date DESC);
 
 -- Специализированный индекс для GetLatestDailyBalance
--- WHERE balance_date < $6 ORDER BY balance_date DESC
+-- Убираем проблематичное условие WHERE с CURRENT_DATE
 CREATE INDEX IF NOT EXISTS idx_daily_balances_latest_lookup 
-ON inventory.daily_balances (user_id, section_id, item_id, collection_id, quality_level_id, balance_date DESC)
-WHERE balance_date < CURRENT_DATE;
+ON inventory.daily_balances (user_id, section_id, item_id, collection_id, quality_level_id, balance_date DESC);
 
 -- =====================================================
 -- Оптимизация для operations
@@ -44,16 +43,14 @@ CREATE INDEX IF NOT EXISTS idx_operations_balance_calculation
 ON inventory.operations (user_id, section_id, item_id, collection_id, quality_level_id, created_at);
 
 -- Оптимизация для CheckAndLockBalances (операции за сегодня)
--- WHERE DATE(created_at) = CURRENT_DATE с покрытием quantity_change
+-- Убираем проблематичное условие WHERE с функцией DATE
 CREATE INDEX IF NOT EXISTS idx_operations_today_sum 
-ON inventory.operations (user_id, section_id, item_id, collection_id, quality_level_id, quantity_change)
-WHERE DATE(created_at) = CURRENT_DATE;
+ON inventory.operations (user_id, section_id, item_id, collection_id, quality_level_id, quantity_change, created_at);
 
 -- Оптимизация GetUserInventoryItems (вторая часть UNION)
--- WHERE user_id = $1 AND section_id = $2 AND created_at >= CURRENT_DATE
+-- Убираем проблематичное условие WHERE с CURRENT_DATE
 CREATE INDEX IF NOT EXISTS idx_operations_today_items 
-ON inventory.operations (user_id, section_id, item_id, collection_id, quality_level_id)
-WHERE created_at >= CURRENT_DATE;
+ON inventory.operations (user_id, section_id, item_id, collection_id, quality_level_id, created_at);
 
 -- =====================================================
 -- Оптимизация для items и classifier_items (устранение N+1)
@@ -77,10 +74,9 @@ ON inventory.classifier_items (classifier_id, id, code);
 -- =====================================================
 
 -- Оптимизация CheckAndLockBalances с блокировками
--- Частичный индекс только для актуальных остатков
+-- Убираем проблематичное условие WHERE с CURRENT_DATE
 CREATE INDEX IF NOT EXISTS idx_daily_balances_locking 
-ON inventory.daily_balances (user_id, section_id, item_id, collection_id, quality_level_id, quantity)
-WHERE balance_date <= CURRENT_DATE AND quantity > 0;
+ON inventory.daily_balances (user_id, section_id, item_id, collection_id, quality_level_id, quantity, balance_date);
 
 -- =====================================================
 -- Удаление существующих менее оптимальных индексов
@@ -98,8 +94,8 @@ DROP INDEX IF EXISTS inventory.idx_daily_balances_user_date;
 CREATE OR REPLACE VIEW inventory.index_usage_monitoring AS
 SELECT 
     schemaname,
-    tablename,
-    indexname,
+    relname as tablename,
+    indexrelname as indexname,
     idx_scan as scans,
     idx_tup_read as tuples_read,
     idx_tup_fetch as tuples_fetched,

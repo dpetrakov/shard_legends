@@ -86,7 +86,7 @@ func TestValidateCode(t *testing.T) {
 
 func TestValidateItemQuantityRequest(t *testing.T) {
 	validUUID := uuid.New()
-	
+
 	tests := []struct {
 		name    string
 		req     *ItemQuantityRequest
@@ -158,7 +158,7 @@ func TestValidateItemQuantityRequest(t *testing.T) {
 
 func TestValidateOperation(t *testing.T) {
 	validUUID := uuid.New()
-	
+
 	tests := []struct {
 		name    string
 		op      *Operation
@@ -246,7 +246,7 @@ func TestValidateOperation(t *testing.T) {
 
 func TestValidateAddItemsRequest(t *testing.T) {
 	validUUID := uuid.New()
-	
+
 	tests := []struct {
 		name    string
 		req     *AddItemsRequest
@@ -327,7 +327,7 @@ func TestValidateAddItemsRequest(t *testing.T) {
 
 func TestValidateDailyBalance(t *testing.T) {
 	validUUID := uuid.New()
-	
+
 	tests := []struct {
 		name    string
 		balance *DailyBalance
@@ -397,7 +397,7 @@ func TestValidateDailyBalance(t *testing.T) {
 
 func TestValidateReserveItemsRequest(t *testing.T) {
 	validUUID := uuid.New()
-	
+
 	tests := []struct {
 		name    string
 		req     *ReserveItemsRequest
@@ -482,7 +482,7 @@ func TestValidateReserveItemsRequest(t *testing.T) {
 
 func TestValidateAdjustInventoryRequest(t *testing.T) {
 	validUUID := uuid.New()
-	
+
 	tests := []struct {
 		name    string
 		req     *AdjustInventoryRequest

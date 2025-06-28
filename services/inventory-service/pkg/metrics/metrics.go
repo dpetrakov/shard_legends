@@ -13,8 +13,8 @@ type Metrics struct {
 	HTTPRequestsInFlight prometheus.Gauge
 
 	// Database metrics
-	DatabaseConnections  prometheus.Gauge
-	DatabaseQueriesTotal *prometheus.CounterVec
+	DatabaseConnections   prometheus.Gauge
+	DatabaseQueriesTotal  *prometheus.CounterVec
 	DatabaseQueryDuration *prometheus.HistogramVec
 
 	// Redis metrics
@@ -23,15 +23,15 @@ type Metrics struct {
 	RedisCommandDuration *prometheus.HistogramVec
 
 	// Business metrics
-	InventoryOperationsTotal *prometheus.CounterVec
-	ActiveUsersTotal        prometheus.Gauge
-	BalanceCalculations     *prometheus.CounterVec
+	InventoryOperationsTotal   *prometheus.CounterVec
+	ActiveUsersTotal           prometheus.Gauge
+	BalanceCalculations        *prometheus.CounterVec
 	BalanceCalculationDuration *prometheus.HistogramVec
-	ItemsPerInventory       *prometheus.HistogramVec
-	CacheHits               *prometheus.CounterVec
-	CacheMisses             *prometheus.CounterVec
-	TransactionOperations   *prometheus.HistogramVec
-	TransactionDuration     *prometheus.HistogramVec
+	ItemsPerInventory          *prometheus.HistogramVec
+	CacheHits                  *prometheus.CounterVec
+	CacheMisses                *prometheus.CounterVec
+	TransactionOperations      *prometheus.HistogramVec
+	TransactionDuration        *prometheus.HistogramVec
 
 	// Health metrics
 	DependencyHealth *prometheus.GaugeVec
