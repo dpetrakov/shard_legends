@@ -39,14 +39,10 @@ info:
     name: Shard Legends Team
 
 servers:
-  - url: http://localhost:8080/api/inventory
-    description: Публичный API (порт 8080)
-  - url: http://localhost:8090/api/inventory
-    description: Внутренний API (порт 8090)
-  - url: https://api.shardlegends.com/api/inventory
-    description: Продуктивный публичный API
-  - url: https://internal.shardlegends.com/api/inventory
-    description: Продуктивный внутренний API
+  - url: http://localhost:9000/api/inventory
+    description: Публичный API (API Gateway)
+  - url: http://localhost:22003/api/inventory
+    description: Внутренний API (прямое обращение к inventory-service)
 
 security:
   - bearerAuth: []

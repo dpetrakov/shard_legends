@@ -20,12 +20,10 @@ info:
     name: MIT
 
 servers:
-  - url: https://dev.slcw.dimlight.online/api
-    description: Development server
-  - url: https://stage.slcw.dimlight.online/api
-    description: Staging server  
-  - url: https://slcw.dimlight.online/api
-    description: Production server
+  - url: http://localhost:9000/api
+    description: Публичный API (API Gateway)
+  - url: http://localhost:22002/api
+    description: Внутренний API (прямое обращение к auth-service)
 
 tags:
   - name: Authentication
