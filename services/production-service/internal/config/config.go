@@ -20,11 +20,12 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Host         string
-	Port         string
-	ReadTimeout  time.Duration
-	WriteTimeout time.Duration
-	IdleTimeout  time.Duration
+	Host             string
+	Port             string
+	InternalPort     string
+	ReadTimeout      time.Duration
+	WriteTimeout     time.Duration
+	IdleTimeout      time.Duration
 }
 
 type DatabaseConfig struct {
@@ -70,7 +71,8 @@ func Load() (*Config, error) {
 	cfg := &Config{
 		Server: ServerConfig{
 			Host:         getEnv("PRODUCTION_SERVICE_HOST", "0.0.0.0"),
-			Port:         getEnv("PRODUCTION_SERVICE_PORT", "8082"),
+			Port:         getEnv("PROD_SVC_PUBLIC_PORT", ""),
+			InternalPort: getEnv("PROD_SVC_INTERNAL_PORT", ""),
 			ReadTimeout:  getDurationEnv("SERVER_READ_TIMEOUT", 15*time.Second),
 			WriteTimeout: getDurationEnv("SERVER_WRITE_TIMEOUT", 15*time.Second),
 			IdleTimeout:  getDurationEnv("SERVER_IDLE_TIMEOUT", 60*time.Second),
@@ -121,6 +123,12 @@ func (c *Config) Validate() error {
 	}
 	if c.Redis.URL == "" {
 		return fmt.Errorf("REDIS_URL is required")
+	}
+	if c.Server.Port == "" {
+		return fmt.Errorf("PROD_SVC_PUBLIC_PORT is required")
+	}
+	if c.Server.InternalPort == "" {
+		return fmt.Errorf("PROD_SVC_INTERNAL_PORT is required")
 	}
 	return nil
 }

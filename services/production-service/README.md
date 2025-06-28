@@ -22,9 +22,10 @@ The service follows a layered architecture:
 
 Environment variables:
 - `PRODUCTION_SERVICE_HOST`: Service host (default: 0.0.0.0)
-- `PRODUCTION_SERVICE_PORT`: Service port (default: 8082)
-- `DATABASE_URL`: PostgreSQL connection string
-- `REDIS_URL`: Redis connection string
+- `PROD_SVC_PUBLIC_PORT`: Public API port (required, no default)
+- `PROD_SVC_INTERNAL_PORT`: Internal API port for health/metrics/admin (required, no default)
+- `DATABASE_URL`: PostgreSQL connection string (required)
+- `REDIS_URL`: Redis connection string (required)
 - `LOG_LEVEL`: Logging level (debug, info, warn, error)
 - `DATABASE_MAX_CONNECTIONS`: Max DB connections (default: 25)
 - `REDIS_MAX_CONNECTIONS`: Max Redis connections (default: 10)
@@ -33,32 +34,43 @@ Environment variables:
 
 See `docs/specs/production-service-openapi.yml` for complete API documentation.
 
-### Public Endpoints (JWT required)
-- `GET /recipes` - Get available recipes
-- `GET /factory/queue` - Get user's production queue
-- `POST /factory/start` - Start production task
-- `POST /factory/claim` - Claim completed task
+### Public Endpoints (Public Port, JWT required)
+- `GET /production/recipes` - Get available recipes
+- `GET /production/factory/queue` - Get user's production queue
+- `POST /production/factory/start` - Start production task
+- `POST /production/factory/claim` - Claim completed task
 
-### Internal Endpoints
-- `GET /internal/task/{taskId}` - Get task details
-- `GET /internal/recipe/{recipeId}` - Get recipe details
+### Internal Endpoints (Internal Port)
+- `GET /health` - Health check
+- `GET /ready` - Readiness check
+- `GET /metrics` - Prometheus metrics
+- `GET /api/v1/internal/task/{taskId}` - Get task details
+- `GET /api/v1/internal/recipe/{recipeId}` - Get recipe details
 
-### Admin Endpoints (JWT with admin role)
-- `GET /admin/tasks` - List all tasks
-- `GET /admin/stats` - Production statistics
+### Admin Endpoints (Internal Port, JWT with admin role)
+- `GET /api/v1/admin/tasks` - List all tasks
+- `GET /api/v1/admin/stats` - Production statistics
 
 ## Development
 
 ```bash
 # Run locally
-go run cmd/server/main.go
+PROD_SVC_PUBLIC_PORT=8082 PROD_SVC_INTERNAL_PORT=8091 go run cmd/server/main.go
+
+# Test endpoints
+curl -H "Authorization: Bearer your-jwt-token" http://localhost:8082/production/recipes
+curl http://localhost:8091/health
+curl http://localhost:8091/metrics
 
 # Run tests
 go test ./...
 
 # Run with Docker
 docker build -t production-service .
-docker run -p 8082:8082 production-service
+docker run -p 8082:8082 -p 8091:8091 \
+  -e PROD_SVC_PUBLIC_PORT=8082 \
+  -e PROD_SVC_INTERNAL_PORT=8091 \
+  production-service
 ```
 
 ## Dependencies

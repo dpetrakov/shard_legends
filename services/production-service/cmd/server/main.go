@@ -141,19 +141,19 @@ func main() {
 	// Initialize additional handlers
 	factoryHandler := public.NewFactoryHandler(taskService, logger.Get())
 
-	// Setup router
-	r := chi.NewRouter()
+	// Setup public router
+	publicRouter := chi.NewRouter()
 
-	// Global middleware
-	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
-	r.Use(customMiddleware.Recovery())
-	r.Use(customMiddleware.Logging())
-	r.Use(customMiddleware.Metrics())
-	r.Use(middleware.Timeout(60 * time.Second))
+	// Public router middleware
+	publicRouter.Use(middleware.RequestID)
+	publicRouter.Use(middleware.RealIP)
+	publicRouter.Use(customMiddleware.Recovery())
+	publicRouter.Use(customMiddleware.Logging())
+	publicRouter.Use(customMiddleware.Metrics())
+	publicRouter.Use(middleware.Timeout(60 * time.Second))
 
-	// CORS
-	r.Use(cors.Handler(cors.Options{
+	// CORS for public endpoints
+	publicRouter.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
@@ -162,30 +162,40 @@ func main() {
 		MaxAge:           300,
 	}))
 
-	// Health check endpoints
-	r.Get("/health", allHandlers.Health.Health)
-	r.Get("/ready", allHandlers.Health.Ready)
+	// Setup internal router
+	internalRouter := chi.NewRouter()
 
-	// Metrics endpoint
-	r.Handle("/metrics", promhttp.Handler())
+	// Internal router middleware
+	internalRouter.Use(middleware.RequestID)
+	internalRouter.Use(middleware.RealIP)
+	internalRouter.Use(customMiddleware.Recovery())
+	internalRouter.Use(customMiddleware.Logging())
+	internalRouter.Use(customMiddleware.Metrics())
+	internalRouter.Use(middleware.Timeout(60 * time.Second))
 
-	// API routes
-	r.Route("/api/v1", func(r chi.Router) {
-		// Public endpoints (require JWT)
-		r.Group(func(r chi.Router) {
-			r.Use(customMiddleware.Auth(jwtValidator))
+	// Internal endpoints - health, metrics, admin
+	internalRouter.Get("/health", allHandlers.Health.Health)
+	internalRouter.Get("/ready", allHandlers.Health.Ready)
+	internalRouter.Handle("/metrics", promhttp.Handler())
 
-			r.Get("/recipes", allHandlers.Recipe.GetRecipes)
+	// Public API routes
+	publicRouter.Route("/production", func(r chi.Router) {
+		// All public endpoints require JWT authentication
+		r.Use(customMiddleware.Auth(jwtValidator))
 
-			r.Route("/factory", func(r chi.Router) {
-				r.Get("/queue", factoryHandler.GetQueue)
-				r.Get("/completed", factoryHandler.GetCompleted)
-				r.Post("/start", factoryHandler.StartProduction)
-				r.Post("/claim", factoryHandler.Claim)
-				r.Post("/cancel", factoryHandler.Cancel)
-			})
+		r.Get("/recipes", allHandlers.Recipe.GetRecipes)
+
+		r.Route("/factory", func(r chi.Router) {
+			r.Get("/queue", factoryHandler.GetQueue)
+			r.Get("/completed", factoryHandler.GetCompleted)
+			r.Post("/start", factoryHandler.StartProduction)
+			r.Post("/claim", factoryHandler.Claim)
+			r.Post("/cancel", factoryHandler.Cancel)
 		})
+	})
 
+	// Internal API routes
+	internalRouter.Route("/api/v1", func(r chi.Router) {
 		// Internal endpoints (no auth required - internal services only)
 		r.Route("/internal", func(r chi.Router) {
 			r.Get("/task/{taskId}", func(w http.ResponseWriter, r *http.Request) {
@@ -213,24 +223,45 @@ func main() {
 		})
 	})
 
-	// Create HTTP server
-	srv := &http.Server{
+	// Create public HTTP server
+	publicServer := &http.Server{
 		Addr:         fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port),
-		Handler:      r,
+		Handler:      publicRouter,
 		ReadTimeout:  cfg.Server.ReadTimeout,
 		WriteTimeout: cfg.Server.WriteTimeout,
 		IdleTimeout:  cfg.Server.IdleTimeout,
 	}
 
-	// Start server in a goroutine
+	// Create internal HTTP server
+	internalServer := &http.Server{
+		Addr:         fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.InternalPort),
+		Handler:      internalRouter,
+		ReadTimeout:  cfg.Server.ReadTimeout,
+		WriteTimeout: cfg.Server.WriteTimeout,
+		IdleTimeout:  cfg.Server.IdleTimeout,
+	}
+
+	// Start public server in a goroutine
 	go func() {
-		logger.Info("Starting Production Service",
+		logger.Info("Starting Production Service public server",
 			zap.String("host", cfg.Server.Host),
 			zap.String("port", cfg.Server.Port),
 		)
 
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Fatal("Failed to start server", zap.Error(err))
+		if err := publicServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Fatal("Failed to start public server", zap.Error(err))
+		}
+	}()
+
+	// Start internal server in a goroutine
+	go func() {
+		logger.Info("Starting Production Service internal server",
+			zap.String("host", cfg.Server.Host),
+			zap.String("port", cfg.Server.InternalPort),
+		)
+
+		if err := internalServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Fatal("Failed to start internal server", zap.Error(err))
 		}
 	}()
 
@@ -245,9 +276,31 @@ func main() {
 	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	if err := srv.Shutdown(ctx); err != nil {
-		logger.Error("Server forced to shutdown", zap.Error(err))
+	// Shutdown both servers
+	shutdownErr := make(chan error, 2)
+
+	go func() {
+		if err := publicServer.Shutdown(ctx); err != nil {
+			shutdownErr <- fmt.Errorf("public server shutdown error: %w", err)
+		} else {
+			shutdownErr <- nil
+		}
+	}()
+
+	go func() {
+		if err := internalServer.Shutdown(ctx); err != nil {
+			shutdownErr <- fmt.Errorf("internal server shutdown error: %w", err)
+		} else {
+			shutdownErr <- nil
+		}
+	}()
+
+	// Wait for both servers to shut down
+	for i := 0; i < 2; i++ {
+		if err := <-shutdownErr; err != nil {
+			logger.Error("Server forced to shutdown", zap.Error(err))
+		}
 	}
 
-	logger.Info("Server exited")
+	logger.Info("Servers exited")
 }

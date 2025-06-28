@@ -78,7 +78,7 @@ Production Service — это микросервис для управления
 
 #### Получение рецептов
 ```
-GET /recipes
+GET /production/recipes
 ```
 
 **Описание:** Возвращает список активных производственных рецептов для пользователя
@@ -94,7 +94,7 @@ GET /recipes
 
 #### Получение очереди производства
 ```
-GET /factory/queue
+GET /production/factory/queue
 ```
 
 **Описание:** Возвращает текущую очередь производственных заданий пользователя
@@ -105,7 +105,7 @@ GET /factory/queue
 
 #### Получение завершенных заданий
 ```
-GET /factory/completed
+GET /production/factory/completed
 ```
 
 **Описание:** Возвращает список завершенных заданий, готовых к Claim
@@ -115,7 +115,7 @@ GET /factory/completed
 
 #### Запуск производства
 ```
-POST /factory/start
+POST /production/factory/start
 ```
 
 **Описание:** Создает новое производственное задание и добавляет его в очередь
@@ -160,7 +160,7 @@ POST /factory/start
 
 #### Claim результатов
 ```
-POST /factory/claim
+POST /production/factory/claim
 ```
 
 **Описание:** Получает результаты завершенного производственного задания
@@ -186,7 +186,7 @@ POST /factory/claim
 
 #### Отмена задания
 ```
-POST /factory/cancel
+POST /production/factory/cancel
 ```
 
 **Описание:** Отменяет задание в статусе "pending" с возвратом материалов
@@ -195,7 +195,7 @@ POST /factory/cancel
 
 #### Получение слотов пользователя
 ```
-GET /internal/user-slots/{user_id}
+GET /api/v1/internal/user-slots/{user_id}
 ```
 
 **Описание:** Возвращает информацию о доступных производственных слотах (для User Service)
@@ -204,7 +204,7 @@ GET /internal/user-slots/{user_id}
 
 #### Мониторинг заданий
 ```
-GET /admin/tasks
+GET /api/v1/admin/tasks
 ```
 
 **Описание:** Возвращает статистику и мониторинг производственных заданий
@@ -635,7 +635,7 @@ Redis используется для кэширования временных 
 
 #### Получение производственных слотов пользователя
 ```
-GET /internal/users/{user_id}/production-slots
+GET /api/v1/internal/users/{user_id}/production-slots
 ```
 
 **Описание:** Возвращает информацию о доступных производственных слотах пользователя
@@ -663,7 +663,7 @@ GET /internal/users/{user_id}/production-slots
 
 #### Получение модификаторов пользователя
 ```
-GET /internal/users/{user_id}/production-modifiers
+GET /api/v1/internal/users/{user_id}/production-modifiers
 ```
 
 **Описание:** Возвращает пользовательские модификаторы для производства
@@ -706,7 +706,7 @@ GET /internal/users/{user_id}/production-modifiers
 
 #### Получение активных событийных модификаторов
 ```
-GET /internal/events/active-production-modifiers
+GET /api/v1/internal/events/active-production-modifiers
 ```
 
 **Описание:** Возвращает активные событийные модификаторы для производства
@@ -745,4 +745,185 @@ GET /internal/events/active-production-modifiers
 - `POST /inventory/add-items` - добавление предметов
 
 **Примечание:** Никаких доработок Inventory Service не требуется, все необходимые методы доступны.
+
+## Атомарность создания заданий и резервирования инвентаря
+
+### Проблема
+
+В текущей реализации между созданием записи production-task в БД и вызовом `POST /inventory/reserve` отсутствует транзакционная целостность. Это может привести к созданию "зависших" задач без резервирования инвентаря или к частичным состояниям при сбоях.
+
+### Архитектурное решение: Saga Pattern с идемпотентностью
+
+Для обеспечения атомарности операции будет реализован **Saga Pattern** с компенсирующими действиями:
+
+#### 1. Последовательность операций
+
+```mermaid
+sequenceDiagram
+    participant Client as Client
+    participant ProdSvc as Production Service
+    participant DB as PostgreSQL
+    participant InvSvc as Inventory Service
+    
+    Client->>ProdSvc: POST /production/factory/start
+    
+    Note over ProdSvc: Phase 1: Draft Task Creation
+    ProdSvc->>DB: BEGIN TRANSACTION
+    ProdSvc->>DB: INSERT task (status=DRAFT)
+    ProdSvc->>DB: INSERT output_items
+    ProdSvc->>DB: COMMIT
+    
+    Note over ProdSvc: Phase 2: Inventory Reservation
+    ProdSvc->>InvSvc: POST /inventory/reserve
+    alt Reservation Success
+        InvSvc-->>ProdSvc: 200 OK
+        Note over ProdSvc: Phase 3: Task Confirmation
+        ProdSvc->>DB: UPDATE task status=PENDING
+        ProdSvc-->>Client: 201 Created
+    else Reservation Failure
+        InvSvc-->>ProdSvc: 4xx/5xx Error
+        Note over ProdSvc: Compensation: Delete Draft Task
+        ProdSvc->>DB: DELETE task
+        ProdSvc-->>Client: 400/500 Error
+    end
+```
+
+#### 2. Состояния задач
+
+Новые состояния production tasks:
+
+- **`DRAFT`** - Задача создана в БД, но инвентарь не зарезервирован
+- **`PENDING`** - Задача подтверждена, инвентарь зарезервирован, производство началось
+- **`IN_PROGRESS`** - Производство в процессе (переход через время)
+- **`COMPLETED`** - Производство завершено, готово к claim
+- **`CLAIMED`** - Результаты получены пользователем
+- **`CANCELLED`** - Отменено пользователем
+- **`FAILED`** - Системная ошибка
+
+#### 3. Алгоритм с компенсацией
+
+```go
+// Псевдокод нового алгоритма StartProduction
+
+func (s *TaskService) StartProduction(ctx context.Context, req StartProductionRequest) error {
+    // Phase 1: Create draft task (database transaction)
+    task := &ProductionTask{
+        Status: TaskStatusDraft,
+        // ... other fields
+    }
+    
+    err := s.taskRepo.CreateTaskWithOutputs(ctx, task)
+    if err != nil {
+        return fmt.Errorf("failed to create draft task: %w", err)
+    }
+    
+    // Phase 2: Reserve inventory (HTTP call with idempotency)
+    err = s.inventoryClient.ReserveItems(ctx, ReservationRequest{
+        UserID:      task.UserID,
+        OperationID: task.ID, // Idempotency key
+        Items:       itemsToReserve,
+    })
+    
+    if err != nil {
+        // Compensation: Delete draft task
+        _ = s.taskRepo.DeleteTask(ctx, task.ID)
+        return fmt.Errorf("failed to reserve inventory: %w", err)
+    }
+    
+    // Phase 3: Confirm task (database transaction)
+    err = s.taskRepo.UpdateTaskStatus(ctx, task.ID, TaskStatusPending)
+    if err != nil {
+        // Compensation: Return inventory reservation
+        _ = s.inventoryClient.ReturnReservation(ctx, task.UserID, task.ID)
+        _ = s.taskRepo.DeleteTask(ctx, task.ID)
+        return fmt.Errorf("failed to confirm task: %w", err)
+    }
+    
+    return nil
+}
+```
+
+#### 4. Идемпотентность
+
+Для обеспечения безопасности повторных запросов:
+
+- **Inventory Service**: Использует `operationID` (task.ID) как ключ идемпотентности
+- **Duplicate Request Detection**: Проверка существующих задач с тем же `recipeID` + `userID` в статусе `DRAFT`/`PENDING`
+- **Graceful Retry**: При сетевых сбоях клиент может безопасно повторить запрос
+
+#### 5. Обработка edge cases
+
+**Scenario 1: Network failure after reservation**
+```go
+// Inventory reserved, but task confirmation failed
+// Compensation: Return reservation + delete draft task
+```
+
+**Scenario 2: Application crash between phases**
+```go
+// Background cleanup job:
+// 1. Find tasks in DRAFT status older than 5 minutes
+// 2. Return any reservations with matching operationID  
+// 3. Delete orphaned draft tasks
+```
+
+**Scenario 3: Partial inventory failure**
+```go
+// Inventory Service должен гарантировать all-or-nothing резервирование
+// При частичном сбое - full rollback резервирования
+```
+
+#### 6. Мониторинг и алерты
+
+Метрики для отслеживания:
+- `production_saga_failures_total` - счетчик неудачных saga
+- `production_draft_tasks_orphaned` - количество orphaned draft tasks
+- `production_compensation_actions_total` - счетчик компенсирующих действий
+- `production_task_creation_duration` - время полного создания задач
+
+#### 7. Конфигурация timeouts
+
+```yaml
+production_service:
+  saga:
+    inventory_timeout: 10s           # Timeout для вызовов Inventory Service
+    draft_task_cleanup_interval: 5m  # Интервал очистки orphaned draft tasks
+    max_retry_attempts: 3            # Максимум повторных попыток
+    retry_backoff: 1s                # Backoff между попытками
+```
+
+#### 8. Database схема изменений
+
+```sql
+-- Добавление новых статусов
+ALTER TYPE task_status ADD VALUE 'DRAFT';
+
+-- Индексы для cleanup операций
+CREATE INDEX idx_production_tasks_status_created 
+ON production_tasks(status, created_at) 
+WHERE status = 'DRAFT';
+
+-- Уникальный constraint для предотвращения дублей
+CREATE UNIQUE INDEX idx_production_tasks_user_recipe_pending
+ON production_tasks(user_id, recipe_id)
+WHERE status IN ('DRAFT', 'PENDING', 'IN_PROGRESS');
+```
+
+#### 9. Тестирование
+
+Unit-тесты должны покрывать:
+- Успешное создание задач
+- Сбои на каждом этапе Saga
+- Корректность компенсирующих действий
+- Идемпотентность повторных запросов
+- Cleanup orphaned tasks
+
+#### 10. Миграционная стратегия
+
+1. **Phase 1**: Добавить поддержку DRAFT статуса, сохранив старую логику
+2. **Phase 2**: Постепенный rollout новой Saga логики
+3. **Phase 3**: Полный переход на новую реализацию
+4. **Phase 4**: Удаление legacy кода
+
+Данная архитектура гарантирует **eventual consistency** и **atomic semantics** для операций создания производственных задач, обеспечивая высокую надежность системы при сбоях компонентов.
 

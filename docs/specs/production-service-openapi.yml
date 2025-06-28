@@ -39,9 +39,9 @@ info:
     name: Shard Legends Team
 
 servers:
-  - url: http://localhost:8080/api/production
+  - url: http://localhost:8080
     description: Локальный сервер разработки
-  - url: https://api.shardlegends.com/api/production
+  - url: https://api.shardlegends.com
     description: Продуктивный сервер
 
 security:
@@ -56,7 +56,7 @@ tags:
     description: Административные эндпоинты
 
 paths:
-  /recipes:
+  /production/recipes:
     get:
       tags:
         - Public
@@ -85,7 +85,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
-  /factory/queue:
+  /production/factory/queue:
     get:
       tags:
         - Public
@@ -106,7 +106,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
-  /factory/completed:
+  /production/factory/completed:
     get:
       tags:
         - Public
@@ -126,7 +126,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
-  /factory/start:
+  /production/factory/start:
     post:
       tags:
         - Public
@@ -171,7 +171,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
-  /factory/claim:
+  /production/factory/claim:
     post:
       tags:
         - Public
@@ -216,7 +216,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
-  /factory/cancel:
+  /production/factory/cancel:
     post:
       tags:
         - Public
@@ -255,7 +255,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
-  /internal/user-slots/{user_id}:
+  /api/v1/internal/user-slots/{user_id}:
     get:
       tags:
         - Internal
@@ -290,7 +290,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
-  /admin/tasks:
+  /api/v1/admin/tasks:
     get:
       tags:
         - Admin

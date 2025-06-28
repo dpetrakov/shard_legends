@@ -30,8 +30,8 @@ WORKDIR /root/
 # Copy the binary from builder
 COPY --from=builder /app/production-service .
 
-# Expose port
-EXPOSE 8082
+# Expose ports (public and internal)
+EXPOSE 8082 8091
 
 # Run the binary
 CMD ["./production-service"]

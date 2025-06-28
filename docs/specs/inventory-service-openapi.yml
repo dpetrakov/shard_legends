@@ -197,6 +197,106 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
+  /inventory/reservation/{operationID}:
+    get:
+      tags:
+        - Internal
+      summary: Проверить статус резервирования
+      description: |
+        Проверяет существование и статус резервирования по ID операции.
+        Используется для проверки целостности данных при восстановлении после сбоев.
+        
+        **Доступен только на внутреннем порту (8090).**
+        **Изолирован сетью, аутентификация не требуется.**
+      operationId: getReservationStatus
+      security: []
+      parameters:
+        - name: operationID
+          in: path
+          required: true
+          description: UUID операции резервирования
+          schema:
+            type: string
+            format: uuid
+            example: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+      responses:
+        '200':
+          description: Резервирование найдено
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - reservation_exists
+                  - operation_id
+                  - user_id
+                  - reserved_items
+                  - reservation_date
+                  - status
+                properties:
+                  reservation_exists:
+                    type: boolean
+                    example: true
+                  operation_id:
+                    type: string
+                    format: uuid
+                    example: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+                  user_id:
+                    type: string
+                    format: uuid
+                    example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+                  reserved_items:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                        - item_code
+                        - collection_code
+                        - quality_level_code
+                        - quantity
+                      properties:
+                        item_code:
+                          type: string
+                          example: "wood_plank"
+                        collection_code:
+                          type: string
+                          example: "basic"
+                        quality_level_code:
+                          type: string
+                          example: "common"
+                        quantity:
+                          type: integer
+                          example: 5
+                  reservation_date:
+                    type: string
+                    format: date-time
+                    example: "2025-06-28T10:30:00Z"
+                  status:
+                    type: string
+                    enum: [active, consumed, returned]
+                    example: "active"
+                    description: |
+                      - active: резервирование активно
+                      - consumed: резерв потреблен
+                      - returned: резерв возвращен
+        '404':
+          description: Резервирование не найдено
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - reservation_exists
+                properties:
+                  reservation_exists:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    example: "Reservation not found"
+        '500':
+          $ref: '#/components/responses/InternalError'
+
   /inventory/add-items:
     post:
       tags:
