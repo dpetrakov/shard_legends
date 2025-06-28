@@ -9,8 +9,9 @@ import (
 
 type Config struct {
 	// Service configuration
-	ServiceHost string
-	ServicePort string
+	ServiceHost         string
+	ServicePort         string
+	InternalServicePort string
 
 	// Database configuration
 	DatabaseURL      string
@@ -44,6 +45,11 @@ func Load() (*Config, error) {
 	cfg.ServicePort = os.Getenv("INVENTORY_SERVICE_PORT")
 	if cfg.ServicePort == "" {
 		cfg.ServicePort = "8080"
+	}
+
+	cfg.InternalServicePort = os.Getenv("INVENTORY_INTERNAL_SERVICE_PORT")
+	if cfg.InternalServicePort == "" {
+		cfg.InternalServicePort = "8081"
 	}
 
 	// Database configuration
@@ -146,8 +152,8 @@ func (c *Config) Validate() error {
 // String returns a string representation of the config (for logging, without sensitive data)
 func (c *Config) String() string {
 	return fmt.Sprintf(
-		"Config{Host: %s, Port: %s, LogLevel: %s, MetricsPort: %s, DB: %s, Redis: %s}",
-		c.ServiceHost, c.ServicePort, c.LogLevel, c.MetricsPort,
+		"Config{Host: %s, Port: %s, InternalPort: %s, LogLevel: %s, MetricsPort: %s, DB: %s, Redis: %s}",
+		c.ServiceHost, c.ServicePort, c.InternalServicePort, c.LogLevel, c.MetricsPort,
 		maskURL(c.DatabaseURL), maskURL(c.RedisURL),
 	)
 }

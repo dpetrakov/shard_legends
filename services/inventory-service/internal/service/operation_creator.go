@@ -3,12 +3,14 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	
 	"github.com/shard-legends/inventory-service/internal/models"
+	internalerrors "github.com/shard-legends/inventory-service/internal/errors"
 )
 
 // operationCreator implements OperationCreator interface
@@ -70,6 +72,10 @@ func (oc *operationCreator) CreateOperationsInTransaction(ctx context.Context, o
 	// Create operations in transaction
 	err = oc.deps.Repositories.Inventory.CreateOperationsInTransaction(ctx, tx, operations)
 	if err != nil {
+		// Handle database errors appropriately
+		if dbErr := internalerrors.HandleDatabaseError(err, "create_operations_in_transaction"); dbErr != nil {
+			return nil, dbErr
+		}
 		return nil, errors.Wrap(err, "failed to create operations in transaction")
 	}
 
@@ -224,8 +230,21 @@ func (oc *operationCreator) CreateReservationOperations(ctx context.Context, req
 		return nil, errors.New("factory inventory section not found")
 	}
 
-	// Convert to ItemQuantityCheck format for balance checking
-	var itemChecks []ItemQuantityCheck
+	// Begin transaction for atomic balance checking and reservation
+	tx, err := oc.deps.Repositories.Inventory.BeginTransaction(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to begin reservation transaction")
+	}
+
+	// Ensure transaction is rolled back on any error
+	defer func() {
+		if err != nil {
+			_ = oc.deps.Repositories.Inventory.RollbackTransaction(tx)
+		}
+	}()
+
+	// Convert to BalanceLockRequest format for atomic balance checking
+	var lockRequests []BalanceLockRequest
 	for _, item := range req.Items {
 		collectionID := oc.getDefaultCollectionID()
 		if item.CollectionID != nil {
@@ -237,7 +256,9 @@ func (oc *operationCreator) CreateReservationOperations(ctx context.Context, req
 			qualityLevelID = *item.QualityLevelID
 		}
 
-		itemChecks = append(itemChecks, ItemQuantityCheck{
+		lockRequests = append(lockRequests, BalanceLockRequest{
+			UserID:         req.UserID,
+			SectionID:      mainSectionID,
 			ItemID:         item.ItemID,
 			CollectionID:   collectionID,
 			QualityLevelID: qualityLevelID,
@@ -245,14 +266,33 @@ func (oc *operationCreator) CreateReservationOperations(ctx context.Context, req
 		})
 	}
 
-	// Check sufficient balance in main inventory first
-	balanceReq := &SufficientBalanceRequest{
-		UserID:    req.UserID,
-		SectionID: mainSectionID,
-		Items:     itemChecks,
+	// Atomically check and lock balances using SELECT ... FOR UPDATE
+	lockResults, err := oc.deps.Repositories.Inventory.CheckAndLockBalances(ctx, tx, lockRequests)
+	if err != nil {
+		// Handle database errors appropriately
+		if dbErr := internalerrors.HandleDatabaseError(err, "check_and_lock_balances"); dbErr != nil {
+			return nil, dbErr
+		}
+		return nil, errors.Wrap(err, "failed to check and lock balances")
 	}
-	if err := oc.deps.BalanceChecker.CheckSufficientBalance(ctx, balanceReq); err != nil {
-		return nil, errors.Wrap(err, "insufficient balance for reservation")
+
+	// Check if all items have sufficient balance
+	var insufficientItems []string
+	for _, result := range lockResults {
+		if result.Error != nil {
+			return nil, errors.Wrapf(result.Error, "failed to check balance for item %s", result.ItemID.String())
+		}
+		
+		if !result.Sufficient {
+			insufficientItems = append(insufficientItems, 
+				fmt.Sprintf("item %s: required %d, available %d", 
+					result.ItemID.String(), result.RequiredQty, result.AvailableQty))
+		}
+	}
+
+	if len(insufficientItems) > 0 {
+		return nil, errors.Errorf("insufficient balance for reservation: %s", 
+			strings.Join(insufficientItems, "; "))
 	}
 
 	// Get operation type ID for reservation
@@ -309,7 +349,36 @@ func (oc *operationCreator) CreateReservationOperations(ctx context.Context, req
 		operations = append(operations, debitOp, creditOp)
 	}
 
-	return oc.CreateOperationsInTransaction(ctx, operations)
+	// Create operations within the same transaction
+	err = oc.deps.Repositories.Inventory.CreateOperationsInTransaction(ctx, tx, operations)
+	if err != nil {
+		// Handle database errors appropriately
+		if dbErr := internalerrors.HandleDatabaseError(err, "create_reservation_operations"); dbErr != nil {
+			return nil, dbErr
+		}
+		return nil, errors.Wrap(err, "failed to create reservation operations")
+	}
+
+	// Commit transaction
+	err = oc.deps.Repositories.Inventory.CommitTransaction(tx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to commit reservation transaction")
+	}
+
+	// Invalidate cache for affected users after successful transaction
+	err = oc.invalidateCacheForOperations(ctx, operations)
+	if err != nil {
+		// Log the error but don't fail the operation since data is already committed
+		fmt.Printf("CRITICAL: Failed to invalidate cache after reservation: %v\n", err)
+	}
+
+	// Extract operation IDs for return
+	var operationIDs []uuid.UUID
+	for _, op := range operations {
+		operationIDs = append(operationIDs, op.ID)
+	}
+
+	return operationIDs, nil
 }
 
 // CreateReturnOperations creates operations for returning reserved items

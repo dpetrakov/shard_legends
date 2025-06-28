@@ -175,6 +175,9 @@ type InventoryRepositoryInterface interface {
 	BeginTransaction(ctx context.Context) (interface{}, error)
 	CommitTransaction(tx interface{}) error
 	RollbackTransaction(tx interface{}) error
+	
+	// Atomic balance checking with row-level locking
+	CheckAndLockBalances(ctx context.Context, tx interface{}, items []BalanceLockRequest) ([]BalanceLockResult, error)
 }
 
 // CacheInterface defines the caching interface
@@ -192,6 +195,24 @@ type ServiceDependencies struct {
 	Metrics        MetricsInterface
 	CodeConverter  CodeConverter
 	BalanceChecker BalanceChecker
+}
+
+// BalanceLockRequest represents a request to lock and check balance for a specific item
+type BalanceLockRequest struct {
+	UserID         uuid.UUID
+	SectionID      uuid.UUID
+	ItemID         uuid.UUID
+	CollectionID   uuid.UUID
+	QualityLevelID uuid.UUID
+	RequiredQty    int64
+}
+
+// BalanceLockResult represents the result of an atomic balance check and lock
+type BalanceLockResult struct {
+	BalanceLockRequest
+	AvailableQty int64
+	Sufficient   bool
+	Error        error
 }
 
 // MetricsInterface defines the metrics collection interface

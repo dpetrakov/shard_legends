@@ -10,7 +10,8 @@ info:
     - Добавление предметов (награды, покупки)
     - Административные операции
     
-    Все эндпоинты требуют JWT токен для аутентификации.
+    Публичные эндпоинты требуют JWT токен для аутентификации.
+    Внутренние эндпоинты требуют Service JWT с ролью 'internal'.
     
     ## JWT Аутентификация
     
@@ -38,21 +39,25 @@ info:
     name: Shard Legends Team
 
 servers:
-  - url: http://localhost:9000/api/inventory
-    description: Локальный сервер разработки
+  - url: http://localhost:8080/api/inventory
+    description: Публичный API (порт 8080)
+  - url: http://localhost:8081/api/inventory
+    description: Внутренний API (порт 8081)
   - url: https://api.shardlegends.com/api/inventory
-    description: Продуктивный сервер
+    description: Продуктивный публичный API
+  - url: https://internal.shardlegends.com/api/inventory
+    description: Продуктивный внутренний API
 
 security:
   - bearerAuth: []
 
 tags:
   - name: Public
-    description: Публичные эндпоинты для фронтенда
+    description: Публичные эндпоинты для фронтенда (порт 8080, требуют пользовательский JWT)
   - name: Internal
-    description: Внутренние эндпоинты для других сервисов
+    description: Внутренние эндпоинты для других сервисов (порт 8081, требуют Service JWT с ролью 'internal')
   - name: Admin
-    description: Административные эндпоинты
+    description: Административные эндпоинты (порт 8080, требуют администраторский JWT)
 
 paths:
   /inventory:
@@ -93,7 +98,12 @@ paths:
       description: |
         Резервирует предметы для производственного задания.
         Перемещает предметы из основного в фабричный инвентарь.
+        
+        **Доступен только на внутреннем порту (8081).**
+        **Требует Service JWT с ролью 'internal'.**
       operationId: reserveItems
+      security:
+        - serviceAuth: []
       requestBody:
         required: true
         content:
@@ -126,7 +136,12 @@ paths:
       description: |
         Возвращает зарезервированные предметы из фабричного в основной инвентарь.
         Используется при отмене производственного задания.
+        
+        **Доступен только на внутреннем порту (8081).**
+        **Требует Service JWT с ролью 'internal'.**
       operationId: returnReservedItems
+      security:
+        - serviceAuth: []
       requestBody:
         required: true
         content:
@@ -159,7 +174,12 @@ paths:
       description: |
         Уничтожает зарезервированные предметы при успешном завершении производства.
         Предметы списываются из фабричного инвентаря без возврата.
+        
+        **Доступен только на внутреннем порту (8081).**
+        **Требует Service JWT с ролью 'internal'.**
       operationId: consumeReservedItems
+      security:
+        - serviceAuth: []
       requestBody:
         required: true
         content:
@@ -192,7 +212,12 @@ paths:
       description: |
         Добавляет предметы в инвентарь пользователя.
         Используется для начисления наград, покупок, результатов производства.
+        
+        **Доступен только на внутреннем порту (8081).**
+        **Требует Service JWT с ролью 'internal'.**
       operationId: addItems
+      security:
+        - serviceAuth: []
       requestBody:
         required: true
         content:
@@ -212,6 +237,90 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '500':
           $ref: '#/components/responses/InternalError'
+
+  /health:
+    get:
+      tags:
+        - Internal
+      summary: Проверка состояния сервиса
+      description: |
+        Возвращает состояние сервиса и готовность к обработке запросов.
+        
+        **Доступен только на внутреннем порту (8081).**
+        **Не требует аутентификации.**
+      operationId: healthCheck
+      security: []
+      responses:
+        '200':
+          description: Сервис здоров
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - status
+                  - timestamp
+                properties:
+                  status:
+                    type: string
+                    enum: [healthy]
+                  timestamp:
+                    type: string
+                    format: date-time
+                  database:
+                    type: string
+                    enum: [connected, error]
+                  redis:
+                    type: string
+                    enum: [connected, error]
+        '503':
+          description: Сервис недоступен
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - status
+                  - timestamp
+                properties:
+                  status:
+                    type: string
+                    enum: [unhealthy]
+                  timestamp:
+                    type: string
+                    format: date-time
+                  errors:
+                    type: array
+                    items:
+                      type: string
+
+  /metrics:
+    get:
+      tags:
+        - Internal
+      summary: Метрики Prometheus
+      description: |
+        Возвращает метрики в формате Prometheus для мониторинга.
+        
+        **Доступен только на внутреннем порту (8081).**
+        **Не требует аутентификации.**
+      operationId: getMetrics
+      security: []
+      responses:
+        '200':
+          description: Метрики в формате Prometheus
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: |
+                  # HELP inventory_service_requests_total Total number of requests
+                  # TYPE inventory_service_requests_total counter
+                  inventory_service_requests_total{method="GET",endpoint="/inventory"} 42
+                  
+                  # HELP inventory_service_request_duration_seconds Request duration in seconds
+                  # TYPE inventory_service_request_duration_seconds histogram
+                  inventory_service_request_duration_seconds_bucket{le="0.005"} 10
 
   /admin/inventory/adjust:
     post:
@@ -255,16 +364,35 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: |
-        JWT токен с RS256 подписью от Auth Service.
+        Пользовательский JWT токен с RS256 подписью от Auth Service.
+        Используется для публичных эндпоинтов (порт 8080).
         
         Процесс валидации:
         1. Проверка Bearer формата
-        2. Валидация RS256 подписи (публичный ключ от auth-service:8080/public-key.pem)
+        2. Валидация RS256 подписи (публичный ключ от auth-service:8081/public-key.pem)
         3. Проверка времени действия (exp claim)  
         4. Проверка отзыва в Redis (EXISTS revoked:{jti})
         5. Извлечение user_id из sub claim
         
         Формат: Authorization: Bearer <jwt_token>
+    
+    serviceAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Service JWT токен с RS256 подписью от Auth Service.
+        Используется для внутренних эндпоинтов (порт 8081).
+        
+        Процесс валидации:
+        1. Проверка Bearer формата
+        2. Валидация RS256 подписи (публичный ключ от auth-service:8081/public-key.pem)
+        3. Проверка времени действия (exp claim)
+        4. Проверка отзыва в Redis (EXISTS revoked:{jti})
+        5. Проверка наличия роли 'internal' в claims.roles
+        6. Извлечение service_name из claims
+        
+        Формат: Authorization: Bearer <service_jwt_token>
 
   schemas:
     # Базовые типы

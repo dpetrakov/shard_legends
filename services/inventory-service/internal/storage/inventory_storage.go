@@ -12,7 +12,9 @@ import (
 
 	"github.com/shard-legends/inventory-service/internal/database"
 	"github.com/shard-legends/inventory-service/internal/models"
+	"github.com/shard-legends/inventory-service/internal/service"
 	"github.com/shard-legends/inventory-service/pkg/metrics"
+	internalerrors "github.com/shard-legends/inventory-service/internal/errors"
 )
 
 // InventoryStorage implements inventory data access using PostgreSQL and Redis
@@ -41,6 +43,12 @@ type InventoryRepository interface {
 	BeginTransaction(ctx context.Context) (interface{}, error)
 	CommitTransaction(tx interface{}) error
 	RollbackTransaction(tx interface{}) error
+	
+	// Atomic balance checking with row-level locking
+	CheckAndLockBalances(ctx context.Context, tx interface{}, items []service.BalanceLockRequest) ([]service.BalanceLockResult, error)
+	
+	// D-15: Optimized methods to eliminate N+1 queries
+	GetUserInventoryOptimized(ctx context.Context, userID, sectionID uuid.UUID) ([]*models.InventoryItemResponse, error)
 }
 
 // ClassifierRepository defines the interface for classifier data access
@@ -56,6 +64,8 @@ type ItemRepository interface {
 	GetItemByID(ctx context.Context, itemID uuid.UUID) (*models.Item, error)
 	GetItemsByClass(ctx context.Context, classCode string) ([]*models.Item, error)
 	GetItemWithDetails(ctx context.Context, itemID uuid.UUID) (*models.ItemWithDetails, error)
+	// D-15: Batch method to eliminate N+1 queries
+	GetItemsWithDetailsBatch(ctx context.Context, itemIDs []uuid.UUID) (map[uuid.UUID]*models.ItemWithDetails, error)
 }
 
 // NewInventoryStorage creates a new inventory storage instance
@@ -454,6 +464,10 @@ func (s *InventoryStorage) CreateOperations(ctx context.Context, operations []*m
 		_, err := br.Exec()
 		if err != nil {
 			s.logger.Error("Failed to create operation", "index", i, "error", err)
+			// Handle database errors appropriately
+			if dbErr := internalerrors.HandleDatabaseError(err, "create_operation"); dbErr != nil {
+				return dbErr
+			}
 			return err
 		}
 	}
@@ -478,6 +492,103 @@ func (s *InventoryStorage) RollbackTransaction(tx interface{}) error {
 		return pgxTx.Rollback(context.Background())
 	}
 	return nil
+}
+
+// CheckAndLockBalances atomically checks and locks balances for multiple items
+// Uses SELECT ... FOR UPDATE to prevent race conditions
+func (s *InventoryStorage) CheckAndLockBalances(ctx context.Context, tx interface{}, items []service.BalanceLockRequest) ([]service.BalanceLockResult, error) {
+	s.logger.Info("CheckAndLockBalances called", "items_count", len(items))
+	
+	if len(items) == 0 {
+		return nil, nil
+	}
+
+	// Cast to pgx.Tx
+	pgxTx, ok := tx.(pgx.Tx)
+	if !ok {
+		return nil, fmt.Errorf("invalid transaction type")
+	}
+
+	results := make([]service.BalanceLockResult, len(items))
+	
+	for i, item := range items {
+		result := service.BalanceLockResult{
+			BalanceLockRequest: item,
+		}
+		
+		// Lock the daily balance row for this item (if exists)
+		// This prevents concurrent modifications to the same item
+		lockQuery := `
+			SELECT quantity 
+			FROM inventory.daily_balances 
+			WHERE user_id = $1 
+			  AND section_id = $2 
+			  AND item_id = $3 
+			  AND collection_id = $4 
+			  AND quality_level_id = $5 
+			  AND balance_date <= CURRENT_DATE
+			ORDER BY balance_date DESC 
+			LIMIT 1
+			FOR UPDATE NOWAIT
+		`
+		
+		var dailyBalance int64 = 0
+		err := pgxTx.QueryRow(ctx, lockQuery, 
+			item.UserID, item.SectionID, item.ItemID, 
+			item.CollectionID, item.QualityLevelID).Scan(&dailyBalance)
+		
+		if err != nil && err != pgx.ErrNoRows {
+			// Handle database errors appropriately
+			if dbErr := internalerrors.HandleDatabaseError(err, "lock_balance_row"); dbErr != nil {
+				result.Error = dbErr
+			} else {
+				result.Error = err
+			}
+			results[i] = result
+			continue
+		}
+		
+		// Calculate operations sum for today within the same transaction
+		operationsQuery := `
+			SELECT COALESCE(SUM(quantity_change), 0)
+			FROM inventory.operations 
+			WHERE user_id = $1 
+			  AND section_id = $2 
+			  AND item_id = $3 
+			  AND collection_id = $4 
+			  AND quality_level_id = $5 
+			  AND DATE(created_at) = CURRENT_DATE
+		`
+		
+		var operationsSum int64 = 0
+		err = pgxTx.QueryRow(ctx, operationsQuery,
+			item.UserID, item.SectionID, item.ItemID,
+			item.CollectionID, item.QualityLevelID).Scan(&operationsSum)
+		
+		if err != nil {
+			result.Error = err
+			results[i] = result
+			continue
+		}
+		
+		// Calculate available balance
+		availableBalance := dailyBalance + operationsSum
+		result.AvailableQty = availableBalance
+		result.Sufficient = availableBalance >= item.RequiredQty
+		
+		results[i] = result
+		
+		s.logger.Debug("Balance locked and checked",
+			"user_id", item.UserID,
+			"item_id", item.ItemID,
+			"daily_balance", dailyBalance,
+			"operations_sum", operationsSum,
+			"available", availableBalance,
+			"required", item.RequiredQty,
+			"sufficient", result.Sufficient)
+	}
+	
+	return results, nil
 }
 
 func (s *InventoryStorage) CreateOperationsInTransaction(ctx context.Context, tx interface{}, operations []*models.Operation) error {
@@ -545,11 +656,177 @@ func (s *InventoryStorage) CreateOperationsInTransaction(ctx context.Context, tx
 		_, err := br.Exec()
 		if err != nil {
 			s.logger.Error("Failed to create operation in transaction", "error", err, "operation_index", i)
+			// Handle database errors appropriately
+			if dbErr := internalerrors.HandleDatabaseError(err, "create_operation_in_transaction"); dbErr != nil {
+				return dbErr
+			}
 			return err
 		}
 	}
 	
 	s.logger.Info("Operations created successfully in transaction", "count", len(operations))
 	return nil
+}
+
+// GetUserInventoryOptimized - D-15: оптимизированный метод для устранения N+1 запросов
+// Использует единый JOIN запрос вместо множественных отдельных запросов
+func (s *InventoryStorage) GetUserInventoryOptimized(ctx context.Context, userID, sectionID uuid.UUID) ([]*models.InventoryItemResponse, error) {
+	s.logger.Info("GetUserInventoryOptimized called", "user_id", userID, "section_id", sectionID)
+	
+	// Единый запрос с JOIN для получения всех данных за раз
+	// Устраняет N+1 проблему путем объединения:
+	// 1. daily_balances и operations для расчета текущего баланса
+	// 2. items, classifier_items для получения деталей предмета и кодов
+	query := `
+		WITH current_balances AS (
+			-- Получаем актуальные остатки на конец дня
+			SELECT DISTINCT ON (db.user_id, db.section_id, db.item_id, db.collection_id, db.quality_level_id)
+				db.user_id,
+				db.section_id, 
+				db.item_id,
+				db.collection_id,
+				db.quality_level_id,
+				db.quantity as daily_quantity,
+				db.balance_date
+			FROM inventory.daily_balances db
+			WHERE db.user_id = $1 AND db.section_id = $2 AND db.quantity > 0
+			ORDER BY db.user_id, db.section_id, db.item_id, db.collection_id, db.quality_level_id, db.balance_date DESC
+			
+			UNION
+			
+			-- Добавляем предметы, которые есть только в операциях за сегодня
+			SELECT DISTINCT 
+				op.user_id,
+				op.section_id,
+				op.item_id,
+				op.collection_id,
+				op.quality_level_id,
+				0 as daily_quantity,
+				CURRENT_DATE as balance_date
+			FROM inventory.operations op
+			WHERE op.user_id = $1 AND op.section_id = $2 
+				AND DATE(op.created_at) = CURRENT_DATE
+				AND NOT EXISTS (
+					SELECT 1 FROM inventory.daily_balances db2 
+					WHERE db2.user_id = op.user_id 
+						AND db2.section_id = op.section_id
+						AND db2.item_id = op.item_id
+						AND db2.collection_id = op.collection_id
+						AND db2.quality_level_id = op.quality_level_id
+				)
+		),
+		operations_sum AS (
+			-- Сумма операций за сегодня для каждого предмета
+			SELECT 
+				op.user_id,
+				op.section_id,
+				op.item_id,
+				op.collection_id,
+				op.quality_level_id,
+				COALESCE(SUM(op.quantity_change), 0) as today_operations
+			FROM inventory.operations op
+			WHERE op.user_id = $1 AND op.section_id = $2 
+				AND DATE(op.created_at) = CURRENT_DATE
+			GROUP BY op.user_id, op.section_id, op.item_id, op.collection_id, op.quality_level_id
+		),
+		final_balances AS (
+			-- Итоговые остатки = дневной остаток + операции за сегодня
+			SELECT 
+				cb.user_id,
+				cb.section_id,
+				cb.item_id,
+				cb.collection_id,
+				cb.quality_level_id,
+				cb.daily_quantity + COALESCE(os.today_operations, 0) as final_quantity
+			FROM current_balances cb
+			LEFT JOIN operations_sum os ON (
+				cb.user_id = os.user_id 
+				AND cb.section_id = os.section_id
+				AND cb.item_id = os.item_id
+				AND cb.collection_id = os.collection_id
+				AND cb.quality_level_id = os.quality_level_id
+			)
+			WHERE cb.daily_quantity + COALESCE(os.today_operations, 0) > 0
+		)
+		-- Основной запрос с JOIN для получения всех данных
+		SELECT 
+			fb.item_id,
+			fb.final_quantity,
+			-- Детали предмета
+			i.item_class_id,
+			i.item_type_id,
+			-- Коды классификаторов
+			ic.code as item_class_code,
+			it.code as item_type_code,
+			coll.code as collection_code,
+			qual.code as quality_code
+		FROM final_balances fb
+		-- JOIN с таблицей предметов
+		INNER JOIN inventory.items i ON fb.item_id = i.id
+		-- JOIN для получения кода класса предмета
+		INNER JOIN inventory.classifier_items ic ON i.item_class_id = ic.id
+		-- JOIN для получения кода типа предмета  
+		INNER JOIN inventory.classifier_items it ON i.item_type_id = it.id
+		-- JOIN для получения кода коллекции
+		INNER JOIN inventory.classifier_items coll ON fb.collection_id = coll.id
+		-- JOIN для получения кода качества
+		INNER JOIN inventory.classifier_items qual ON fb.quality_level_id = qual.id
+		ORDER BY fb.item_id
+	`
+	
+	rows, err := s.pool.Query(ctx, query, userID, sectionID)
+	if err != nil {
+		s.logger.Error("Failed to execute optimized inventory query", "error", err)
+		if s.metrics != nil {
+			s.metrics.RecordInventoryOperation("get_inventory_optimized", sectionID.String(), "error")
+		}
+		return nil, err
+	}
+	defer rows.Close()
+	
+	var result []*models.InventoryItemResponse
+	for rows.Next() {
+		var item models.InventoryItemResponse
+		var collectionCode, qualityCode string
+		
+		if err := rows.Scan(
+			&item.ItemID,
+			&item.Quantity,
+			// Пропускаем item_class_id и item_type_id так как нам нужны коды
+			new(interface{}), // item_class_id
+			new(interface{}), // item_type_id
+			&item.ItemClass,
+			&item.ItemType,
+			&collectionCode,
+			&qualityCode,
+		); err != nil {
+			s.logger.Error("Failed to scan optimized inventory item", "error", err)
+			return nil, err
+		}
+		
+		// Устанавливаем коды коллекции и качества
+		item.Collection = &collectionCode
+		item.QualityLevel = &qualityCode
+		
+		result = append(result, &item)
+	}
+	
+	if err := rows.Err(); err != nil {
+		s.logger.Error("Rows iteration error in optimized inventory", "error", err)
+		return nil, err
+	}
+	
+	// Записываем метрики успеха
+	if s.metrics != nil {
+		s.metrics.RecordInventoryOperation("get_inventory_optimized", sectionID.String(), "success")
+		s.metrics.RecordItemsPerInventory(sectionID.String(), len(result))
+	}
+	
+	s.logger.Info("Optimized inventory query completed", 
+		"user_id", userID, 
+		"section_id", sectionID, 
+		"items_count", len(result))
+	
+	return result, nil
 }
 

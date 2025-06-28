@@ -106,6 +106,14 @@ func (m *MockInventoryRepo) RollbackTransaction(tx interface{}) error {
 	return args.Error(0)
 }
 
+func (m *MockInventoryRepo) CheckAndLockBalances(ctx context.Context, tx interface{}, items []BalanceLockRequest) ([]BalanceLockResult, error) {
+	args := m.Called(ctx, tx, items)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]BalanceLockResult), args.Error(1)
+}
+
 // Test fixtures
 func createTestBalanceRequest() *BalanceRequest {
 	return &BalanceRequest{

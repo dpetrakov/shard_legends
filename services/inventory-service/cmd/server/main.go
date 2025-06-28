@@ -69,33 +69,47 @@ func main() {
 	}
 	defer redis.Close()
 
-	// Create Gin router
-	router := gin.New()
+	// Create Gin router for public API
+	publicRouter := gin.New()
 
-	// Add global middleware
-	router.Use(gin.Recovery())
-	router.Use(requestLogger(log))
-	router.Use(middleware.MetricsMiddleware(metricsCollector))
+	// Add global middleware for public API
+	publicRouter.Use(gin.Recovery())
+	publicRouter.Use(requestLogger(log))
+	publicRouter.Use(middleware.MetricsMiddleware(metricsCollector))
+
+	// Create Gin router for internal API
+	internalRouter := gin.New()
+	internalRouter.Use(gin.Recovery())
+	internalRouter.Use(requestLogger(log))
 
 	// Initialize health handler
 	healthHandler := NewHealthHandler(log, postgres, redis)
 
-	// Register health check routes
-	router.GET("/health", healthHandler.Health)
+	// Register internal routes
+	internalRouter.GET("/health", healthHandler.Health)
 
 	// Metrics endpoint for Prometheus scraping
-	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
+	internalRouter.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
-	// Initialize API with JWT authentication
-	if err := setupAPIWithJWT(router, postgres, redis, log, metricsCollector); err != nil {
+	// Initialize API with JWT authentication for both routers
+	if err := setupAPIWithJWT(publicRouter, internalRouter, postgres, redis, log, metricsCollector); err != nil {
 		log.Error("Failed to setup API with JWT", "error", err)
 		os.Exit(1)
 	}
 
-	// Create HTTP server
-	server := &http.Server{
+	// Create public HTTP server
+	publicServer := &http.Server{
 		Addr:         fmt.Sprintf("%s:%s", cfg.ServiceHost, cfg.ServicePort),
-		Handler:      router,
+		Handler:      publicRouter,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	// Create internal HTTP server
+	internalServer := &http.Server{
+		Addr:         fmt.Sprintf("%s:%s", cfg.ServiceHost, cfg.InternalServicePort),
+		Handler:      internalRouter,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
@@ -119,11 +133,20 @@ func main() {
 		}
 	}()
 
-	// Start server in a goroutine
+	// Start public server in a goroutine
 	go func() {
-		log.Info("Server starting", "address", server.Addr)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Error("Server failed to start", "error", err)
+		log.Info("Public server starting", "address", publicServer.Addr)
+		if err := publicServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Error("Public server failed to start", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	// Start internal server in a goroutine
+	go func() {
+		log.Info("Internal server starting", "address", internalServer.Addr)
+		if err := internalServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Error("Internal server failed to start", "error", err)
 			os.Exit(1)
 		}
 	}()
@@ -139,9 +162,15 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Attempt graceful shutdown
-	if err := server.Shutdown(ctx); err != nil {
-		log.Error("Server forced to shutdown", "error", err)
+	// Attempt graceful shutdown of both servers
+	go func() {
+		if err := publicServer.Shutdown(ctx); err != nil {
+			log.Error("Public server forced to shutdown", "error", err)
+		}
+	}()
+
+	if err := internalServer.Shutdown(ctx); err != nil {
+		log.Error("Internal server forced to shutdown", "error", err)
 		os.Exit(1)
 	}
 
@@ -179,7 +208,7 @@ func requestLogger(logger *slog.Logger) gin.HandlerFunc {
 }
 
 // setupAPIWithJWT initializes the API with JWT authentication and real services
-func setupAPIWithJWT(router *gin.Engine, postgres *database.PostgresDB, redis *database.RedisDB, logger *slog.Logger, metricsCollector *metrics.Metrics) error {
+func setupAPIWithJWT(publicRouter *gin.Engine, internalRouter *gin.Engine, postgres *database.PostgresDB, redis *database.RedisDB, logger *slog.Logger, metricsCollector *metrics.Metrics) error {
 	// Load JWT public key directly from auth-service container
 	publicKey, err := jwt.LoadPublicKeyFromAuthService("http://auth-service:8080")
 	if err != nil {
@@ -222,41 +251,60 @@ func setupAPIWithJWT(router *gin.Engine, postgres *database.PostgresDB, redis *d
 
 	// Initialize JWT middleware
 	var jwtMiddleware *middleware.JWTAuthMiddleware
+	var serviceJWTMiddleware *middleware.ServiceJWTAuthMiddleware
 	if publicKey != nil {
 		jwtMiddleware = middleware.NewJWTAuthMiddleware(publicKey, redis, logger)
+		serviceJWTMiddleware = middleware.NewServiceJWTAuthMiddleware(publicKey, redis, logger)
 	}
 
 	// Initialize handlers
 	inventoryHandler := handlers.NewInventoryHandler(inventoryService, classifierService, logger)
 
-	// Setup API routes
-	api := router.Group("/api/inventory")
+	// Setup public API routes
+	publicAPI := publicRouter.Group("/api/inventory")
 
-	// Public endpoint (requires JWT authentication)
+	// Public endpoints (require JWT authentication)
 	if jwtMiddleware != nil {
-		public := api.Group("")
+		public := publicAPI.Group("")
 		public.Use(jwtMiddleware.AuthenticateJWT())
 		{
 			public.GET("", inventoryHandler.GetUserInventory)
+			public.GET("/items", inventoryHandler.GetUserInventory) // alias for compatibility
 		}
 	} else {
 		// Fallback without JWT for development
-		api.GET("", inventoryHandler.GetUserInventoryNoAuth)
+		publicAPI.GET("", inventoryHandler.GetUserInventoryNoAuth)
+		publicAPI.GET("/items", inventoryHandler.GetUserInventoryNoAuth)
 	}
 
-	// Internal endpoints (no authentication, used by other microservices)
-	internal := api.Group("")
-	{
-		internal.POST("/add-items", inventoryHandler.AddItems)
-		internal.POST("/reserve", inventoryHandler.ReserveItems)
-		internal.POST("/return-reserve", inventoryHandler.ReturnReservedItems)
-		internal.POST("/consume-reserve", inventoryHandler.ConsumeReservedItems)
-	}
-
-	// Administrative endpoints (require admin authentication)
-	admin := api.Group("/admin")
+	// Administrative endpoints on public API (require admin authentication)
+	admin := publicAPI.Group("/admin")
 	{
 		admin.POST("/adjust", inventoryHandler.AdjustInventory)
+	}
+
+	// Setup internal API routes
+	internalAPI := internalRouter.Group("/api/inventory")
+
+	// Internal endpoints (require service JWT with 'internal' role)
+	if serviceJWTMiddleware != nil {
+		internal := internalAPI.Group("")
+		internal.Use(serviceJWTMiddleware.AuthenticateServiceJWT())
+		{
+			internal.POST("/add-items", inventoryHandler.AddItems)
+			internal.POST("/reserve", inventoryHandler.ReserveItems)
+			internal.POST("/return-reserve", inventoryHandler.ReturnReservedItems)
+			internal.POST("/consume-reserve", inventoryHandler.ConsumeReservedItems)
+		}
+	} else {
+		// Fallback without service JWT for development
+		internal := internalAPI.Group("")
+		{
+			internal.POST("/add-items", inventoryHandler.AddItems)
+			internal.POST("/reserve", inventoryHandler.ReserveItems)
+			internal.POST("/return-reserve", inventoryHandler.ReturnReservedItems)
+			internal.POST("/consume-reserve", inventoryHandler.ConsumeReservedItems)
+		}
 	}
 
 	return nil
