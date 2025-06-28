@@ -12,13 +12,13 @@ import (
 
 // RateLimiter implements token bucket rate limiting per IP
 type RateLimiter struct {
-	logger    *slog.Logger
-	clients   map[string]*TokenBucket
-	mutex     sync.RWMutex
-	rate      time.Duration // Time between tokens
-	capacity  int           // Maximum tokens in bucket
+	logger        *slog.Logger
+	clients       map[string]*TokenBucket
+	mutex         sync.RWMutex
+	rate          time.Duration // Time between tokens
+	capacity      int           // Maximum tokens in bucket
 	cleanupTicker *time.Ticker
-	metrics   *metrics.Metrics
+	metrics       *metrics.Metrics
 }
 
 // TokenBucket represents a token bucket for rate limiting
@@ -29,14 +29,14 @@ type TokenBucket struct {
 }
 
 // NewRateLimiter creates a new rate limiter
-func NewRateLimiter(requestsPerMinute int, logger *slog.Logger, metrics *metrics.Metrics) *RateLimiter {
+func NewRateLimiter(requestsPerWindow int, window time.Duration, logger *slog.Logger, metrics *metrics.Metrics) *RateLimiter {
 	rl := &RateLimiter{
-		logger:   logger,
-		clients:  make(map[string]*TokenBucket),
-		rate:     time.Minute / time.Duration(requestsPerMinute),
-		capacity: requestsPerMinute,
+		logger:        logger,
+		clients:       make(map[string]*TokenBucket),
+		rate:          window / time.Duration(requestsPerWindow),
+		capacity:      requestsPerWindow,
 		cleanupTicker: time.NewTicker(5 * time.Minute), // Cleanup every 5 minutes
-		metrics:  metrics,
+		metrics:       metrics,
 	}
 
 	// Start cleanup goroutine
@@ -49,22 +49,22 @@ func NewRateLimiter(requestsPerMinute int, logger *slog.Logger, metrics *metrics
 func (rl *RateLimiter) Limit() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		clientIP := c.ClientIP()
-		
+
 		// Check if request is allowed
 		if !rl.allow(clientIP) {
 			rl.logger.Warn("Rate limit exceeded",
 				"ip", clientIP,
 				"path", c.Request.URL.Path,
 				"method", c.Request.Method)
-			
+
 			// Record rate limit hit in metrics
 			if rl.metrics != nil {
 				rl.metrics.RecordRateLimitHit(clientIP)
 			}
-			
+
 			c.JSON(http.StatusTooManyRequests, gin.H{
 				"success": false,
-				"error":   "rate_limit_exceeded", 
+				"error":   "rate_limit_exceeded",
 				"message": "Too many requests. Please try again later.",
 			})
 			c.Abort()
@@ -99,7 +99,7 @@ func (tb *TokenBucket) consume(rate time.Duration, capacity int) bool {
 	defer tb.mutex.Unlock()
 
 	now := time.Now()
-	
+
 	// Calculate how many tokens to add based on time passed
 	tokensToAdd := int(now.Sub(tb.lastRefill) / rate)
 	if tokensToAdd > 0 {
@@ -123,7 +123,7 @@ func (tb *TokenBucket) consume(rate time.Duration, capacity int) bool {
 func (rl *RateLimiter) cleanup() {
 	for range rl.cleanupTicker.C {
 		rl.mutex.Lock()
-		
+
 		cutoff := time.Now().Add(-10 * time.Minute)
 		for ip, bucket := range rl.clients {
 			bucket.mutex.Lock()
@@ -132,10 +132,10 @@ func (rl *RateLimiter) cleanup() {
 			}
 			bucket.mutex.Unlock()
 		}
-		
+
 		rl.logger.Debug("Rate limiter cleanup completed",
 			"active_clients", len(rl.clients))
-		
+
 		rl.mutex.Unlock()
 	}
 }

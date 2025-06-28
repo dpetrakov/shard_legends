@@ -21,16 +21,16 @@ type CORSConfig struct {
 func DefaultCORSConfig() CORSConfig {
 	return CORSConfig{
 		AllowOrigins: []string{
-			"http://localhost:3000",    // Next.js dev server
-			"https://localhost:3000",   // Next.js dev server with HTTPS
-			"http://127.0.0.1:3000",   // Alternative localhost
-			"https://127.0.0.1:3000",  // Alternative localhost with HTTPS
+			"http://localhost:3000",  // Next.js dev server
+			"https://localhost:3000", // Next.js dev server with HTTPS
+			"http://127.0.0.1:3000",  // Alternative localhost
+			"https://127.0.0.1:3000", // Alternative localhost with HTTPS
 			// Production domains would be added here
 		},
 		AllowMethods: []string{
 			"GET",
 			"POST",
-			"PUT", 
+			"PUT",
 			"PATCH",
 			"DELETE",
 			"HEAD",
@@ -64,7 +64,7 @@ func CORS() gin.HandlerFunc {
 func CORSWithConfig(config CORSConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		origin := c.Request.Header.Get("Origin")
-		
+
 		// Check if origin is allowed
 		if origin != "" && isOriginAllowed(origin, config.AllowOrigins) {
 			c.Header("Access-Control-Allow-Origin", origin)
@@ -109,7 +109,7 @@ func isOriginAllowed(origin string, allowedOrigins []string) bool {
 		if allowed == "*" || allowed == origin {
 			return true
 		}
-		
+
 		// Support for wildcard subdomains like *.example.com
 		if strings.HasPrefix(allowed, "*.") {
 			domain := strings.TrimPrefix(allowed, "*.")

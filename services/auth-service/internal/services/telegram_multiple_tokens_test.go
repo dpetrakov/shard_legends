@@ -12,12 +12,12 @@ import (
 
 func TestValidateSignatureWithMultipleTokens(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	
+
 	// Test tokens
 	token1 := "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefgh"
 	token2 := "987654321:XYZabcdefghIJKLMNOPQRSTUVWXYZABCD"
 	tokens := []string{token1, token2}
-	
+
 	validator := NewTelegramValidator(tokens, logger)
 
 	// Create test data
@@ -51,7 +51,7 @@ func TestValidateSignatureWithMultipleTokens(t *testing.T) {
 	// Build complete initData
 	values.Set("hash", validHash1)
 	initDataWithToken1Hash := values.Encode()
-	
+
 	values.Set("hash", validHash2)
 	initDataWithToken2Hash := values.Encode()
 
@@ -123,22 +123,22 @@ func TestGenerateSecretKeyForToken(t *testing.T) {
 
 func TestMultipleTokensIntegration(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	
+
 	// Test with multiple tokens
 	token1 := "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefgh"
 	token2 := "987654321:XYZabcdefghIJKLMNOPQRSTUVWXYZABCD"
 	tokens := []string{token1, token2}
-	
+
 	validator := NewTelegramValidator(tokens, logger)
 
 	// Test that validator accepts data signed with either token
 	userData := `{"id":123456789,"first_name":"John","last_name":"Doe","username":"johndoe","language_code":"en"}`
-	
+
 	// Test with token1
 	values1 := url.Values{}
 	values1.Set("user", userData)
 	values1.Set("auth_date", "1703243400")
-	
+
 	var pairs1 []string
 	for key, valueSlice := range values1 {
 		if len(valueSlice) > 0 {
@@ -147,7 +147,7 @@ func TestMultipleTokensIntegration(t *testing.T) {
 	}
 	sort.Strings(pairs1)
 	dataCheckString1 := strings.Join(pairs1, "\n")
-	
+
 	secretKey1 := validator.generateSecretKeyForToken(token1)
 	validHash1 := validator.calculateHMAC(dataCheckString1, secretKey1)
 	values1.Set("hash", validHash1)
@@ -157,7 +157,7 @@ func TestMultipleTokensIntegration(t *testing.T) {
 	values2 := url.Values{}
 	values2.Set("user", userData)
 	values2.Set("auth_date", "1703243400")
-	
+
 	var pairs2 []string
 	for key, valueSlice := range values2 {
 		if len(valueSlice) > 0 {
@@ -166,7 +166,7 @@ func TestMultipleTokensIntegration(t *testing.T) {
 	}
 	sort.Strings(pairs2)
 	dataCheckString2 := strings.Join(pairs2, "\n")
-	
+
 	secretKey2 := validator.generateSecretKeyForToken(token2)
 	validHash2 := validator.calculateHMAC(dataCheckString2, secretKey2)
 	values2.Set("hash", validHash2)

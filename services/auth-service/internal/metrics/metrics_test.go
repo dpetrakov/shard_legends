@@ -289,7 +289,7 @@ func TestMetricsInitialization(t *testing.T) {
 
 	// Initialize metrics
 	m.Initialize()
-	
+
 	// Verify service up metric is set to 1
 	serviceUpValue := getGaugeValue(t, m.ServiceUp)
 	if serviceUpValue != 1.0 {
@@ -304,7 +304,7 @@ func TestMetricsInitialization(t *testing.T) {
 
 	// Test shutdown
 	m.Shutdown()
-	
+
 	// Verify service up metric is set to 0
 	serviceUpValue = getGaugeValue(t, m.ServiceUp)
 	if serviceUpValue != 0.0 {
@@ -314,17 +314,17 @@ func TestMetricsInitialization(t *testing.T) {
 
 func TestHTTPMetrics(t *testing.T) {
 	m := createTestMetrics()
-	
+
 	// Record HTTP request
 	duration := 100 * time.Millisecond
 	m.RecordHTTPRequest("POST", "/auth", "200", duration)
-	
+
 	// Verify counter metric
 	counterValue := getCounterVecValue(t, m.HTTPRequestsTotal, "POST", "/auth", "200")
 	if counterValue != 1.0 {
 		t.Errorf("Expected HTTPRequestsTotal to be 1.0, got %f", counterValue)
 	}
-	
+
 	// Verify histogram metric has observations
 	histogramCount := getHistogramVecCount(t, m.HTTPRequestDuration, "POST", "/auth")
 	if histogramCount != 1 {
@@ -334,44 +334,44 @@ func TestHTTPMetrics(t *testing.T) {
 
 func TestAuthMetrics(t *testing.T) {
 	m := createTestMetrics()
-	
+
 	// Test successful auth
 	duration := 50 * time.Millisecond
 	m.RecordAuthRequest("success", "valid", duration)
-	
+
 	counterValue := getCounterVecValue(t, m.AuthRequestsTotal, "success", "valid")
 	if counterValue != 1.0 {
 		t.Errorf("Expected AuthRequestsTotal to be 1.0, got %f", counterValue)
 	}
-	
+
 	// Test failed auth
 	m.RecordAuthRequest("failed", "invalid_signature", duration)
-	
+
 	counterValue = getCounterVecValue(t, m.AuthRequestsTotal, "failed", "invalid_signature")
 	if counterValue != 1.0 {
 		t.Errorf("Expected AuthRequestsTotal to be 1.0, got %f", counterValue)
 	}
-	
+
 	// Test telegram validation
 	validationDuration := 10 * time.Millisecond
 	m.RecordTelegramValidation(validationDuration)
-	
+
 	histogramCount := getHistogramCount(t, m.AuthTelegramValidationDuration)
 	if histogramCount != 1 {
 		t.Errorf("Expected AuthTelegramValidationDuration to have 1 observation, got %d", histogramCount)
 	}
-	
+
 	// Test new user registration
 	m.RecordNewUser()
-	
+
 	counterValue = getCounterValue(t, m.AuthNewUsersTotal)
 	if counterValue != 1.0 {
 		t.Errorf("Expected AuthNewUsersTotal to be 1.0, got %f", counterValue)
 	}
-	
+
 	// Test rate limit hit
 	m.RecordRateLimitHit("192.168.1.1")
-	
+
 	counterValue = getCounterVecValue(t, m.AuthRateLimitHitsTotal, "192.168.1.1")
 	if counterValue != 1.0 {
 		t.Errorf("Expected AuthRateLimitHitsTotal to be 1.0, got %f", counterValue)
@@ -380,49 +380,49 @@ func TestAuthMetrics(t *testing.T) {
 
 func TestJWTMetrics(t *testing.T) {
 	m := createTestMetrics()
-	
+
 	// Test JWT generation
 	m.RecordJWTGenerated()
-	
+
 	counterValue := getCounterValue(t, m.JWTTokensGeneratedTotal)
 	if counterValue != 1.0 {
 		t.Errorf("Expected JWTTokensGeneratedTotal to be 1.0, got %f", counterValue)
 	}
-	
+
 	// Test JWT validation
 	m.RecordJWTValidation("valid")
 	m.RecordJWTValidation("invalid")
-	
+
 	validCount := getCounterVecValue(t, m.JWTTokensValidatedTotal, "valid")
 	if validCount != 1.0 {
 		t.Errorf("Expected valid JWT tokens to be 1.0, got %f", validCount)
 	}
-	
+
 	invalidCount := getCounterVecValue(t, m.JWTTokensValidatedTotal, "invalid")
 	if invalidCount != 1.0 {
 		t.Errorf("Expected invalid JWT tokens to be 1.0, got %f", invalidCount)
 	}
-	
+
 	// Test key generation
 	keyGenDuration := 500 * time.Millisecond
 	m.RecordKeyGeneration(keyGenDuration)
-	
+
 	histogramCount := getHistogramCount(t, m.JWTKeyGenerationDuration)
 	if histogramCount != 1 {
 		t.Errorf("Expected JWTKeyGenerationDuration to have 1 observation, got %d", histogramCount)
 	}
-	
+
 	// Test active tokens count
 	m.UpdateActiveTokensCount(42.0)
-	
+
 	gaugeValue := getGaugeValue(t, m.JWTActiveTokensCount)
 	if gaugeValue != 42.0 {
 		t.Errorf("Expected JWTActiveTokensCount to be 42.0, got %f", gaugeValue)
 	}
-	
+
 	// Test tokens per user
 	m.RecordTokensPerUser(3.0)
-	
+
 	histogramCount = getHistogramCount(t, m.JWTTokensPerUserHistogram)
 	if histogramCount != 1 {
 		t.Errorf("Expected JWTTokensPerUserHistogram to have 1 observation, got %d", histogramCount)
@@ -431,48 +431,48 @@ func TestJWTMetrics(t *testing.T) {
 
 func TestRedisMetrics(t *testing.T) {
 	m := createTestMetrics()
-	
+
 	// Test Redis operation
 	duration := 5 * time.Millisecond
 	m.RecordRedisOperation("set", "success", duration)
-	
+
 	counterValue := getCounterVecValue(t, m.RedisOperationsTotal, "set", "success")
 	if counterValue != 1.0 {
 		t.Errorf("Expected RedisOperationsTotal to be 1.0, got %f", counterValue)
 	}
-	
+
 	histogramCount := getHistogramVecCount(t, m.RedisOperationDuration, "set")
 	if histogramCount != 1 {
 		t.Errorf("Expected RedisOperationDuration to have 1 observation, got %d", histogramCount)
 	}
-	
+
 	// Test pool stats
 	m.UpdateRedisPoolStats(5.0, 3.0)
-	
+
 	activeValue := getGaugeValue(t, m.RedisConnectionPoolActive)
 	if activeValue != 5.0 {
 		t.Errorf("Expected RedisConnectionPoolActive to be 5.0, got %f", activeValue)
 	}
-	
+
 	idleValue := getGaugeValue(t, m.RedisConnectionPoolIdle)
 	if idleValue != 3.0 {
 		t.Errorf("Expected RedisConnectionPoolIdle to be 3.0, got %f", idleValue)
 	}
-	
+
 	// Test token cleanup
 	cleanupDuration := 2 * time.Second
 	m.RecordTokenCleanup(cleanupDuration, 10.0, 5.0)
-	
+
 	histogramCount = getHistogramCount(t, m.RedisTokenCleanupDuration)
 	if histogramCount != 1 {
 		t.Errorf("Expected RedisTokenCleanupDuration to have 1 observation, got %d", histogramCount)
 	}
-	
+
 	expiredCount := getCounterValue(t, m.RedisExpiredTokensCleaned)
 	if expiredCount != 10.0 {
 		t.Errorf("Expected RedisExpiredTokensCleaned to be 10.0, got %f", expiredCount)
 	}
-	
+
 	processedCount := getCounterValue(t, m.RedisCleanupProcessedUsers)
 	if processedCount != 5.0 {
 		t.Errorf("Expected RedisCleanupProcessedUsers to be 5.0, got %f", processedCount)
@@ -481,34 +481,34 @@ func TestRedisMetrics(t *testing.T) {
 
 func TestPostgresMetrics(t *testing.T) {
 	m := createTestMetrics()
-	
+
 	// Test Postgres operation
 	duration := 15 * time.Millisecond
 	m.RecordPostgresOperation("select", "users", "success", duration)
-	
+
 	counterValue := getCounterVecValue(t, m.PostgresOperationsTotal, "select", "users", "success")
 	if counterValue != 1.0 {
 		t.Errorf("Expected PostgresOperationsTotal to be 1.0, got %f", counterValue)
 	}
-	
+
 	histogramCount := getHistogramVecCount(t, m.PostgresOperationDuration, "select", "users")
 	if histogramCount != 1 {
 		t.Errorf("Expected PostgresOperationDuration to have 1 observation, got %d", histogramCount)
 	}
-	
+
 	// Test pool stats
 	m.UpdatePostgresPoolStats(8.0, 2.0, 10.0)
-	
+
 	activeValue := getGaugeValue(t, m.PostgresConnectionPoolActive)
 	if activeValue != 8.0 {
 		t.Errorf("Expected PostgresConnectionPoolActive to be 8.0, got %f", activeValue)
 	}
-	
+
 	idleValue := getGaugeValue(t, m.PostgresConnectionPoolIdle)
 	if idleValue != 2.0 {
 		t.Errorf("Expected PostgresConnectionPoolIdle to be 2.0, got %f", idleValue)
 	}
-	
+
 	maxValue := getGaugeValue(t, m.PostgresConnectionPoolMax)
 	if maxValue != 10.0 {
 		t.Errorf("Expected PostgresConnectionPoolMax to be 10.0, got %f", maxValue)
@@ -517,18 +517,18 @@ func TestPostgresMetrics(t *testing.T) {
 
 func TestDependencyHealthMetrics(t *testing.T) {
 	m := createTestMetrics()
-	
+
 	// Test healthy dependency
 	m.UpdateDependencyHealth("postgres", true)
-	
+
 	healthyValue := getGaugeVecValue(t, m.DependenciesHealthy, "postgres")
 	if healthyValue != 1.0 {
 		t.Errorf("Expected healthy postgres to be 1.0, got %f", healthyValue)
 	}
-	
+
 	// Test unhealthy dependency
 	m.UpdateDependencyHealth("redis", false)
-	
+
 	unhealthyValue := getGaugeVecValue(t, m.DependenciesHealthy, "redis")
 	if unhealthyValue != 0.0 {
 		t.Errorf("Expected unhealthy redis to be 0.0, got %f", unhealthyValue)
@@ -537,32 +537,32 @@ func TestDependencyHealthMetrics(t *testing.T) {
 
 func TestAdminMetrics(t *testing.T) {
 	m := createTestMetrics()
-	
+
 	// Test admin operation
 	m.RecordAdminOperation("get_stats", "success")
-	
+
 	counterValue := getCounterVecValue(t, m.AdminOperationsTotal, "get_stats", "success")
 	if counterValue != 1.0 {
 		t.Errorf("Expected AdminOperationsTotal to be 1.0, got %f", counterValue)
 	}
-	
+
 	// Test token revocation
 	m.RecordTokenRevocation("single")
 	m.RecordTokenRevocation("user_all")
-	
+
 	singleValue := getCounterVecValue(t, m.AdminTokenRevocationsTotal, "single")
 	if singleValue != 1.0 {
 		t.Errorf("Expected single token revocations to be 1.0, got %f", singleValue)
 	}
-	
+
 	allValue := getCounterVecValue(t, m.AdminTokenRevocationsTotal, "user_all")
 	if allValue != 1.0 {
 		t.Errorf("Expected user_all token revocations to be 1.0, got %f", allValue)
 	}
-	
+
 	// Test manual cleanup
 	m.RecordManualCleanup()
-	
+
 	cleanupValue := getCounterValue(t, m.AdminCleanupOperationsTotal)
 	if cleanupValue != 1.0 {
 		t.Errorf("Expected AdminCleanupOperationsTotal to be 1.0, got %f", cleanupValue)
@@ -615,12 +615,12 @@ func getHistogramVecCount(t *testing.T, histogramVec *prometheus.HistogramVec, l
 	if err != nil {
 		t.Fatalf("Failed to get histogram with labels %v: %v", labelValues, err)
 	}
-	
+
 	// Convert Observer to Histogram to access Write method
 	histogram, ok := observer.(prometheus.Histogram)
 	if !ok {
 		t.Fatalf("Failed to convert Observer to Histogram")
 	}
-	
+
 	return getHistogramCount(t, histogram)
 }

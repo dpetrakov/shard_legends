@@ -37,12 +37,12 @@ func main() {
 
 	// Create tokens that are already expired
 	expiredTime := time.Now().Add(-time.Hour) // Expired 1 hour ago
-	
+
 	fmt.Println("Creating test expired tokens...")
-	
+
 	for i := 0; i < 3; i++ {
 		jti := uuid.New().String()
-		
+
 		err := tokenStorage.StoreActiveToken(ctx, jti, userID, telegramID, expiredTime)
 		if err != nil {
 			log.Printf("Failed to store expired token %d: %v", i+1, err)
@@ -82,6 +82,6 @@ func main() {
 	fmt.Printf("\nAfter cleanup:")
 	fmt.Printf("\n- Cleaned tokens: %d", cleanedCount)
 	fmt.Printf("\n- Active tokens remaining: %d\n", activeCountAfter)
-	
+
 	fmt.Println("\nCleanup test completed!")
 }

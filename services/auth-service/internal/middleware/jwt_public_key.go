@@ -19,39 +19,8 @@ func NewJWTPublicKeyMiddleware(jwtService *services.JWTService) *JWTPublicKeyMid
 	}
 }
 
-// PublicKeyHandler returns the JWT public key in PEM format
-func (m *JWTPublicKeyMiddleware) PublicKeyHandler() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		publicKeyPEM, err := m.jwtService.GetPublicKeyPEM()
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "Failed to retrieve public key",
-			})
-			return
-		}
-
-		keyID, err := m.jwtService.GetKeyID()
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "Failed to retrieve key ID",
-			})
-			return
-		}
-
-		// Return public key information in JSON Web Key Set (JWKS) compatible format
-		c.JSON(http.StatusOK, gin.H{
-			"keys": []gin.H{
-				{
-					"kty": "RSA",        // Key Type
-					"use": "sig",        // Public Key Use
-					"alg": "RS256",      // Algorithm
-					"kid": keyID,        // Key ID
-					"pem": publicKeyPEM, // PEM format for easy consumption
-				},
-			},
-		})
-	}
-}
+// PublicKeyHandler was removed in favor of simpler PEM-only approach
+// JWKS support is deferred to a future version
 
 // PublicKeyPEMHandler returns only the PEM format public key (simpler endpoint)
 func (m *JWTPublicKeyMiddleware) PublicKeyPEMHandler() gin.HandlerFunc {

@@ -22,7 +22,9 @@
 
 ### Позиционирование в системе
 - **Тип**: Микросервис на Golang
-- **Порт**: 8080 (внутренний)
+- **Порты**: 
+  - 8080 (публичный API) - для внешних запросов через API Gateway
+  - 8090 (внутренний API) - для health checks, метрик и административных функций
 - **Доступ**: Через API Gateway (nginx) на маршруте `/api/auth`
 - **Зависимости**: PostgreSQL, Redis, API Gateway
 
@@ -796,6 +798,25 @@ func (r *RedisTokenStorage) RevokeAllUserTokens(ctx context.Context, userID stri
 
 **📋 Полная OpenAPI 3.0 спецификация**: [`auth-service-openapi.yml`](./auth-service-openapi.yml)
 
+### Разделение API на два порта
+
+С целью повышения безопасности и изоляции, API auth-service разделен на два порта:
+
+#### Публичный API (порт 8080)
+Доступен через API Gateway для внешних клиентов:
+- `POST /auth` - аутентификация пользователей
+
+#### Внутренний API (порт 8090)
+Доступен только внутри Docker network для служебных функций и других микросервисов:
+- `GET /health` - проверка здоровья сервиса
+- `GET /metrics` - метрики Prometheus
+- `GET /public-key.pem` - получение публичного ключа в формате PEM (для других микросервисов)
+- `GET /admin/tokens/stats` - статистика токенов
+- `GET /admin/tokens/user/:userId` - токены пользователя
+- `DELETE /admin/tokens/user/:userId` - отзыв токенов пользователя
+- `DELETE /admin/tokens/:jti` - отзыв конкретного токена
+- `POST /admin/tokens/cleanup` - ручная очистка токенов
+
 ### Основные эндпоинты
 
 #### 1. POST /auth - Аутентификация
@@ -827,42 +848,13 @@ func (r *RedisTokenStorage) RevokeAllUserTokens(ctx context.Context, userID stri
 }
 ```
 
-#### 3. GET /jwks - Публичный ключ (JWKS формат)
-**Описание**: Экспорт публичного RSA ключа в стандартном формате JWKS для валидации JWT токенов другими микросервисами
-
-**Использование другими сервисами**:
-```bash
-# Получение ключа
-curl http://auth-service:8080/jwks > /tmp/auth_jwks.json
-
-# Использование в коде (Go пример)
-jwks, _ := jwk.Parse(jwksData)
-publicKey, _ := jwks.Get(0)
-token, _ := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-    return publicKey, nil
-})
-```
-
-**Пример ответа**:
-```json
-{
-  "keys": [{
-    "kty": "RSA",
-    "use": "sig",
-    "alg": "RS256",
-    "kid": "30820122300d0609",
-    "pem": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...\n-----END PUBLIC KEY-----"
-  }]
-}
-```
-
-#### 4. GET /public-key.pem - Публичный ключ (PEM формат)
+#### 3. GET /public-key.pem - Публичный ключ (PEM формат)
 **Описание**: Простой экспорт публичного RSA ключа в формате PEM для легкой интеграции
 
 **Использование другими сервисами**:
 ```bash
-# Получение ключа
-curl http://auth-service:8080/public-key.pem > /tmp/auth_public_key.pem
+# Получение ключа (через внутренний порт)
+curl http://auth-service:8090/public-key.pem > /tmp/auth_public_key.pem
 
 # Использование в коде (Go пример)
 keyData, _ := os.ReadFile("/tmp/auth_public_key.pem")
@@ -958,17 +950,14 @@ fwIDAQAB
 
 **Автоматическое получение ключа при старте сервиса**:
 ```bash
-# Вариант 1: JWKS формат (рекомендуется для современных библиотек)
-curl http://auth-service:8080/jwks > /etc/keys/auth_jwks.json
-
-# Вариант 2: PEM формат (универсальный)
-curl http://auth-service:8080/public-key.pem > /etc/keys/auth_public_key.pem
+# PEM формат (единственный поддерживаемый формат)
+curl http://auth-service:8090/public-key.pem > /etc/keys/auth_public_key.pem
 ```
 
 #### Middleware для валидации токенов
 
 Для валидации JWT токенов в других сервисах используйте:
-- **Публичный ключ** RSA для проверки подписи (получается через /jwks или /public-key.pem)
+- **Публичный ключ** RSA для проверки подписи (получается через /public-key.pem)
 - **Redis проверку** на отзыв токена: `EXISTS revoked:{jti}`  
 - **Базовый middleware** для проверки авторизации:
 
@@ -976,7 +965,7 @@ curl http://auth-service:8080/public-key.pem > /etc/keys/auth_public_key.pem
 // Пример middleware с автоматическим получением ключа
 func AuthMiddleware() gin.HandlerFunc {
     // Получение публичного ключа при инициализации
-    resp, _ := http.Get("http://auth-service:8080/public-key.pem")
+    resp, _ := http.Get("http://auth-service:8090/public-key.pem")
     keyData, _ := io.ReadAll(resp.Body)
     block, _ := pem.Decode(keyData)
     publicKey, _ := x509.ParsePKIXPublicKey(block.Bytes)
@@ -1089,6 +1078,7 @@ services:
 # Основные настройки
 AUTH_SERVICE_PORT=8080
 AUTH_SERVICE_HOST=0.0.0.0
+AUTH_INTERNAL_SERVICE_PORT=8090
 
 # База данных
 DATABASE_URL=postgresql://user:pass@postgres:5432/shard_legends
@@ -1156,7 +1146,7 @@ auth-service:
     - postgres
     - redis
   healthcheck:
-    test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+    test: ["CMD", "curl", "-f", "http://localhost:8090/health"]
     interval: 30s
     timeout: 10s
     retries: 3
@@ -1280,7 +1270,7 @@ Auth Service предоставляет comprehensive набор метрик д
 
 ### Доступ к метрикам
 
-**Endpoint**: `GET /metrics`
+**Endpoint**: `GET /metrics` (доступен только на внутреннем порту 8090)
 **Формат**: Prometheus exposition format
 **Namespace**: `auth_service` (все метрики имеют префикс `auth_service_`)
 
@@ -1523,7 +1513,7 @@ rate(auth_service_redis_expired_tokens_cleaned_total[5m])
 scrape_configs:
   - job_name: 'auth-service'
     static_configs:
-      - targets: ['auth-service:8080']
+      - targets: ['auth-service:8090']
     metrics_path: '/metrics'
     scrape_interval: 30s
 ```

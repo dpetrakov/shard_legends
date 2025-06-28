@@ -564,11 +564,11 @@ func TestPostgresStorage_ListActiveUsers(t *testing.T) {
 	}
 
 	tests := []struct {
-		name       string
-		limit      int
-		offset     int
-		wantCount  int
-		wantErr    bool
+		name      string
+		limit     int
+		offset    int
+		wantCount int
+		wantErr   bool
 	}{
 		{
 			name:      "list all users",

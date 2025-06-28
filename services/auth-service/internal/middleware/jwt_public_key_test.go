@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"encoding/json"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -62,92 +61,7 @@ func TestNewJWTPublicKeyMiddleware(t *testing.T) {
 	}
 }
 
-func TestPublicKeyHandler(t *testing.T) {
-	middleware := setupTestMiddleware(t)
-
-	// Set Gin to test mode
-	gin.SetMode(gin.TestMode)
-
-	// Create a test router
-	router := gin.New()
-	router.GET("/public-key", middleware.PublicKeyHandler())
-
-	// Create a test request
-	req, err := http.NewRequest("GET", "/public-key", nil)
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
-	}
-
-	// Create a response recorder
-	rr := httptest.NewRecorder()
-
-	// Perform the request
-	router.ServeHTTP(rr, req)
-
-	// Check status code
-	if rr.Code != http.StatusOK {
-		t.Errorf("Expected status %d, got %d", http.StatusOK, rr.Code)
-	}
-
-	// Check content type
-	expectedContentType := "application/json; charset=utf-8"
-	actualContentType := rr.Header().Get("Content-Type")
-	if actualContentType != expectedContentType {
-		t.Errorf("Expected content type %q, got %q", expectedContentType, actualContentType)
-	}
-
-	// Parse response body
-	var response struct {
-		Keys []struct {
-			Kty string `json:"kty"`
-			Use string `json:"use"`
-			Alg string `json:"alg"`
-			Kid string `json:"kid"`
-			Pem string `json:"pem"`
-		} `json:"keys"`
-	}
-
-	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
-		t.Fatalf("Failed to parse response JSON: %v", err)
-	}
-
-	// Verify response structure
-	if len(response.Keys) != 1 {
-		t.Errorf("Expected 1 key, got %d", len(response.Keys))
-	}
-
-	key := response.Keys[0]
-
-	// Verify key properties
-	if key.Kty != "RSA" {
-		t.Errorf("Expected kty 'RSA', got %q", key.Kty)
-	}
-
-	if key.Use != "sig" {
-		t.Errorf("Expected use 'sig', got %q", key.Use)
-	}
-
-	if key.Alg != "RS256" {
-		t.Errorf("Expected alg 'RS256', got %q", key.Alg)
-	}
-
-	if key.Kid == "" {
-		t.Error("Expected non-empty kid")
-	}
-
-	if key.Pem == "" {
-		t.Error("Expected non-empty pem")
-	}
-
-	// Verify PEM format
-	if !strings.Contains(key.Pem, "-----BEGIN PUBLIC KEY-----") {
-		t.Error("Expected PEM to contain BEGIN PUBLIC KEY header")
-	}
-
-	if !strings.Contains(key.Pem, "-----END PUBLIC KEY-----") {
-		t.Error("Expected PEM to contain END PUBLIC KEY footer")
-	}
-}
+// TestPublicKeyHandler was removed - JWKS support deferred to future version
 
 func TestPublicKeyPEMHandler(t *testing.T) {
 	middleware := setupTestMiddleware(t)
@@ -213,9 +127,8 @@ func TestMiddlewareIntegration(t *testing.T) {
 	// Set Gin to test mode
 	gin.SetMode(gin.TestMode)
 
-	// Create a test router with both endpoints
+	// Create a test router with PEM endpoint only (JWKS removed)
 	router := gin.New()
-	router.GET("/jwks", middleware.PublicKeyHandler())
 	router.GET("/public-key.pem", middleware.PublicKeyPEMHandler())
 
 	tests := []struct {
@@ -224,12 +137,6 @@ func TestMiddlewareIntegration(t *testing.T) {
 		expectedStatus int
 		expectedType   string
 	}{
-		{
-			name:           "JWKS endpoint",
-			path:           "/jwks",
-			expectedStatus: http.StatusOK,
-			expectedType:   "application/json; charset=utf-8",
-		},
 		{
 			name:           "PEM endpoint",
 			path:           "/public-key.pem",
@@ -264,20 +171,7 @@ func TestMiddlewareIntegration(t *testing.T) {
 }
 
 // Benchmark tests
-func BenchmarkPublicKeyHandler(b *testing.B) {
-	middleware := setupTestMiddleware(&testing.T{})
-	gin.SetMode(gin.TestMode)
-
-	router := gin.New()
-	router.GET("/public-key", middleware.PublicKeyHandler())
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		req, _ := http.NewRequest("GET", "/public-key", nil)
-		rr := httptest.NewRecorder()
-		router.ServeHTTP(rr, req)
-	}
-}
+// BenchmarkPublicKeyHandler was removed - JWKS support deferred to future version
 
 func BenchmarkPublicKeyPEMHandler(b *testing.B) {
 	middleware := setupTestMiddleware(&testing.T{})

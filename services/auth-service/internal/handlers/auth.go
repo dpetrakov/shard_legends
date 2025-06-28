@@ -61,7 +61,7 @@ type UserResponse struct {
 // Auth handles POST /auth requests
 func (h *AuthHandler) Auth(c *gin.Context) {
 	start := time.Now()
-	
+
 	// Get X-Telegram-Init-Data header
 	initData := c.GetHeader("X-Telegram-Init-Data")
 	if initData == "" {
@@ -84,7 +84,7 @@ func (h *AuthHandler) Auth(c *gin.Context) {
 	telegramStart := time.Now()
 	telegramData, err := h.telegramValidator.ValidateTelegramData(initData)
 	h.metrics.RecordTelegramValidation(time.Since(telegramStart))
-	
+
 	if err != nil {
 		h.logger.Error("Telegram data validation failed", "error", err)
 		h.metrics.RecordAuthRequest("failed", "invalid_signature", time.Since(start))
@@ -114,7 +114,7 @@ func (h *AuthHandler) Auth(c *gin.Context) {
 		})
 		return
 	}
-	
+
 	// Record new user registration if applicable
 	if isNewUser {
 		h.metrics.RecordNewUser()
@@ -125,7 +125,7 @@ func (h *AuthHandler) Auth(c *gin.Context) {
 		h.logger.Warn("Failed to update last login", "error", err, "user_id", user.ID.String())
 		// Don't fail the request for this non-critical error
 	}
-	
+
 	// Revoke all existing tokens for this user before creating a new one
 	// This ensures only one active token per user (security best practice)
 	if h.tokenStorage != nil {
@@ -149,7 +149,7 @@ func (h *AuthHandler) Auth(c *gin.Context) {
 		})
 		return
 	}
-	
+
 	// Record JWT generation
 	h.metrics.RecordJWTGenerated()
 
@@ -160,7 +160,7 @@ func (h *AuthHandler) Auth(c *gin.Context) {
 			// Don't fail the request - token is still valid even if not stored in Redis
 		} else {
 			h.logger.Info("New token stored successfully", "jti", tokenInfo.JTI, "user_id", user.ID.String())
-			
+
 			// Update active tokens count asynchronously
 			go func() {
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -199,7 +199,7 @@ func (h *AuthHandler) Auth(c *gin.Context) {
 
 	// Record successful authentication
 	h.metrics.RecordAuthRequest("success", "valid", time.Since(start))
-	
+
 	c.JSON(http.StatusOK, response)
 }
 
@@ -209,10 +209,10 @@ func (h *AuthHandler) getOrCreateUser(ctx context.Context, telegramUser services
 	existingUser, err := h.userRepo.GetUserByTelegramID(ctx, telegramUser.ID)
 	if err == nil {
 		// User exists, update their information if needed
-		h.logger.Info("Existing user found", 
+		h.logger.Info("Existing user found",
 			"user_id", existingUser.ID.String(),
 			"telegram_id", telegramUser.ID)
-		
+
 		// Update user information with latest Telegram data
 		updateReq := &models.UpdateUserRequest{
 			Username:     stringToStringPtr(telegramUser.Username),
@@ -222,25 +222,25 @@ func (h *AuthHandler) getOrCreateUser(ctx context.Context, telegramUser services
 			IsPremium:    &telegramUser.IsPremium,
 			PhotoURL:     stringToStringPtr(telegramUser.PhotoURL),
 		}
-		
+
 		updatedUser, err := h.userRepo.UpdateUser(ctx, existingUser.ID, updateReq)
 		if err != nil {
 			h.logger.Warn("Failed to update existing user", "error", err, "user_id", existingUser.ID.String())
 			// Return the existing user even if update failed
 			return existingUser, false, nil
 		}
-		
+
 		return updatedUser, false, nil
 	}
-	
+
 	// Check if error is "user not found", otherwise it's a real error
 	if err != storage.ErrUserNotFound {
 		return nil, false, err
 	}
-	
+
 	// User doesn't exist, create new one
 	h.logger.Info("Creating new user", "telegram_id", telegramUser.ID)
-	
+
 	createReq := &models.CreateUserRequest{
 		TelegramID:   telegramUser.ID,
 		Username:     stringToStringPtr(telegramUser.Username),
@@ -250,16 +250,16 @@ func (h *AuthHandler) getOrCreateUser(ctx context.Context, telegramUser services
 		IsPremium:    telegramUser.IsPremium,
 		PhotoURL:     stringToStringPtr(telegramUser.PhotoURL),
 	}
-	
+
 	newUser, err := h.userRepo.CreateUser(ctx, createReq)
 	if err != nil {
 		return nil, false, err
 	}
-	
+
 	h.logger.Info("New user created successfully",
 		"user_id", newUser.ID.String(),
 		"telegram_id", newUser.TelegramID)
-	
+
 	return newUser, true, nil
 }
 

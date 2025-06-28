@@ -330,7 +330,7 @@ func TestValidateClaims(t *testing.T) {
 				JTI:        "test-jti",
 				RegisteredClaims: jwt.RegisteredClaims{
 					Issuer:  service.issuer,
-					Subject: "12345678",
+					Subject: "123e4567-e89b-12d3-a456-426614174000", // Valid UUID
 				},
 			},
 			wantErr: false,
@@ -342,7 +342,7 @@ func TestValidateClaims(t *testing.T) {
 				JTI:        "test-jti",
 				RegisteredClaims: jwt.RegisteredClaims{
 					Issuer:  "wrong-issuer",
-					Subject: "12345678",
+					Subject: "123e4567-e89b-12d3-a456-426614174000", // Valid UUID
 				},
 			},
 			wantErr: true,
@@ -354,7 +354,7 @@ func TestValidateClaims(t *testing.T) {
 				JTI:        "test-jti",
 				RegisteredClaims: jwt.RegisteredClaims{
 					Issuer:  service.issuer,
-					Subject: "0",
+					Subject: "123e4567-e89b-12d3-a456-426614174000", // Valid UUID
 				},
 			},
 			wantErr: true,
@@ -366,7 +366,7 @@ func TestValidateClaims(t *testing.T) {
 				JTI:        "test-jti",
 				RegisteredClaims: jwt.RegisteredClaims{
 					Issuer:  service.issuer,
-					Subject: "-12345",
+					Subject: "123e4567-e89b-12d3-a456-426614174000", // Valid UUID
 				},
 			},
 			wantErr: true,
@@ -378,7 +378,7 @@ func TestValidateClaims(t *testing.T) {
 				JTI:        "",
 				RegisteredClaims: jwt.RegisteredClaims{
 					Issuer:  service.issuer,
-					Subject: "12345678",
+					Subject: "123e4567-e89b-12d3-a456-426614174000", // Valid UUID
 				},
 			},
 			wantErr: true,
@@ -390,7 +390,7 @@ func TestValidateClaims(t *testing.T) {
 				JTI:        "test-jti",
 				RegisteredClaims: jwt.RegisteredClaims{
 					Issuer:  service.issuer,
-					Subject: "87654321", // Different from telegram_id
+					Subject: "invalid-uuid-format", // Invalid UUID format
 				},
 			},
 			wantErr: true,

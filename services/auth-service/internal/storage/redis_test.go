@@ -15,17 +15,17 @@ import (
 func setupTestRedis(t *testing.T) (*RedisTokenStorage, func()) {
 	// Use Redis database 15 for testing (to avoid conflicts)
 	redisURL := "redis://localhost:6379/15"
-	
+
 	// Check if Redis is available
 	opts, err := redis.ParseURL(redisURL)
 	if err != nil {
 		t.Skipf("Invalid Redis URL: %v", err)
 	}
-	
+
 	client := redis.NewClient(opts)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	
+
 	if err := client.Ping(ctx).Err(); err != nil {
 		client.Close()
 		t.Skipf("Redis not available for testing: %v", err)
@@ -46,7 +46,7 @@ func setupTestRedis(t *testing.T) (*RedisTokenStorage, func()) {
 	// Cleanup function
 	cleanup := func() {
 		ctx := context.Background()
-		
+
 		// Clear test database
 		storage.client.FlushDB(ctx)
 		storage.Close()
@@ -291,10 +291,28 @@ func TestRedisTokenStorage_CleanupExpiredTokens(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
+
+	// With TTL-based cleanup, the cleanup method should return 0 (no manual cleanup needed)
+	cleanedCount, err := storage.CleanupExpiredTokens(ctx)
+	if err != nil {
+		t.Fatalf("Failed to cleanup expired tokens: %v", err)
+	}
+
+	// Should return 0 since Redis TTL handles cleanup automatically
+	if cleanedCount != 0 {
+		t.Errorf("Expected 0 tokens cleaned (TTL handles it), got %d", cleanedCount)
+	}
+}
+
+func TestRedisTokenStorage_AutoExpiration(t *testing.T) {
+	storage, cleanup := setupTestRedis(t)
+	defer cleanup()
+
+	ctx := context.Background()
 	userID := uuid.New()
 	telegramID := int64(123456789)
 
-	// Store token that expires soon
+	// Store token that expires very soon
 	jti1 := uuid.New().String()
 	shortExpiry := time.Now().Add(100 * time.Millisecond)
 
@@ -303,36 +321,31 @@ func TestRedisTokenStorage_CleanupExpiredTokens(t *testing.T) {
 		t.Fatalf("Failed to store short-lived token: %v", err)
 	}
 
-	// Store token with normal expiry
-	jti2 := uuid.New().String()
-	normalExpiry := time.Now().Add(time.Hour)
-
-	err = storage.StoreActiveToken(ctx, jti2, userID, telegramID, normalExpiry)
-	if err != nil {
-		t.Fatalf("Failed to store normal token: %v", err)
-	}
-
-	// Wait for first token to expire
-	time.Sleep(200 * time.Millisecond)
-
-	// Run cleanup
-	cleanedCount, err := storage.CleanupExpiredTokens(ctx)
-	if err != nil {
-		t.Fatalf("Failed to cleanup expired tokens: %v", err)
-	}
-
-	// Should have cleaned at least the expired token
-	if cleanedCount == 0 {
-		t.Error("Expected at least 1 token to be cleaned up")
-	}
-
-	// Normal token should still be active
-	isActive, err := storage.IsTokenActive(ctx, jti2)
+	// Token should be active initially
+	isActive, err := storage.IsTokenActive(ctx, jti1)
 	if err != nil {
 		t.Fatalf("Failed to check token status: %v", err)
 	}
 	if !isActive {
-		t.Error("Normal token should still be active")
+		t.Error("Token should be active initially")
+	}
+
+	// Wait for token to expire via TTL
+	time.Sleep(200 * time.Millisecond)
+
+	// Token should be automatically removed by Redis TTL
+	isActive, err = storage.IsTokenActive(ctx, jti1)
+	if err != nil {
+		t.Fatalf("Failed to check token status: %v", err)
+	}
+	if isActive {
+		t.Error("Token should be automatically expired by Redis TTL")
+	}
+
+	// GetTokenInfo should fail for expired token
+	_, err = storage.GetTokenInfo(ctx, jti1)
+	if err == nil {
+		t.Error("Expected error when getting info for expired token")
 	}
 }
 
@@ -403,5 +416,70 @@ func TestRedisTokenStorage_GetActiveTokenCount(t *testing.T) {
 	}
 	if count != 1 {
 		t.Errorf("Expected 1 active token after revocation, got %d", count)
+	}
+}
+
+func TestRedisTokenStorage_TTLValidation(t *testing.T) {
+	storage, cleanup := setupTestRedis(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	userID := uuid.New()
+	telegramID := int64(123456789)
+
+	// Store token with 5 second expiry
+	jti := uuid.New().String()
+	expiresAt := time.Now().Add(5 * time.Second)
+
+	err := storage.StoreActiveToken(ctx, jti, userID, telegramID, expiresAt)
+	if err != nil {
+		t.Fatalf("Failed to store token: %v", err)
+	}
+
+	// Check TTL on active token key
+	activeKey := "active_token:" + jti
+	ttl, err := storage.client.TTL(ctx, activeKey).Result()
+	if err != nil {
+		t.Fatalf("Failed to get TTL: %v", err)
+	}
+
+	// TTL should be approximately 5 seconds (allow some tolerance)
+	if ttl < 4*time.Second || ttl > 6*time.Second {
+		t.Errorf("Expected TTL around 5 seconds, got %v", ttl)
+	}
+
+	// Check TTL on user tokens key
+	userKey := "user_tokens:" + userID.String()
+	userTTL, err := storage.client.TTL(ctx, userKey).Result()
+	if err != nil {
+		t.Fatalf("Failed to get user TTL: %v", err)
+	}
+
+	// User tokens TTL should be similar to token TTL
+	if userTTL < 4*time.Second || userTTL > 6*time.Second {
+		t.Errorf("Expected user TTL around 5 seconds, got %v", userTTL)
+	}
+}
+
+func TestRedisTokenStorage_ExpiredTokenError(t *testing.T) {
+	storage, cleanup := setupTestRedis(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	userID := uuid.New()
+	telegramID := int64(123456789)
+
+	// Try to store token that's already expired
+	jti := uuid.New().String()
+	pastTime := time.Now().Add(-1 * time.Hour) // 1 hour ago
+
+	err := storage.StoreActiveToken(ctx, jti, userID, telegramID, pastTime)
+	if err == nil {
+		t.Error("Expected error when storing already expired token")
+	}
+
+	expectedErrorMsg := "token already expired"
+	if err.Error() != expectedErrorMsg {
+		t.Errorf("Expected error '%s', got '%s'", expectedErrorMsg, err.Error())
 	}
 }

@@ -13,10 +13,10 @@ import (
 
 func TestAuthHandler_MissingHeader(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	
+
 	// Create a minimal router for testing
 	router := gin.New()
-	
+
 	// Add a simple route that checks for the required header
 	router.POST("/auth", func(c *gin.Context) {
 		initData := c.GetHeader("X-Telegram-Init-Data")
@@ -30,26 +30,26 @@ func TestAuthHandler_MissingHeader(t *testing.T) {
 		}
 		c.JSON(http.StatusOK, gin.H{"success": true})
 	})
-	
+
 	// Test missing header
 	req := httptest.NewRequest("POST", "/auth", nil)
 	w := httptest.NewRecorder()
-	
+
 	router.ServeHTTP(w, req)
-	
+
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected status 400, got %d", w.Code)
 	}
-	
+
 	var response map[string]interface{}
 	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
 		t.Fatalf("Failed to parse response: %v", err)
 	}
-	
+
 	if response["success"] != false {
 		t.Error("Expected success to be false")
 	}
-	
+
 	if response["error"] != "missing_init_data" {
 		t.Errorf("Expected error 'missing_init_data', got %v", response["error"])
 	}
@@ -57,10 +57,10 @@ func TestAuthHandler_MissingHeader(t *testing.T) {
 
 func TestAuthHandler_WithHeader(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	
+
 	// Create a minimal router for testing
 	router := gin.New()
-	
+
 	// Add a simple route that accepts the header
 	router.POST("/auth", func(c *gin.Context) {
 		initData := c.GetHeader("X-Telegram-Init-Data")
@@ -71,30 +71,30 @@ func TestAuthHandler_WithHeader(t *testing.T) {
 			})
 			return
 		}
-		
+
 		// For testing, just return success if header is present
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
 			"message": "Header received",
 		})
 	})
-	
+
 	// Test with header
 	req := httptest.NewRequest("POST", "/auth", nil)
 	req.Header.Set("X-Telegram-Init-Data", "test_data")
 	w := httptest.NewRecorder()
-	
+
 	router.ServeHTTP(w, req)
-	
+
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", w.Code)
 	}
-	
+
 	var response map[string]interface{}
 	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
 		t.Fatalf("Failed to parse response: %v", err)
 	}
-	
+
 	if response["success"] != true {
 		t.Error("Expected success to be true")
 	}
@@ -102,7 +102,7 @@ func TestAuthHandler_WithHeader(t *testing.T) {
 
 func TestHealthResponse_Structure(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	
+
 	// Create a minimal health endpoint
 	router := gin.New()
 	router.GET("/health", func(c *gin.Context) {
@@ -118,33 +118,33 @@ func TestHealthResponse_Structure(t *testing.T) {
 		}
 		c.JSON(http.StatusOK, response)
 	})
-	
+
 	req := httptest.NewRequest("GET", "/health", nil)
 	w := httptest.NewRecorder()
-	
+
 	router.ServeHTTP(w, req)
-	
+
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", w.Code)
 	}
-	
+
 	var response HealthResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
 		t.Fatalf("Failed to parse response: %v", err)
 	}
-	
+
 	if response.Status != "healthy" {
 		t.Errorf("Expected status 'healthy', got %s", response.Status)
 	}
-	
+
 	if response.Version != "1.0.0" {
 		t.Errorf("Expected version '1.0.0', got %s", response.Version)
 	}
-	
+
 	if len(response.Dependencies) != 3 {
 		t.Errorf("Expected 3 dependencies, got %d", len(response.Dependencies))
 	}
-	
+
 	if response.Dependencies["postgresql"] != "healthy" {
 		t.Error("Expected postgresql to be healthy")
 	}
@@ -164,26 +164,26 @@ func TestAuthResponse_Structure(t *testing.T) {
 			IsNewUser:  true,
 		},
 	}
-	
+
 	// Marshal to JSON and back to ensure structure is correct
 	data, err := json.Marshal(response)
 	if err != nil {
 		t.Fatalf("Failed to marshal AuthResponse: %v", err)
 	}
-	
+
 	var unmarshaled AuthResponse
 	if err := json.Unmarshal(data, &unmarshaled); err != nil {
 		t.Fatalf("Failed to unmarshal AuthResponse: %v", err)
 	}
-	
+
 	if unmarshaled.Success != true {
 		t.Error("Success field not preserved")
 	}
-	
+
 	if unmarshaled.Token != "test.jwt.token" {
 		t.Error("Token field not preserved")
 	}
-	
+
 	if unmarshaled.User == nil {
 		t.Error("User field should not be nil")
 	} else {
@@ -202,17 +202,17 @@ func TestStringHelpers(t *testing.T) {
 	if result := stringPtrToString(nilPtr); result != "" {
 		t.Errorf("stringPtrToString(nil) = %s, want empty string", result)
 	}
-	
+
 	testStr := "test"
 	if result := stringPtrToString(&testStr); result != "test" {
 		t.Errorf("stringPtrToString(&\"test\") = %s, want \"test\"", result)
 	}
-	
+
 	// Test stringToStringPtr
 	if result := stringToStringPtr(""); result != nil {
 		t.Error("stringToStringPtr(\"\") should return nil")
 	}
-	
+
 	if result := stringToStringPtr("test"); result == nil || *result != "test" {
 		t.Error("stringToStringPtr(\"test\") should return pointer to \"test\"")
 	}

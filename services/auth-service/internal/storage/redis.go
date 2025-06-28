@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -31,7 +30,7 @@ type TokenStorage interface {
 	// GetTokenInfo retrieves token information
 	GetTokenInfo(ctx context.Context, jti string) (*TokenInfo, error)
 
-	// CleanupExpiredTokens removes expired tokens from storage
+	// CleanupExpiredTokens removes expired tokens from storage - DEPRECATED: Use Redis TTL instead
 	CleanupExpiredTokens(ctx context.Context) (int64, error)
 
 	// GetActiveTokenCount returns the number of active tokens
@@ -52,12 +51,12 @@ type TokenStorage interface {
 
 // TokenInfo represents stored token information
 type TokenInfo struct {
-	JTI        string    `json:"jti"`
-	UserID     uuid.UUID `json:"user_id"`
-	TelegramID int64     `json:"telegram_id"`
-	IssuedAt   time.Time `json:"issued_at"`
-	ExpiresAt  time.Time `json:"expires_at"`
-	IsRevoked  bool      `json:"is_revoked"`
+	JTI        string     `json:"jti"`
+	UserID     uuid.UUID  `json:"user_id"`
+	TelegramID int64      `json:"telegram_id"`
+	IssuedAt   time.Time  `json:"issued_at"`
+	ExpiresAt  time.Time  `json:"expires_at"`
+	IsRevoked  bool       `json:"is_revoked"`
 	RevokedAt  *time.Time `json:"revoked_at,omitempty"`
 }
 
@@ -70,14 +69,12 @@ type RedisTokenStorage struct {
 
 // Redis key prefixes
 const (
-	// Active tokens: active_token:{jti} -> TokenInfo JSON
+	// Active tokens: active_token:{jti} -> TokenInfo JSON (with automatic TTL)
 	activeTokenPrefix = "active_token:"
-	// Revoked tokens: revoked_token:{jti} -> revocation timestamp
+	// Revoked tokens: revoked_token:{jti} -> revocation timestamp (with automatic TTL)
 	revokedTokenPrefix = "revoked_token:"
-	// User tokens index: user_tokens:{user_id} -> Set of JTIs
+	// User tokens index: user_tokens:{user_id} -> Set of JTIs (with automatic TTL)
 	userTokensPrefix = "user_tokens:"
-	// Token expiry index: token_expiry:{unix_timestamp} -> Set of JTIs
-	tokenExpiryPrefix = "token_expiry:"
 )
 
 // NewRedisTokenStorage creates a new Redis token storage instance
@@ -167,23 +164,21 @@ func (r *RedisTokenStorage) StoreActiveToken(ctx context.Context, jti string, us
 		return fmt.Errorf("failed to marshal token info: %w", err)
 	}
 
-	// Calculate TTL (add buffer for cleanup)
-	ttl := time.Until(expiresAt) + time.Hour
+	// Calculate TTL - use exact expiration time for automatic cleanup
+	ttl := time.Until(expiresAt)
+	if ttl <= 0 {
+		return fmt.Errorf("token already expired")
+	}
 
 	// Use Redis pipeline for atomic operations
 	pipe := r.client.Pipeline()
 
-	// Store active token
+	// Store active token with exact TTL
 	pipe.Set(ctx, activeTokenPrefix+jti, tokenData, ttl)
 
-	// Add to user tokens index
+	// Add to user tokens index with same TTL
 	pipe.SAdd(ctx, userTokensPrefix+userID.String(), jti)
 	pipe.Expire(ctx, userTokensPrefix+userID.String(), ttl)
-
-	// Add to expiry index for cleanup
-	expiryKey := tokenExpiryPrefix + strconv.FormatInt(expiresAt.Unix(), 10)
-	pipe.SAdd(ctx, expiryKey, jti)
-	pipe.ExpireAt(ctx, expiryKey, expiresAt.Add(time.Hour))
 
 	// Execute pipeline
 	if _, err := pipe.Exec(ctx); err != nil {
@@ -305,195 +300,32 @@ func (r *RedisTokenStorage) GetTokenInfo(ctx context.Context, jti string) (*Toke
 	return &tokenInfo, nil
 }
 
-// CleanupExpiredTokens removes expired tokens from storage
+// CleanupExpiredTokens removes expired tokens from storage - DEPRECATED: Redis TTL handles this automatically
+// This method is kept for backwards compatibility and testing purposes only
 func (r *RedisTokenStorage) CleanupExpiredTokens(ctx context.Context) (int64, error) {
 	start := time.Now()
-	now := time.Now()
-	cleanedCount := int64(0)
-	usersProcessed := int64(0)
-	
+
+	// Record metrics for compatibility
 	defer func() {
 		duration := time.Since(start)
 		if r.metrics != nil {
-			r.metrics.RecordTokenCleanup(duration, float64(cleanedCount), float64(usersProcessed))
+			r.metrics.RecordTokenCleanup(duration, 0, 0) // No manual cleanup needed
 		}
 	}()
 
-	// Find expired token keys using scan
-	var cursor uint64
-	var expiredKeys []string
+	// With Redis TTL, expired tokens are automatically removed
+	// No manual cleanup is necessary
+	r.logger.Info("Token cleanup called - Redis TTL handles expiration automatically",
+		slog.String("mode", "ttl_automatic"))
 
-	for {
-		// Scan for active token keys
-		keys, nextCursor, err := r.client.Scan(ctx, cursor, activeTokenPrefix+"*", 100).Result()
-		if err != nil {
-			return cleanedCount, fmt.Errorf("failed to scan for expired tokens: %w", err)
-		}
-
-		// Check each token's expiration time
-		for _, key := range keys {
-			// Get token info to check expires_at
-			tokenData, err := r.client.Get(ctx, key).Result()
-			if err != nil {
-				if err == redis.Nil {
-					// Key doesn't exist, add to cleanup list
-					expiredKeys = append(expiredKeys, key)
-				}
-				continue // Skip on other errors
-			}
-
-			var tokenInfo TokenInfo
-			if err := json.Unmarshal([]byte(tokenData), &tokenInfo); err != nil {
-				// Invalid token data, add to cleanup list
-				expiredKeys = append(expiredKeys, key)
-				continue
-			}
-
-			// Check if token is expired based on expires_at field
-			if tokenInfo.ExpiresAt.Before(now) {
-				expiredKeys = append(expiredKeys, key)
-			}
-		}
-
-		cursor = nextCursor
-		if cursor == 0 {
-			break
-		}
-	}
-
-	// Remove expired keys in batches
-	if len(expiredKeys) > 0 {
-		pipe := r.client.Pipeline()
-
-		for _, key := range expiredKeys {
-			pipe.Del(ctx, key)
-			
-			// Extract JTI from key
-			jti := key[len(activeTokenPrefix):]
-			
-			// Also clean up related keys
-			pipe.Del(ctx, revokedTokenPrefix+jti)
-		}
-
-		results, err := pipe.Exec(ctx)
-		if err != nil {
-			return cleanedCount, fmt.Errorf("failed to cleanup expired tokens: %w", err)
-		}
-
-		// Count successful deletions
-		for _, result := range results {
-			if cmd, ok := result.(*redis.IntCmd); ok {
-				cleanedCount += cmd.Val()
-			}
-		}
-	}
-
-	// Clean up expired revoked tokens
-	cursor = 0
-	var expiredRevokedKeys []string
-
-	for {
-		// Scan for revoked token keys
-		keys, nextCursor, err := r.client.Scan(ctx, cursor, revokedTokenPrefix+"*", 100).Result()
-		if err != nil {
-			break // Continue with what we have
-		}
-
-		// Check each revoked token's expiration time by getting corresponding active token info
-		for _, key := range keys {
-			// Extract JTI from revoked token key
-			jti := key[len(revokedTokenPrefix):]
-			
-			// Get token info from active token to check expires_at
-			activeKey := activeTokenPrefix + jti
-			tokenData, err := r.client.Get(ctx, activeKey).Result()
-			if err != nil {
-				// If active token doesn't exist, revoked token can be cleaned
-				expiredRevokedKeys = append(expiredRevokedKeys, key)
-				continue
-			}
-
-			var tokenInfo TokenInfo
-			if err := json.Unmarshal([]byte(tokenData), &tokenInfo); err != nil {
-				// Invalid token data, clean up revoked token
-				expiredRevokedKeys = append(expiredRevokedKeys, key)
-				continue
-			}
-
-			// If token is expired, clean up the revoked token entry
-			if tokenInfo.ExpiresAt.Before(now) {
-				expiredRevokedKeys = append(expiredRevokedKeys, key)
-			}
-		}
-
-		cursor = nextCursor
-		if cursor == 0 {
-			break
-		}
-	}
-
-	// Remove expired revoked tokens
-	if len(expiredRevokedKeys) > 0 {
-		pipe := r.client.Pipeline()
-		for _, key := range expiredRevokedKeys {
-			pipe.Del(ctx, key)
-		}
-
-		results, err := pipe.Exec(ctx)
-		if err == nil {
-			// Count successful deletions of revoked tokens
-			for _, result := range results {
-				if cmd, ok := result.(*redis.IntCmd); ok {
-					cleanedCount += cmd.Val()
-				}
-			}
-		}
-	}
-
-	// Clean up expired expiry index keys
-	expiryPattern := tokenExpiryPrefix + "*"
-	cursor = 0
-
-	for {
-		keys, nextCursor, err := r.client.Scan(ctx, cursor, expiryPattern, 100).Result()
-		if err != nil {
-			break // Continue with what we have
-		}
-
-		pipe := r.client.Pipeline()
-		for _, key := range keys {
-			// Extract timestamp from key
-			timestampStr := key[len(tokenExpiryPrefix):]
-			timestamp, err := strconv.ParseInt(timestampStr, 10, 64)
-			if err != nil {
-				continue
-			}
-
-			// If timestamp is in the past, remove the key
-			if time.Unix(timestamp, 0).Before(now) {
-				pipe.Del(ctx, key)
-			}
-		}
-
-		pipe.Exec(ctx)
-
-		cursor = nextCursor
-		if cursor == 0 {
-			break
-		}
-	}
-
-	r.logger.Info("Token cleanup completed",
-		slog.Int64("cleaned_count", cleanedCount),
-	)
-
-	return cleanedCount, nil
+	return 0, nil // Return 0 as no manual cleanup was performed
 }
 
 // GetActiveTokenCount returns the number of active tokens
+// With TTL-based approach, active tokens are those that exist in Redis and are not revoked
 func (r *RedisTokenStorage) GetActiveTokenCount(ctx context.Context) (int64, error) {
 	var cursor uint64
-	var count int64
+	var activeCount int64
 
 	for {
 		keys, nextCursor, err := r.client.Scan(ctx, cursor, activeTokenPrefix+"*", 100).Result()
@@ -501,12 +333,15 @@ func (r *RedisTokenStorage) GetActiveTokenCount(ctx context.Context) (int64, err
 			return 0, fmt.Errorf("failed to scan active tokens: %w", err)
 		}
 
-		// Check which keys are actually not revoked
+		// With TTL, only non-expired tokens exist in Redis
+		// Still need to check if they're not revoked
 		for _, key := range keys {
 			jti := key[len(activeTokenPrefix):]
-			isActive, err := r.IsTokenActive(ctx, jti)
-			if err == nil && isActive {
-				count++
+
+			// Check if token is not revoked
+			isRevoked, err := r.IsTokenRevoked(ctx, jti)
+			if err == nil && !isRevoked {
+				activeCount++
 			}
 		}
 
@@ -516,10 +351,11 @@ func (r *RedisTokenStorage) GetActiveTokenCount(ctx context.Context) (int64, err
 		}
 	}
 
-	return count, nil
+	return activeCount, nil
 }
 
 // GetUserActiveTokens returns all active tokens for a specific user
+// With TTL-based approach, we only check if tokens exist and are not revoked
 func (r *RedisTokenStorage) GetUserActiveTokens(ctx context.Context, userID uuid.UUID) ([]string, error) {
 	jtis, err := r.client.SMembers(ctx, userTokensPrefix+userID.String()).Result()
 	if err != nil {
@@ -531,9 +367,17 @@ func (r *RedisTokenStorage) GetUserActiveTokens(ctx context.Context, userID uuid
 
 	var activeJTIs []string
 	for _, jti := range jtis {
-		isActive, err := r.IsTokenActive(ctx, jti)
-		if err == nil && isActive {
-			activeJTIs = append(activeJTIs, jti)
+		// Check if token still exists (not expired via TTL) and is not revoked
+		exists, err := r.client.Exists(ctx, activeTokenPrefix+jti).Result()
+		if err != nil {
+			continue // Skip on error
+		}
+
+		if exists > 0 {
+			isRevoked, err := r.IsTokenRevoked(ctx, jti)
+			if err == nil && !isRevoked {
+				activeJTIs = append(activeJTIs, jti)
+			}
 		}
 	}
 

@@ -18,7 +18,7 @@ func MetricsMiddleware(m *metrics.Metrics) gin.HandlerFunc {
 		}
 
 		start := time.Now()
-		
+
 		// Increment in-flight requests
 		m.HTTPRequestsInFlight.Inc()
 		defer m.HTTPRequestsInFlight.Dec()
@@ -29,10 +29,10 @@ func MetricsMiddleware(m *metrics.Metrics) gin.HandlerFunc {
 		// Record metrics after request completion
 		duration := time.Since(start)
 		statusCode := strconv.Itoa(c.Writer.Status())
-		
+
 		// Normalize endpoint for better grouping
 		endpoint := normalizeEndpoint(c.Request.URL.Path)
-		
+
 		m.RecordHTTPRequest(
 			c.Request.Method,
 			endpoint,
@@ -50,8 +50,6 @@ func normalizeEndpoint(path string) string {
 		return "/auth"
 	case path == "/health":
 		return "/health"
-	case path == "/jwks":
-		return "/jwks"
 	case path == "/public-key.pem":
 		return "/public-key.pem"
 	case path == "/admin/tokens/stats":

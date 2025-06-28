@@ -16,50 +16,50 @@ const (
 // Metrics holds all Prometheus metrics for the auth service
 type Metrics struct {
 	// HTTP metrics
-	HTTPRequestsTotal       *prometheus.CounterVec
-	HTTPRequestDuration     *prometheus.HistogramVec
-	HTTPRequestsInFlight    prometheus.Gauge
+	HTTPRequestsTotal    *prometheus.CounterVec
+	HTTPRequestDuration  *prometheus.HistogramVec
+	HTTPRequestsInFlight prometheus.Gauge
 
 	// Auth metrics
-	AuthRequestsTotal               *prometheus.CounterVec
-	AuthRequestDuration             *prometheus.HistogramVec
-	AuthTelegramValidationDuration  prometheus.Histogram
-	AuthNewUsersTotal               prometheus.Counter
-	AuthRateLimitHitsTotal          *prometheus.CounterVec
+	AuthRequestsTotal              *prometheus.CounterVec
+	AuthRequestDuration            *prometheus.HistogramVec
+	AuthTelegramValidationDuration prometheus.Histogram
+	AuthNewUsersTotal              prometheus.Counter
+	AuthRateLimitHitsTotal         *prometheus.CounterVec
 
 	// JWT metrics
-	JWTTokensGeneratedTotal    prometheus.Counter
-	JWTTokensValidatedTotal    *prometheus.CounterVec
-	JWTKeyGenerationDuration   prometheus.Histogram
-	JWTActiveTokensCount       prometheus.Gauge
-	JWTTokensPerUserHistogram  prometheus.Histogram
+	JWTTokensGeneratedTotal   prometheus.Counter
+	JWTTokensValidatedTotal   *prometheus.CounterVec
+	JWTKeyGenerationDuration  prometheus.Histogram
+	JWTActiveTokensCount      prometheus.Gauge
+	JWTTokensPerUserHistogram prometheus.Histogram
 
 	// Redis metrics
-	RedisOperationsTotal         *prometheus.CounterVec
-	RedisOperationDuration       *prometheus.HistogramVec
-	RedisConnectionPoolActive    prometheus.Gauge
-	RedisConnectionPoolIdle      prometheus.Gauge
-	RedisTokenCleanupDuration    prometheus.Histogram
-	RedisExpiredTokensCleaned    prometheus.Counter
-	RedisCleanupProcessedUsers   prometheus.Counter
+	RedisOperationsTotal       *prometheus.CounterVec
+	RedisOperationDuration     *prometheus.HistogramVec
+	RedisConnectionPoolActive  prometheus.Gauge
+	RedisConnectionPoolIdle    prometheus.Gauge
+	RedisTokenCleanupDuration  prometheus.Histogram
+	RedisExpiredTokensCleaned  prometheus.Counter
+	RedisCleanupProcessedUsers prometheus.Counter
 
 	// PostgreSQL metrics
-	PostgresOperationsTotal         *prometheus.CounterVec
-	PostgresOperationDuration       *prometheus.HistogramVec
-	PostgresConnectionPoolActive    prometheus.Gauge
-	PostgresConnectionPoolIdle      prometheus.Gauge
-	PostgresConnectionPoolMax       prometheus.Gauge
+	PostgresOperationsTotal      *prometheus.CounterVec
+	PostgresOperationDuration    *prometheus.HistogramVec
+	PostgresConnectionPoolActive prometheus.Gauge
+	PostgresConnectionPoolIdle   prometheus.Gauge
+	PostgresConnectionPoolMax    prometheus.Gauge
 
 	// System health metrics
-	ServiceUp                prometheus.Gauge
-	ServiceStartTime         prometheus.Gauge
-	DependenciesHealthy      *prometheus.GaugeVec
-	MemoryUsageBytes         prometheus.Gauge
-	GoroutinesCount          prometheus.Gauge
+	ServiceUp           prometheus.Gauge
+	ServiceStartTime    prometheus.Gauge
+	DependenciesHealthy *prometheus.GaugeVec
+	MemoryUsageBytes    prometheus.Gauge
+	GoroutinesCount     prometheus.Gauge
 
 	// Admin metrics
-	AdminOperationsTotal      *prometheus.CounterVec
-	AdminTokenRevocationsTotal *prometheus.CounterVec
+	AdminOperationsTotal        *prometheus.CounterVec
+	AdminTokenRevocationsTotal  *prometheus.CounterVec
 	AdminCleanupOperationsTotal prometheus.Counter
 }
 
@@ -338,10 +338,10 @@ func New() *Metrics {
 func (m *Metrics) Initialize() {
 	// Set service up metric
 	m.ServiceUp.Set(1)
-	
+
 	// Set service start time
 	m.ServiceStartTime.Set(float64(time.Now().Unix()))
-	
+
 	// Start background metrics collection
 	go m.collectSystemMetrics()
 }
@@ -356,7 +356,7 @@ func (m *Metrics) collectSystemMetrics() {
 		var memStats runtime.MemStats
 		runtime.ReadMemStats(&memStats)
 		m.MemoryUsageBytes.Set(float64(memStats.Alloc))
-		
+
 		// Collect goroutine count
 		m.GoroutinesCount.Set(float64(runtime.NumGoroutine()))
 	}

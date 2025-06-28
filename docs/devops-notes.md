@@ -4,7 +4,7 @@
 ```bash
 nano /etc/nginx/conf.d/slcw.conf
 sudo nginx -t
-systemctl restart nginx.service
+Ds
 ```
 
 # ssh туннель 

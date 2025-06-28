@@ -26,12 +26,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
-    depends_on:
-      - telegram-bot-service
-      - auth-service
-      - inventory-service
-      - production-service
-      - user-service
 
   # Frontend service
   frontend:
@@ -115,6 +109,7 @@ services:
       - TELEGRAM_BOT_TOKEN_SECONDARY=${TELEGRAM_BOT_TOKEN_FORLY:-}
       - AUTH_SERVICE_HOST=0.0.0.0
       - AUTH_SERVICE_PORT=8080
+      - AUTH_INTERNAL_SERVICE_PORT=8090
       - DATABASE_MAX_CONNECTIONS=10
       - REDIS_MAX_CONNECTIONS=10
       - JWT_ISSUER=shard-legends-auth
@@ -139,7 +134,7 @@ services:
         max-file: "3"
         labels: "logging.service,logging.environment"
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8090/health"]
       interval: 30s
       timeout: 10s
       retries: 3

@@ -49,29 +49,34 @@ func main() {
 	// Initialize metrics
 	metricsCollector := metrics.New()
 	metricsCollector.Initialize()
-	
+
 	// Defer shutdown of metrics
 	defer metricsCollector.Shutdown()
 
 	// Set Gin mode
 	gin.SetMode(gin.ReleaseMode)
 
-	// Create Gin router
-	router := gin.New()
+	// Create Gin router for public API
+	publicRouter := gin.New()
 
-	// Add global middleware
-	router.Use(gin.Recovery())
-	router.Use(requestLogger(logger))
-	router.Use(middleware.CORS()) // Add CORS support
-	router.Use(middleware.MetricsMiddleware(metricsCollector)) // Add metrics collection
+	// Add global middleware for public API
+	publicRouter.Use(gin.Recovery())
+	publicRouter.Use(requestLogger(logger))
+	publicRouter.Use(middleware.CORS())                              // Add CORS support
+	publicRouter.Use(middleware.MetricsMiddleware(metricsCollector)) // Add metrics collection
 
-	// Create rate limiter for auth endpoint (10 requests per minute)
-	authRateLimiter := middleware.NewRateLimiter(10, logger, metricsCollector)
+	// Create Gin router for internal API
+	internalRouter := gin.New()
+	internalRouter.Use(gin.Recovery())
+	internalRouter.Use(requestLogger(logger))
+
+	// Create rate limiter for auth endpoint using configuration
+	authRateLimiter := middleware.NewRateLimiter(cfg.RateLimitRequests, cfg.RateLimitWindow, logger, metricsCollector)
 	defer authRateLimiter.Close()
 
 	// Initialize services
 	telegramValidator := services.NewTelegramValidator(cfg.TelegramBotTokens, logger)
-	
+
 	// Initialize JWT service
 	keyPaths := services.KeyPaths{
 		PrivateKeyPath: cfg.JWTPrivateKeyPath,
@@ -107,19 +112,20 @@ func main() {
 	authHandler := handlers.NewAuthHandler(logger, telegramValidator, jwtService, userRepo, tokenStorage, metricsCollector)
 	adminHandler := handlers.NewAdminHandler(logger, tokenStorage)
 
-	// Register routes
-	router.GET("/health", healthHandler.Health)
-	router.POST("/auth", authRateLimiter.Limit(), authHandler.Auth) // Apply rate limiting to auth endpoint
-	
+	// Register public routes
+	publicRouter.POST("/auth", authRateLimiter.Limit(), authHandler.Auth) // Apply rate limiting to auth endpoint
+
+	// Register internal routes
+	internalRouter.GET("/health", healthHandler.Health)
+
 	// Metrics endpoint for Prometheus scraping
-	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
-	
-	// JWT public key endpoints for other services
-	router.GET("/jwks", jwtPublicKeyMiddleware.PublicKeyHandler())
-	router.GET("/public-key.pem", jwtPublicKeyMiddleware.PublicKeyPEMHandler())
-	
-	// Admin endpoints for token management (should be protected in production)
-	adminGroup := router.Group("/admin")
+	internalRouter.GET("/metrics", gin.WrapH(promhttp.Handler()))
+
+	// JWT public key endpoint for other services (internal only)
+	internalRouter.GET("/public-key.pem", jwtPublicKeyMiddleware.PublicKeyPEMHandler())
+
+	// Admin endpoints for token management (internal only)
+	adminGroup := internalRouter.Group("/admin")
 	{
 		adminGroup.GET("/tokens/stats", adminHandler.GetTokenStats)
 		adminGroup.GET("/tokens/user/:userId", adminHandler.GetUserTokens)
@@ -128,20 +134,27 @@ func main() {
 		adminGroup.POST("/tokens/cleanup", adminHandler.CleanupExpiredTokens)
 	}
 
-	// Create HTTP server
-	server := &http.Server{
+	// Create public HTTP server
+	publicServer := &http.Server{
 		Addr:         fmt.Sprintf("%s:%s", cfg.ServiceHost, cfg.ServicePort),
-		Handler:      router,
+		Handler:      publicRouter,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
 
-	// Start token cleanup and metrics update goroutine
+	// Create internal HTTP server
+	internalServer := &http.Server{
+		Addr:         fmt.Sprintf("%s:%s", cfg.ServiceHost, cfg.InternalServicePort),
+		Handler:      internalRouter,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	// Start metrics update goroutine (token cleanup now handled by Redis TTL)
 	go func() {
-		ticker := time.NewTicker(time.Duration(cfg.TokenCleanupIntervalHours) * time.Hour)
 		metricsTicker := time.NewTicker(30 * time.Second) // Update metrics every 30 seconds
-		defer ticker.Stop()
 		defer metricsTicker.Stop()
 
 		// Update metrics on startup
@@ -154,29 +167,10 @@ func main() {
 
 		for {
 			select {
-			case <-ticker.C:
-				ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.TokenCleanupTimeoutMins)*time.Minute)
-				cleanedCount, err := tokenStorage.CleanupExpiredTokens(ctx)
-				cancel()
-
-				if err != nil {
-					logger.Error("Token cleanup failed", "error", err)
-				} else {
-					logger.Info("Token cleanup completed", "cleaned_tokens", cleanedCount)
-				}
-
-				// Update active tokens count after cleanup
-				ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
-				activeCount, err := tokenStorage.GetActiveTokenCount(ctx)
-				cancel()
-				if err == nil {
-					metricsCollector.UpdateActiveTokensCount(float64(activeCount))
-				}
-
 			case <-metricsTicker.C:
 				// Periodically update active tokens count and dependency health
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				
+
 				// Update active tokens count
 				activeCount, err := tokenStorage.GetActiveTokenCount(ctx)
 				if err == nil {
@@ -194,11 +188,20 @@ func main() {
 		}
 	}()
 
-	// Start server in a goroutine
+	// Start public server in a goroutine
 	go func() {
-		logger.Info("Server starting", "address", server.Addr)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Error("Server failed to start", "error", err)
+		logger.Info("Public server starting", "address", publicServer.Addr)
+		if err := publicServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error("Public server failed to start", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	// Start internal server in a goroutine
+	go func() {
+		logger.Info("Internal server starting", "address", internalServer.Addr)
+		if err := internalServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error("Internal server failed to start", "error", err)
 			os.Exit(1)
 		}
 	}()
@@ -214,9 +217,17 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Attempt graceful shutdown
-	if err := server.Shutdown(ctx); err != nil {
-		logger.Error("Server forced to shutdown", "error", err)
+	// Attempt graceful shutdown for both servers
+	var shutdownErr error
+	if err := publicServer.Shutdown(ctx); err != nil {
+		logger.Error("Public server forced to shutdown", "error", err)
+		shutdownErr = err
+	}
+	if err := internalServer.Shutdown(ctx); err != nil {
+		logger.Error("Internal server forced to shutdown", "error", err)
+		shutdownErr = err
+	}
+	if shutdownErr != nil {
 		os.Exit(1)
 	}
 

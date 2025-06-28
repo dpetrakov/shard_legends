@@ -22,10 +22,10 @@ scrape_configs:
     static_configs:
       - targets: ['cadvisor:8080']
 
-  # Auth Service
+  # Auth Service (metrics on internal port)
   - job_name: 'auth-service'
     static_configs:
-      - targets: ['slcw-auth-service-dev:8080']
+      - targets: ['slcw-auth-service-dev:8090']
     metrics_path: '/metrics'
     scrape_interval: 30s
 

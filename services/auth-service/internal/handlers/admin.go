@@ -27,7 +27,7 @@ func NewAdminHandler(logger *slog.Logger, tokenStorage storage.TokenStorage) *Ad
 
 // TokenStatsResponse represents token statistics
 type TokenStatsResponse struct {
-	ActiveTokenCount int64 `json:"active_token_count"`
+	ActiveTokenCount int64  `json:"active_token_count"`
 	Timestamp        string `json:"timestamp"`
 }
 

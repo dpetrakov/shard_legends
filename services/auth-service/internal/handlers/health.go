@@ -74,7 +74,7 @@ func (h *HealthHandler) Health(c *gin.Context) {
 		},
 	}
 
-	h.logger.Debug("Health check requested", 
+	h.logger.Debug("Health check requested",
 		"status", response.Status,
 		"postgresql", dbStatus,
 		"redis", redisStatus)

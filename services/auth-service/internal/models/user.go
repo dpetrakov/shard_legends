@@ -35,14 +35,14 @@ type CreateUserRequest struct {
 
 // UpdateUserRequest represents a request to update an existing user
 type UpdateUserRequest struct {
-	Username     *string `json:"username,omitempty"`
-	FirstName    *string `json:"first_name,omitempty"`
-	LastName     *string `json:"last_name,omitempty"`
-	LanguageCode *string `json:"language_code,omitempty"`
-	IsPremium    *bool   `json:"is_premium,omitempty"`
-	PhotoURL     *string `json:"photo_url,omitempty"`
+	Username     *string    `json:"username,omitempty"`
+	FirstName    *string    `json:"first_name,omitempty"`
+	LastName     *string    `json:"last_name,omitempty"`
+	LanguageCode *string    `json:"language_code,omitempty"`
+	IsPremium    *bool      `json:"is_premium,omitempty"`
+	PhotoURL     *string    `json:"photo_url,omitempty"`
 	LastLoginAt  *time.Time `json:"last_login_at,omitempty"`
-	IsActive     *bool   `json:"is_active,omitempty"`
+	IsActive     *bool      `json:"is_active,omitempty"`
 }
 
 // ToUser converts CreateUserRequest to User model

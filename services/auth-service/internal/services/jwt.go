@@ -278,8 +278,8 @@ func (j *JWTService) GenerateToken(userID uuid.UUID, telegramID int64) (*TokenIn
 	// Sign token with private key
 	tokenString, err := token.SignedString(j.privateKey)
 	if err != nil {
-		j.logger.Error("Failed to sign JWT token", 
-			"error", err, 
+		j.logger.Error("Failed to sign JWT token",
+			"error", err,
 			"user_id", userID.String(),
 			"telegram_id", telegramID)
 		return nil, fmt.Errorf("failed to sign token: %w", err)

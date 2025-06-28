@@ -28,7 +28,8 @@ The service is configured through environment variables:
 ### Optional Variables
 
 - `AUTH_SERVICE_HOST` - Service host (default: 0.0.0.0)
-- `AUTH_SERVICE_PORT` - Service port (default: 8080)
+- `AUTH_SERVICE_PORT` - Public API port (default: 8080)
+- `AUTH_INTERNAL_SERVICE_PORT` - Internal API port for health, metrics, admin endpoints (default: 8090)
 - `DATABASE_MAX_CONNECTIONS` - Max DB connections (default: 10)
 - `REDIS_MAX_CONNECTIONS` - Max Redis connections (default: 10)
 - `JWT_PRIVATE_KEY_PATH` - JWT private key path (default: /etc/auth/private_key.pem)
@@ -42,9 +43,20 @@ The service is configured through environment variables:
 
 ## API Endpoints
 
+The auth-service exposes two separate API interfaces:
+
+### Public API (Port 8080)
+- `/auth` - Authentication endpoint
+
+### Internal API (Port 8090)
+- `/health` - Health check endpoint
+- `/metrics` - Prometheus metrics
+- `/public-key.pem` - JWT public key in PEM format (for other microservices)
+- `/admin/*` - Admin endpoints for token management
+
 ### GET /health
 
-Health check endpoint that returns service status and dependencies.
+Health check endpoint that returns service status and dependencies (Internal API only).
 
 **Response:**
 ```json
@@ -60,26 +72,10 @@ Health check endpoint that returns service status and dependencies.
 }
 ```
 
-### GET /jwks
-
-Returns JWT public key in JWKS (JSON Web Key Set) format for other services.
-
-**Response:**
-```json
-{
-  "keys": [{
-    "kty": "RSA",
-    "use": "sig",
-    "alg": "RS256", 
-    "kid": "key_fingerprint",
-    "pem": "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----"
-  }]
-}
-```
 
 ### GET /public-key.pem
 
-Returns JWT public key in PEM format for simple integration.
+Returns JWT public key in PEM format for simple integration (Internal API only).
 
 **Response:**
 ```
@@ -90,7 +86,7 @@ MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...
 
 ### GET /metrics
 
-Prometheus metrics endpoint for monitoring and observability.
+Prometheus metrics endpoint for monitoring and observability (Internal API only).
 
 **Response:** Prometheus format metrics including HTTP requests, authentication metrics, JWT metrics, Redis/PostgreSQL operations, and system health indicators.
 
