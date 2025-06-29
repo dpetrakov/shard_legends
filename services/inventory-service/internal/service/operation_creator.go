@@ -246,12 +246,18 @@ func (oc *operationCreator) CreateReservationOperations(ctx context.Context, req
 	// Convert to BalanceLockRequest format for atomic balance checking
 	var lockRequests []BalanceLockRequest
 	for _, item := range req.Items {
-		collectionID := oc.getDefaultCollectionID()
+		collectionID, err := oc.getDefaultCollectionID(ctx)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to get default collection ID")
+		}
 		if item.CollectionID != nil {
 			collectionID = *item.CollectionID
 		}
 
-		qualityLevelID := oc.getDefaultQualityLevelID()
+		qualityLevelID, err := oc.getDefaultQualityLevelID(ctx)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to get default quality level ID")
+		}
 		if item.QualityLevelID != nil {
 			qualityLevelID = *item.QualityLevelID
 		}
@@ -310,12 +316,18 @@ func (oc *operationCreator) CreateReservationOperations(ctx context.Context, req
 	var operations []*models.Operation
 	for _, item := range req.Items {
 		// Get collection and quality level IDs, using defaults if not provided
-		collectionID := oc.getDefaultCollectionID()
+		collectionID, err := oc.getDefaultCollectionID(ctx)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to get default collection ID")
+		}
 		if item.CollectionID != nil {
 			collectionID = *item.CollectionID
 		}
 
-		qualityLevelID := oc.getDefaultQualityLevelID()
+		qualityLevelID, err := oc.getDefaultQualityLevelID(ctx)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to get default quality level ID")
+		}
 		if item.QualityLevelID != nil {
 			qualityLevelID = *item.QualityLevelID
 		}
@@ -553,16 +565,32 @@ func stringPtr(s string) *string {
 	return &s
 }
 
-// getDefaultCollectionID returns the default collection UUID
-// In practice, this should retrieve the standard collection from config or constants
-func (oc *operationCreator) getDefaultCollectionID() uuid.UUID {
-	// Using predefined default UUIDs as per the inventory service design
-	return uuid.MustParse("00000000-0000-0000-0000-000000000001") // Default collection
+// getDefaultCollectionID returns the default collection UUID by looking up "base" code
+func (oc *operationCreator) getDefaultCollectionID(ctx context.Context) (uuid.UUID, error) {
+	collectionMapping, err := oc.deps.Repositories.Classifier.GetCodeToUUIDMapping(ctx, models.ClassifierCollection)
+	if err != nil {
+		return uuid.Nil, errors.Wrap(err, "failed to get collection mapping")
+	}
+
+	baseCollectionID, found := collectionMapping["base"]
+	if !found {
+		return uuid.Nil, errors.New("base collection not found in classifier mapping")
+	}
+
+	return baseCollectionID, nil
 }
 
-// getDefaultQualityLevelID returns the default quality level UUID
-// In practice, this should retrieve the standard quality level from config or constants
-func (oc *operationCreator) getDefaultQualityLevelID() uuid.UUID {
-	// Using predefined default UUIDs as per the inventory service design
-	return uuid.MustParse("00000000-0000-0000-0000-000000000002") // Default quality
+// getDefaultQualityLevelID returns the default quality level UUID by looking up "base" code
+func (oc *operationCreator) getDefaultQualityLevelID(ctx context.Context) (uuid.UUID, error) {
+	qualityMapping, err := oc.deps.Repositories.Classifier.GetCodeToUUIDMapping(ctx, models.ClassifierQualityLevel)
+	if err != nil {
+		return uuid.Nil, errors.Wrap(err, "failed to get quality level mapping")
+	}
+
+	baseQualityID, found := qualityMapping["base"]
+	if !found {
+		return uuid.Nil, errors.New("base quality level not found in classifier mapping")
+	}
+
+	return baseQualityID, nil
 }

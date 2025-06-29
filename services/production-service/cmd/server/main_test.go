@@ -28,7 +28,6 @@ func TestPortSeparation(t *testing.T) {
 		os.Unsetenv("REDIS_URL")
 	}()
 
-
 	// Setup public router
 	publicRouter := chi.NewRouter()
 	publicRouter.Use(middleware.RequestID)
@@ -56,19 +55,7 @@ func TestPortSeparation(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"healthy"}`))
 	})
-	internalRouter.Get("/ready", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"ready"}`))
-	})
 	internalRouter.Handle("/metrics", promhttp.Handler())
-
-	// Admin endpoints (testing without auth for simplicity)
-	internalRouter.Route("/api/v1/admin", func(r chi.Router) {
-		r.Get("/tasks", func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"message":"admin tasks"}`))
-		})
-	})
 
 	t.Run("Public router should NOT expose internal endpoints", func(t *testing.T) {
 		// Test that metrics is not available on public router
@@ -83,11 +70,6 @@ func TestPortSeparation(t *testing.T) {
 		publicRouter.ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusNotFound, rec.Code, "Health should not be available on public port")
 
-		// Test that admin endpoints are not available on public router
-		req = httptest.NewRequest("GET", "/api/v1/admin/tasks", nil)
-		rec = httptest.NewRecorder()
-		publicRouter.ServeHTTP(rec, req)
-		assert.Equal(t, http.StatusNotFound, rec.Code, "Admin endpoints should not be available on public port")
 	})
 
 	t.Run("Internal router should expose health and metrics", func(t *testing.T) {
@@ -97,13 +79,6 @@ func TestPortSeparation(t *testing.T) {
 		internalRouter.ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusOK, rec.Code, "Health should be available on internal port")
 		assert.Contains(t, rec.Body.String(), "healthy")
-
-		// Test that ready is available on internal router
-		req = httptest.NewRequest("GET", "/ready", nil)
-		rec = httptest.NewRecorder()
-		internalRouter.ServeHTTP(rec, req)
-		assert.Equal(t, http.StatusOK, rec.Code, "Ready should be available on internal port")
-		assert.Contains(t, rec.Body.String(), "ready")
 
 		// Test that metrics is available on internal router
 		req = httptest.NewRequest("GET", "/metrics", nil)
@@ -132,4 +107,3 @@ func TestPortSeparation(t *testing.T) {
 		require.Empty(t, os.Getenv("PROD_SVC_INTERNAL_PORT"), "Internal port should be required")
 	})
 }
-

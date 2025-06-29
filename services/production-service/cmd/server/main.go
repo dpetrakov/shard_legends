@@ -144,7 +144,7 @@ func main() {
 	// Start cleanup service in background
 	cleanupCtx, cleanupCancel := context.WithCancel(context.Background())
 	defer cleanupCancel()
-	
+
 	go func() {
 		cleanupService.Start(cleanupCtx)
 	}()
@@ -193,9 +193,8 @@ func main() {
 	internalRouter.Use(customMiddleware.Metrics())
 	internalRouter.Use(middleware.Timeout(cfg.Timeouts.HTTPMiddleware))
 
-	// Internal endpoints - health, metrics, admin
+	// Internal endpoints - health, metrics
 	internalRouter.Get("/health", allHandlers.Health.Health)
-	internalRouter.Get("/ready", allHandlers.Health.Ready)
 	internalRouter.Handle("/metrics", promhttp.Handler())
 
 	// Public API routes
@@ -211,35 +210,6 @@ func main() {
 			r.Post("/start", factoryHandler.StartProduction)
 			r.Post("/claim", factoryHandler.Claim)
 			r.Post("/cancel", factoryHandler.Cancel)
-		})
-	})
-
-	// Internal API routes
-	internalRouter.Route("/api/v1", func(r chi.Router) {
-		// Internal endpoints (no auth required - internal services only)
-		r.Route("/internal", func(r chi.Router) {
-			r.Get("/task/{taskId}", func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", "application/json")
-				w.Write([]byte(`{"message":"Internal task endpoint not implemented yet"}`))
-			})
-			r.Get("/recipe/{recipeId}", func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", "application/json")
-				w.Write([]byte(`{"message":"Internal recipe endpoint not implemented yet"}`))
-			})
-		})
-
-		// Admin endpoints (require JWT with admin role)
-		r.Route("/admin", func(r chi.Router) {
-			r.Use(customMiddleware.AdminAuth(jwtValidator))
-
-			r.Get("/tasks", func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", "application/json")
-				w.Write([]byte(`{"message":"Admin tasks endpoint not implemented yet"}`))
-			})
-			r.Get("/stats", func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", "application/json")
-				w.Write([]byte(`{"message":"Admin stats endpoint not implemented yet"}`))
-			})
 		})
 	})
 

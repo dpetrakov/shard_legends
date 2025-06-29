@@ -281,8 +281,8 @@ func TestInventoryService_ReserveItems_InsufficientBalance(t *testing.T) {
 	itemID := uuid.New()
 	mainSectionID := uuid.New()
 	factorySectionID := uuid.New()
-	defaultCollectionID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
-	defaultQualityID := uuid.MustParse("00000000-0000-0000-0000-000000000002")
+	defaultCollectionID := uuid.New()
+	defaultQualityID := uuid.New()
 
 	req := &models.ReserveItemsRequest{
 		UserID:      userID,
@@ -308,9 +308,13 @@ func TestInventoryService_ReserveItems_InsufficientBalance(t *testing.T) {
 	}
 	classifierRepo.On("GetCodeToUUIDMapping", ctx, models.ClassifierOperationType).Return(operationMapping, nil).Maybe()
 
-	// Mock collection and quality level mappings (using defaults) - these may not be called if balance check fails
-	collectionMapping := map[string]uuid.UUID{}
-	qualityMapping := map[string]uuid.UUID{}
+	// Mock collection and quality level mappings with base defaults
+	collectionMapping := map[string]uuid.UUID{
+		"base": defaultCollectionID,
+	}
+	qualityMapping := map[string]uuid.UUID{
+		"base": defaultQualityID,
+	}
 	classifierRepo.On("GetCodeToUUIDMapping", ctx, models.ClassifierCollection).Return(collectionMapping, nil).Maybe()
 	classifierRepo.On("GetCodeToUUIDMapping", ctx, models.ClassifierQualityLevel).Return(qualityMapping, nil).Maybe()
 
@@ -767,7 +771,7 @@ func TestInventoryService_GetReservationStatus_Success_ActiveReservation(t *test
 
 	// Setup mocks
 	mockInventoryRepo.On("GetOperationsByExternalID", ctx, operationID).Return(reservationOps, nil)
-	
+
 	// Mock operation type mapping
 	operationTypeMapping := map[uuid.UUID]string{
 		operationTypeID: models.OperationTypeFactoryReservation,
@@ -869,7 +873,7 @@ func TestInventoryService_GetReservationStatus_Success_ConsumedReservation(t *te
 
 	// Setup mocks
 	mockInventoryRepo.On("GetOperationsByExternalID", ctx, operationID).Return(operations, nil)
-	
+
 	// Mock operation type mapping
 	operationTypeMapping := map[uuid.UUID]string{
 		reservationTypeID: models.OperationTypeFactoryReservation,
@@ -965,7 +969,7 @@ func TestInventoryService_GetReservationStatus_Success_ReturnedReservation(t *te
 
 	// Setup mocks
 	mockInventoryRepo.On("GetOperationsByExternalID", ctx, operationID).Return(operations, nil)
-	
+
 	// Mock operation type mapping
 	operationTypeMapping := map[uuid.UUID]string{
 		reservationTypeID: models.OperationTypeFactoryReservation,
@@ -1095,7 +1099,7 @@ func TestInventoryService_GetReservationStatus_NoReservationOperations(t *testin
 
 	// Setup mocks
 	mockInventoryRepo.On("GetOperationsByExternalID", ctx, operationID).Return(operations, nil)
-	
+
 	// Mock operation type mapping - not a reservation operation
 	operationTypeMapping := map[uuid.UUID]string{
 		otherTypeID: models.OperationTypeChestReward,
@@ -1162,7 +1166,7 @@ func TestInventoryService_GetReservationStatus_MultipleItems(t *testing.T) {
 
 	// Setup mocks
 	mockInventoryRepo.On("GetOperationsByExternalID", ctx, operationID).Return(reservationOps, nil)
-	
+
 	// Mock operation type mapping
 	operationTypeMapping := map[uuid.UUID]string{
 		operationTypeID: models.OperationTypeFactoryReservation,

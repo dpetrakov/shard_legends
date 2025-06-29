@@ -239,21 +239,34 @@ func (is *inventoryService) convertToBalanceCheck(ctx context.Context, userID uu
 
 // convertItemCodes converts optional collection and quality level codes to UUIDs
 func (is *inventoryService) convertItemCodes(ctx context.Context, collection, qualityLevel *string) (uuid.UUID, uuid.UUID, error) {
-	// Get default UUIDs (these should be configurable)
-	defaultCollection := uuid.MustParse("00000000-0000-0000-0000-000000000001") // Default collection
-	defaultQuality := uuid.MustParse("00000000-0000-0000-0000-000000000002")    // Default quality
+	// Get default collection UUID by looking up "base" code
+	collectionMapping, err := is.deps.Repositories.Classifier.GetCodeToUUIDMapping(ctx, models.ClassifierCollection)
+	if err != nil {
+		return uuid.Nil, uuid.Nil, errors.Wrap(err, "failed to get collection mapping for defaults")
+	}
+
+	defaultCollection, found := collectionMapping["base"]
+	if !found {
+		return uuid.Nil, uuid.Nil, errors.New("base collection not found in classifier mapping")
+	}
+
+	// Get default quality level UUID by looking up "base" code
+	qualityMapping, err := is.deps.Repositories.Classifier.GetCodeToUUIDMapping(ctx, models.ClassifierQualityLevel)
+	if err != nil {
+		return uuid.Nil, uuid.Nil, errors.Wrap(err, "failed to get quality level mapping for defaults")
+	}
+
+	defaultQuality, found := qualityMapping["base"]
+	if !found {
+		return uuid.Nil, uuid.Nil, errors.New("base quality level not found in classifier mapping")
+	}
 
 	collectionID := defaultCollection
 	qualityLevelID := defaultQuality
 
 	// Convert collection if provided
 	if collection != nil && *collection != "" {
-		mapping, err := is.deps.Repositories.Classifier.GetCodeToUUIDMapping(ctx, models.ClassifierCollection)
-		if err != nil {
-			return uuid.Nil, uuid.Nil, errors.Wrap(err, "failed to get collection mapping")
-		}
-
-		if id, found := mapping[*collection]; found {
+		if id, found := collectionMapping[*collection]; found {
 			collectionID = id
 		} else {
 			return uuid.Nil, uuid.Nil, errors.Errorf("unknown collection code: %s", *collection)
@@ -262,12 +275,7 @@ func (is *inventoryService) convertItemCodes(ctx context.Context, collection, qu
 
 	// Convert quality level if provided
 	if qualityLevel != nil && *qualityLevel != "" {
-		mapping, err := is.deps.Repositories.Classifier.GetCodeToUUIDMapping(ctx, models.ClassifierQualityLevel)
-		if err != nil {
-			return uuid.Nil, uuid.Nil, errors.Wrap(err, "failed to get quality level mapping")
-		}
-
-		if id, found := mapping[*qualityLevel]; found {
+		if id, found := qualityMapping[*qualityLevel]; found {
 			qualityLevelID = id
 		} else {
 			return uuid.Nil, uuid.Nil, errors.Errorf("unknown quality level code: %s", *qualityLevel)
@@ -698,12 +706,12 @@ func (is *inventoryService) GetReservationStatus(ctx context.Context, operationI
 			ReservationExists: false,
 			Error:             stringPtr("Reservation not found"),
 		}
-		
+
 		// Record metrics
 		if is.deps.Metrics != nil {
 			is.deps.Metrics.RecordInventoryOperation("get_reservation_status", "factory", "not_found")
 		}
-		
+
 		return response, nil
 	}
 
@@ -711,14 +719,14 @@ func (is *inventoryService) GetReservationStatus(ctx context.Context, operationI
 	var reservationOps []*models.Operation
 	var userID uuid.UUID
 	var reservationDate *string
-	
+
 	for _, op := range operations {
 		// Get operation type code to determine if it's a reservation
 		operationTypeCode, err := is.getOperationTypeCode(ctx, op.OperationTypeID)
 		if err != nil {
 			continue // Skip operations we can't identify
 		}
-		
+
 		if operationTypeCode == models.OperationTypeFactoryReservation {
 			reservationOps = append(reservationOps, op)
 			if userID == uuid.Nil {
@@ -742,7 +750,7 @@ func (is *inventoryService) GetReservationStatus(ctx context.Context, operationI
 
 	// Determine reservation status by checking for consumption or return operations
 	status := "active" // Default status
-	
+
 	// Check for consumption operations (factory_consumption)
 	for _, op := range operations {
 		operationTypeCode, err := is.getOperationTypeCode(ctx, op.OperationTypeID)
@@ -754,7 +762,7 @@ func (is *inventoryService) GetReservationStatus(ctx context.Context, operationI
 			break
 		}
 	}
-	
+
 	// Check for return operations (factory_return) - only if not consumed
 	if status == "active" {
 		for _, op := range operations {
@@ -804,10 +812,10 @@ func (is *inventoryService) GetReservationStatus(ctx context.Context, operationI
 
 		// Create unique key for this item combination
 		itemKey := op.ItemID.String() + "_" + collectionCode + "_" + qualityLevelCode
-		
+
 		// Add to quantities
 		itemQuantities[itemKey] += op.QuantityChange
-		
+
 		// Store item details (will be overwritten for same items, but that's fine)
 		itemDetails[itemKey] = models.ReservationItemResponse{
 			ItemCode:         item.ItemType,
@@ -873,4 +881,3 @@ func (is *inventoryService) getSectionCode(ctx context.Context, sectionID uuid.U
 
 	return "", errors.Errorf("unknown section UUID: %s", sectionID.String())
 }
-

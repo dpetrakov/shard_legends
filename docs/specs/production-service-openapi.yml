@@ -255,109 +255,66 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
-  /api/v1/internal/user-slots/{user_id}:
+  /health:
     get:
       tags:
         - Internal
-      summary: Получение слотов пользователя
-      description: |
-        Возвращает информацию о доступных производственных слотах пользователя.
-        Используется User Service для предоставления информации о слотах.
-      operationId: getUserSlots
-      parameters:
-        - name: user_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            description: UUID пользователя
+      summary: Health check
+      description: Проверка состояния сервиса и его зависимостей
+      operationId: getHealth
+      security: []
       responses:
         '200':
-          description: Успешный ответ
+          description: Сервис работает нормально
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserSlotsResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          description: Пользователь не найден
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok, unhealthy]
+                  services:
+                    type: object
+                    additionalProperties:
+                      type: string
+                  database_pool:
+                    type: object
+                    properties:
+                      total_connections:
+                        type: integer
+                      idle_connections:
+                        type: integer
+                      acquired_connections:
+                        type: integer
+        '503':
+          description: Сервис недоступен
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-        '500':
-          $ref: '#/components/responses/InternalError'
 
-  /api/v1/admin/tasks:
+
+
+  /metrics:
     get:
       tags:
-        - Admin
-      summary: Мониторинг заданий
-      description: |
-        Возвращает статистику и мониторинг производственных заданий.
-        Требует административные права доступа.
-      operationId: getTasksStats
-      parameters:
-        - name: user_id
-          in: query
-          description: Фильтр по пользователю
-          required: false
-          schema:
-            type: string
-            format: uuid
-        - name: status
-          in: query
-          description: Фильтр по статусу задания
-          required: false
-          schema:
-            type: string
-            enum: [pending, in_progress, completed, claimed, cancelled, failed]
-        - name: from_date
-          in: query
-          description: Начальная дата периода
-          required: false
-          schema:
-            type: string
-            format: date-time
-        - name: to_date
-          in: query
-          description: Конечная дата периода
-          required: false
-          schema:
-            type: string
-            format: date-time
-        - name: page
-          in: query
-          description: Номер страницы для пагинации
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            default: 1
-        - name: limit
-          in: query
-          description: Количество элементов на странице
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 20
+        - Internal
+      summary: Prometheus metrics
+      description: Метрики для мониторинга
+      operationId: getMetrics
+      security: []
       responses:
         '200':
-          description: Успешный ответ
+          description: Метрики в формате Prometheus
           content:
-            application/json:
+            text/plain:
               schema:
-                $ref: '#/components/schemas/TasksStatsResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                type: string
+
+
+
+
 
 components:
   securitySchemes:
@@ -648,15 +605,13 @@ components:
           description: Статус задания после создания
         expected_completion_time:
           type: string
-          format: date-time
-          description: Ожидаемое время завершения
+          description: Ожидаемое время завершения в ISO 8601 формате (или пустая строка)
 
     ClaimResponse:
       type: object
       required:
         - success
         - items_received
-        - updated_queue_status
       properties:
         success:
           type: boolean
@@ -666,110 +621,46 @@ components:
             $ref: '#/components/schemas/TaskOutputItem'
           description: Список полученных предметов
         updated_queue_status:
-          $ref: '#/components/schemas/QueueResponse'
-
-    UserSlotsResponse:
-      type: object
-      required:
-        - user_id
-        - slots
-      properties:
-        user_id:
-          type: string
-          format: uuid
-        slots:
-          type: array
-          items:
-            type: object
-            required:
-              - slot_type
-              - supported_operations
-              - count
-            properties:
-              slot_type:
-                type: string
-                description: Тип слота
-                enum: [universal, specialized]
-              supported_operations:
-                type: array
-                items:
-                  type: string
-                  enum: [crafting, smelting, chest_opening, resource_gathering, special]
-                description: Поддерживаемые операции
-              count:
-                type: integer
-                minimum: 0
-                description: Количество слотов этого типа
-
-    TasksStatsResponse:
-      type: object
-      required:
-        - tasks
-        - stats
-        - pagination
-      properties:
-        tasks:
-          type: array
-          items:
-            $ref: '#/components/schemas/ProductionTask'
-        stats:
-          type: object
-          properties:
-            total_tasks:
-              type: integer
-              description: Общее количество заданий
-            by_status:
-              type: object
-              description: Статистика по статусам
-              additionalProperties:
-                type: integer
-            by_operation_class:
-              type: object
-              description: Статистика по классам операций
-              additionalProperties:
-                type: integer
-            system_load:
-              type: object
-              properties:
-                average_queue_length:
-                  type: number
-                  description: Средняя длина очереди
-                slot_utilization_percent:
-                  type: number
-                  description: Процент использования слотов
-        pagination:
-          type: object
-          properties:
-            page:
-              type: integer
-            limit:
-              type: integer
-            total_pages:
-              type: integer
-            total_items:
-              type: integer
+          allOf:
+            - $ref: '#/components/schemas/QueueResponse'
+          nullable: true
+          description: Обновленный статус очереди (опционально)
 
     # Запросы
     StartProductionRequest:
       type: object
       required:
         - recipe_id
-        - executions
+        - execution_count
       properties:
         recipe_id:
           type: string
           format: uuid
           description: UUID рецепта для выполнения
-        executions:
+        execution_count:
           type: integer
           minimum: 1
           description: Количество исполнений рецепта
         boosters:
           type: array
           items:
-            type: string
-            format: uuid
-          description: UUID предметов-ускорителей из инвентаря пользователя
+            $ref: '#/components/schemas/BoosterItem'
+          description: Предметы-ускорители из инвентаря пользователя
+
+    BoosterItem:
+      type: object
+      required:
+        - item_id
+        - quantity
+      properties:
+        item_id:
+          type: string
+          format: uuid
+          description: UUID предмета-ускорителя
+        quantity:
+          type: integer
+          minimum: 1
+          description: Количество предметов
 
     ClaimRequest:
       type: object
@@ -777,6 +668,7 @@ components:
         task_id:
           type: string
           format: uuid
+          nullable: true
           description: UUID задания для получения результатов (если не указано - все готовые)
 
     CancelRequest:

@@ -184,30 +184,114 @@ func TestOperationCreator_CreateOperationsInTransaction(t *testing.T) {
 func TestOperationCreator_GetDefaultValues(t *testing.T) {
 	t.Run("Default collection ID", func(t *testing.T) {
 		// Arrange
-		deps, _, _, _, _ := createFullTestDeps()
+		ctx := context.Background()
+		deps, _, classifierRepo, _, _ := createFullTestDeps()
 		creator := NewOperationCreator(deps).(*operationCreator)
 
+		expectedUUID := uuid.New()
+		collectionMapping := map[string]uuid.UUID{"base": expectedUUID}
+		classifierRepo.On("GetCodeToUUIDMapping", ctx, models.ClassifierCollection).Return(collectionMapping, nil)
+
 		// Act
-		defaultCollectionID := creator.getDefaultCollectionID()
+		defaultCollectionID, err := creator.getDefaultCollectionID(ctx)
 
 		// Assert
-		assert.NotEqual(t, uuid.Nil, defaultCollectionID)
-		expectedUUID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+		assert.NoError(t, err)
 		assert.Equal(t, expectedUUID, defaultCollectionID)
+		classifierRepo.AssertExpectations(t)
+	})
+
+	t.Run("Default collection ID - mapping error", func(t *testing.T) {
+		// Arrange
+		ctx := context.Background()
+		deps, _, classifierRepo, _, _ := createFullTestDeps()
+		creator := NewOperationCreator(deps).(*operationCreator)
+
+		classifierRepo.On("GetCodeToUUIDMapping", ctx, models.ClassifierCollection).Return(nil, errors.New("mapping error"))
+
+		// Act
+		defaultCollectionID, err := creator.getDefaultCollectionID(ctx)
+
+		// Assert
+		assert.Error(t, err)
+		assert.Equal(t, uuid.Nil, defaultCollectionID)
+		assert.Contains(t, err.Error(), "failed to get collection mapping")
+		classifierRepo.AssertExpectations(t)
+	})
+
+	t.Run("Default collection ID - base not found", func(t *testing.T) {
+		// Arrange
+		ctx := context.Background()
+		deps, _, classifierRepo, _, _ := createFullTestDeps()
+		creator := NewOperationCreator(deps).(*operationCreator)
+
+		emptyMapping := map[string]uuid.UUID{}
+		classifierRepo.On("GetCodeToUUIDMapping", ctx, models.ClassifierCollection).Return(emptyMapping, nil)
+
+		// Act
+		defaultCollectionID, err := creator.getDefaultCollectionID(ctx)
+
+		// Assert
+		assert.Error(t, err)
+		assert.Equal(t, uuid.Nil, defaultCollectionID)
+		assert.Contains(t, err.Error(), "base collection not found in classifier mapping")
+		classifierRepo.AssertExpectations(t)
 	})
 
 	t.Run("Default quality level ID", func(t *testing.T) {
 		// Arrange
-		deps, _, _, _, _ := createFullTestDeps()
+		ctx := context.Background()
+		deps, _, classifierRepo, _, _ := createFullTestDeps()
 		creator := NewOperationCreator(deps).(*operationCreator)
 
+		expectedUUID := uuid.New()
+		qualityMapping := map[string]uuid.UUID{"base": expectedUUID}
+		classifierRepo.On("GetCodeToUUIDMapping", ctx, models.ClassifierQualityLevel).Return(qualityMapping, nil)
+
 		// Act
-		defaultQualityLevelID := creator.getDefaultQualityLevelID()
+		defaultQualityLevelID, err := creator.getDefaultQualityLevelID(ctx)
 
 		// Assert
-		assert.NotEqual(t, uuid.Nil, defaultQualityLevelID)
-		expectedUUID := uuid.MustParse("00000000-0000-0000-0000-000000000002")
+		assert.NoError(t, err)
 		assert.Equal(t, expectedUUID, defaultQualityLevelID)
+		classifierRepo.AssertExpectations(t)
+	})
+
+	t.Run("Default quality level ID - mapping error", func(t *testing.T) {
+		// Arrange
+		ctx := context.Background()
+		deps, _, classifierRepo, _, _ := createFullTestDeps()
+		creator := NewOperationCreator(deps).(*operationCreator)
+
+		classifierRepo.On("GetCodeToUUIDMapping", ctx, models.ClassifierQualityLevel).Return(nil, errors.New("mapping error"))
+
+		// Act
+		defaultQualityLevelID, err := creator.getDefaultQualityLevelID(ctx)
+
+		// Assert
+		assert.Error(t, err)
+		assert.Equal(t, uuid.Nil, defaultQualityLevelID)
+		assert.Contains(t, err.Error(), "failed to get quality level mapping")
+		classifierRepo.AssertExpectations(t)
+	})
+
+	t.Run("Default quality level ID - base not found", func(t *testing.T) {
+		// Arrange
+		ctx := context.Background()
+		deps, _, classifierRepo, _, _ := createFullTestDeps()
+		creator := NewOperationCreator(deps).(*operationCreator)
+
+		emptyMapping := map[string]uuid.UUID{}
+		classifierRepo.On("GetCodeToUUIDMapping", ctx, models.ClassifierQualityLevel).Return(emptyMapping, nil)
+
+		// Act
+		defaultQualityLevelID, err := creator.getDefaultQualityLevelID(ctx)
+
+		// Assert
+		assert.Error(t, err)
+		assert.Equal(t, uuid.Nil, defaultQualityLevelID)
+		assert.Contains(t, err.Error(), "base quality level not found in classifier mapping")
+		classifierRepo.AssertExpectations(t)
 	})
 }
 
