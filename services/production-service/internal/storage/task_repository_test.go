@@ -205,7 +205,8 @@ func TestTaskRepository_CreateTask(t *testing.T) {
 	mockTx.On("Exec", mock.Anything, mock.AnythingOfType("string"), mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	mockTx.On("Commit").Return(nil)
 	mockTx.On("Rollback").Return(nil)
-	mockMetrics.On("IncDBQuery", "task_create")
+	mockMetrics.On("IncDBQuery", "create_task")
+	mockMetrics.On("ObserveDBQueryDuration", "create_task", mock.AnythingOfType("time.Duration"))
 
 	// Act
 	err := repo.CreateTask(context.Background(), task)
@@ -242,19 +243,20 @@ func TestTaskRepository_GetUserTasks(t *testing.T) {
 	mockRows := &MockRows{
 		data: [][]interface{}{
 			{
-				taskID,                                // id
-				userID,                                // user_id  
-				recipeID,                              // recipe_id
-				1,                                     // slot_number
-				models.TaskStatusPending,              // status
-				nil,                                   // started_at
-				nil,                                   // completion_time
-				nil,                                   // claimed_at
-				models.AppliedModifiers{},             // pre_calculated_results
-				models.AppliedModifiers{},             // modifiers_applied
-				nil,                                   // reservation_id
-				now,                                   // created_at
-				now,                                   // updated_at
+				taskID,                    // id
+				userID,                    // user_id
+				recipeID,                  // recipe_id
+				1,                         // slot_number
+				1,                         // execution_count
+				models.TaskStatusPending,  // status
+				nil,                       // started_at
+				nil,                       // completion_time
+				nil,                       // claimed_at
+				models.AppliedModifiers{}, // pre_calculated_results
+				models.AppliedModifiers{}, // modifiers_applied
+				nil,                       // reservation_id
+				now,                       // created_at
+				now,                       // updated_at
 			},
 		},
 	}
