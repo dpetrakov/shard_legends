@@ -19,8 +19,8 @@ type RecipeRepository interface {
 	// GetRecipeLimits возвращает все лимиты для рецепта
 	GetRecipeLimits(ctx context.Context, recipeID uuid.UUID) ([]models.RecipeLimit, error)
 
-	// GetRecipeUsageStats возвращает статистику использования рецепта пользователем
-	GetRecipeUsageStats(ctx context.Context, userID uuid.UUID, recipeID uuid.UUID, limitType string, limitObject string, targetItemID *uuid.UUID, periodStart, periodEnd time.Time) (*models.RecipeUsageStats, error)
+	// GetRecipeUsageStats возвращает статистику использования рецепта пользователем (упрощенная версия)
+	GetRecipeUsageStats(ctx context.Context, userID uuid.UUID, recipeID uuid.UUID, limitType string, periodStart, periodEnd time.Time) (int, error)
 
 	// CheckRecipeLimits проверяет все лимиты рецепта для пользователя
 	CheckRecipeLimits(ctx context.Context, userID uuid.UUID, recipeID uuid.UUID, requestedExecutions int) ([]models.UserRecipeLimit, error)
@@ -48,6 +48,9 @@ type TaskRepository interface {
 
 	// GetTasksStats возвращает статистику заданий для административной панели
 	GetTasksStats(ctx context.Context, filters map[string]interface{}, page, limit int) (*models.TasksStatsResponse, error)
+
+	// UpdateTaskSlotNumber обновляет номер слота задания
+	UpdateTaskSlotNumber(ctx context.Context, taskID uuid.UUID, slotNumber int) error
 }
 
 // ClassifierRepository определяет интерфейс для работы с классификаторами

@@ -43,7 +43,7 @@ func NewHTTPUserClientWithTimeout(baseURL string, timeout time.Duration, logger 
 
 // GetUserProductionSlots получает производственные слоты пользователя
 func (c *HTTPUserClient) GetUserProductionSlots(ctx context.Context, userID uuid.UUID) (*models.UserProductionSlots, error) {
-	url := fmt.Sprintf("%s/internal/users/%s/production-slots", c.baseURL, userID)
+	url := fmt.Sprintf("%s/users/%s/production-slots", c.baseURL, userID)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -71,7 +71,7 @@ func (c *HTTPUserClient) GetUserProductionSlots(ctx context.Context, userID uuid
 
 // GetUserProductionModifiers получает производственные модификаторы пользователя
 func (c *HTTPUserClient) GetUserProductionModifiers(ctx context.Context, userID uuid.UUID) (*models.UserProductionModifiers, error) {
-	url := fmt.Sprintf("%s/internal/users/%s/production-modifiers", c.baseURL, userID)
+	url := fmt.Sprintf("%s/users/%s/production-modifiers", c.baseURL, userID)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {

@@ -44,7 +44,7 @@ type RecipeOutputItem struct {
 	ItemID                     uuid.UUID `json:"item_id" db:"item_id"`
 	MinQuantity                int       `json:"min_quantity" db:"min_quantity"`
 	MaxQuantity                int       `json:"max_quantity" db:"max_quantity"`
-	ProbabilityPercent         int       `json:"probability_percent" db:"probability_percent"`
+	ProbabilityPercent         float64   `json:"probability_percent" db:"probability_percent"`
 	OutputGroup                *string   `json:"output_group,omitempty" db:"output_group"`
 	CollectionSourceInputIndex *int      `json:"collection_source_input_index,omitempty" db:"collection_source_input_index"`
 	QualitySourceInputIndex    *int      `json:"quality_source_input_index,omitempty" db:"quality_source_input_index"`
@@ -56,13 +56,13 @@ type RecipeOutputItem struct {
 	FixedQualityLevelID *uuid.UUID `json:"-" db:"fixed_quality_level_id"`
 }
 
-// RecipeLimit представляет лимит использования рецепта
+// RecipeLimit представляет лимит использования рецепта (упрощенная версия)
 type RecipeLimit struct {
-	RecipeID      uuid.UUID  `json:"recipe_id" db:"recipe_id"`
-	LimitType     string     `json:"limit_type" db:"limit_type"`
-	LimitObject   string     `json:"limit_object" db:"limit_object"`
-	TargetItemID  *uuid.UUID `json:"target_item_id,omitempty" db:"target_item_id"`
-	LimitQuantity int        `json:"limit_quantity" db:"limit_quantity"`
+	ID        uuid.UUID `json:"id" db:"id"`
+	RecipeID  uuid.UUID `json:"recipe_id" db:"recipe_id"`
+	LimitType string    `json:"limit_type" db:"limit_type"` // daily, weekly, total
+	MaxUses   int       `json:"max_uses" db:"max_uses"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
 }
 
 // RecipeFilters представляет фильтры для поиска рецептов
@@ -113,19 +113,20 @@ func (a *AppliedModifiers) Scan(value interface{}) error {
 
 // ProductionTask представляет производственное задание
 type ProductionTask struct {
-	ID                    uuid.UUID        `json:"id" db:"id"`
-	UserID                uuid.UUID        `json:"user_id" db:"user_id"`
-	RecipeID              uuid.UUID        `json:"recipe_id" db:"recipe_id"`
-	SlotNumber            int              `json:"slot_number" db:"slot_number"`
-	Status                string           `json:"status" db:"status"`
-	StartedAt             *time.Time       `json:"started_at,omitempty" db:"started_at"`
-	CompletionTime        *time.Time       `json:"completion_time,omitempty" db:"completion_time"`
-	ClaimedAt             *time.Time       `json:"claimed_at,omitempty" db:"claimed_at"`
-	PreCalculatedResults  AppliedModifiers `json:"pre_calculated_results,omitempty" db:"pre_calculated_results"`
-	ModifiersApplied      AppliedModifiers `json:"modifiers_applied,omitempty" db:"modifiers_applied"`
-	ReservationID         *uuid.UUID       `json:"reservation_id,omitempty" db:"reservation_id"`
-	CreatedAt             time.Time        `json:"created_at" db:"created_at"`
-	UpdatedAt             time.Time        `json:"updated_at" db:"updated_at"`
+	ID                   uuid.UUID        `json:"id" db:"id"`
+	UserID               uuid.UUID        `json:"user_id" db:"user_id"`
+	RecipeID             uuid.UUID        `json:"recipe_id" db:"recipe_id"`
+	SlotNumber           int              `json:"slot_number" db:"slot_number"`
+	ExecutionCount       int              `json:"execution_count" db:"execution_count"`
+	Status               string           `json:"status" db:"status"`
+	StartedAt            *time.Time       `json:"started_at,omitempty" db:"started_at"`
+	CompletionTime       *time.Time       `json:"completion_time,omitempty" db:"completion_time"`
+	ClaimedAt            *time.Time       `json:"claimed_at,omitempty" db:"claimed_at"`
+	PreCalculatedResults AppliedModifiers `json:"pre_calculated_results,omitempty" db:"pre_calculated_results"`
+	ModifiersApplied     AppliedModifiers `json:"modifiers_applied,omitempty" db:"modifiers_applied"`
+	ReservationID        *uuid.UUID       `json:"reservation_id,omitempty" db:"reservation_id"`
+	CreatedAt            time.Time        `json:"created_at" db:"created_at"`
+	UpdatedAt            time.Time        `json:"updated_at" db:"updated_at"`
 
 	// Связанные данные
 	OutputItems []TaskOutputItem  `json:"output_items,omitempty"`

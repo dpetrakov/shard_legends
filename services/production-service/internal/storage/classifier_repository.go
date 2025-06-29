@@ -46,7 +46,7 @@ func (r *classifierRepository) GetClassifierMapping(ctx context.Context, classif
 		SELECT ci.code, ci.id
 		FROM inventory.classifiers c
 		JOIN inventory.classifier_items ci ON c.id = ci.classifier_id
-		WHERE c.name = $1 AND ci.is_active = true
+		WHERE c.code = $1
 		ORDER BY ci.code
 	`
 
@@ -101,7 +101,7 @@ func (r *classifierRepository) GetReverseClassifierMapping(ctx context.Context, 
 		SELECT ci.id, ci.code
 		FROM inventory.classifiers c
 		JOIN inventory.classifier_items ci ON c.id = ci.classifier_id
-		WHERE c.name = $1 AND ci.is_active = true
+		WHERE c.code = $1
 		ORDER BY ci.code
 	`
 

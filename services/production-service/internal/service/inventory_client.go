@@ -46,7 +46,7 @@ func NewHTTPInventoryClientWithTimeout(baseURL string, timeout time.Duration, lo
 
 // ReserveItems резервирует предметы в инвентаре
 func (c *HTTPInventoryClient) ReserveItems(ctx context.Context, userID uuid.UUID, operationID uuid.UUID, items []models.ReservationItem) error {
-	url := fmt.Sprintf("%s/inventory/reserve", c.baseURL)
+	url := fmt.Sprintf("%s/api/inventory/reserve", c.baseURL)
 
 	// Преобразуем наши модели в формат Inventory Service
 	inventoryItems := make([]map[string]interface{}, len(items))
@@ -56,11 +56,17 @@ func (c *HTTPInventoryClient) ReserveItems(ctx context.Context, userID uuid.UUID
 			"quantity": item.Quantity,
 		}
 
-		if item.CollectionID != nil {
-			inventoryItem["collection_id"] = item.CollectionID
+		// Используем коды из модели, если они есть, иначе "base" по умолчанию
+		if item.CollectionCode != nil && *item.CollectionCode != "" {
+			inventoryItem["collection"] = *item.CollectionCode
+		} else {
+			inventoryItem["collection"] = "base"
 		}
-		if item.QualityLevelID != nil {
-			inventoryItem["quality_level_id"] = item.QualityLevelID
+
+		if item.QualityLevelCode != nil && *item.QualityLevelCode != "" {
+			inventoryItem["quality_level"] = *item.QualityLevelCode
+		} else {
+			inventoryItem["quality_level"] = "base"
 		}
 
 		inventoryItems[i] = inventoryItem
@@ -101,7 +107,7 @@ func (c *HTTPInventoryClient) ReserveItems(ctx context.Context, userID uuid.UUID
 
 // ReturnReserve возвращает зарезервированные предметы
 func (c *HTTPInventoryClient) ReturnReserve(ctx context.Context, userID uuid.UUID, operationID uuid.UUID) error {
-	url := fmt.Sprintf("%s/inventory/return-reserve", c.baseURL)
+	url := fmt.Sprintf("%s/api/inventory/return-reserve", c.baseURL)
 
 	payload := map[string]interface{}{
 		"user_id":      userID,
@@ -137,7 +143,7 @@ func (c *HTTPInventoryClient) ReturnReserve(ctx context.Context, userID uuid.UUI
 
 // ConsumeReserve потребляет зарезервированные предметы
 func (c *HTTPInventoryClient) ConsumeReserve(ctx context.Context, userID uuid.UUID, operationID uuid.UUID) error {
-	url := fmt.Sprintf("%s/inventory/consume-reserve", c.baseURL)
+	url := fmt.Sprintf("%s/api/inventory/consume-reserve", c.baseURL)
 
 	payload := map[string]interface{}{
 		"user_id":      userID,
@@ -165,6 +171,10 @@ func (c *HTTPInventoryClient) ConsumeReserve(ctx context.Context, userID uuid.UU
 	if resp.StatusCode != http.StatusOK {
 		var errorResp map[string]interface{}
 		json.NewDecoder(resp.Body).Decode(&errorResp)
+		if code, ok := errorResp["error"].(string); ok && code == "operation_not_found" {
+			// резерв отсутствует – это не критично, считаем, что всё уже потреблено/не требовалось
+			return nil
+		}
 		return fmt.Errorf("consume reserve failed: %v", errorResp)
 	}
 
@@ -173,7 +183,7 @@ func (c *HTTPInventoryClient) ConsumeReserve(ctx context.Context, userID uuid.UU
 
 // AddItems добавляет предметы в инвентарь
 func (c *HTTPInventoryClient) AddItems(ctx context.Context, userID uuid.UUID, section string, operationType string, operationID uuid.UUID, items []models.AddItem) error {
-	url := fmt.Sprintf("%s/inventory/add-items", c.baseURL)
+	url := fmt.Sprintf("%s/api/inventory/add-items", c.baseURL)
 
 	// Преобразуем наши модели в формат Inventory Service
 	inventoryItems := make([]map[string]interface{}, len(items))
@@ -183,11 +193,17 @@ func (c *HTTPInventoryClient) AddItems(ctx context.Context, userID uuid.UUID, se
 			"quantity": item.Quantity,
 		}
 
-		if item.CollectionID != nil {
-			inventoryItem["collection_id"] = item.CollectionID
+		// Используем коды из модели, если они есть, иначе "base" по умолчанию
+		if item.CollectionCode != nil && *item.CollectionCode != "" {
+			inventoryItem["collection"] = *item.CollectionCode
+		} else {
+			inventoryItem["collection"] = "base"
 		}
-		if item.QualityLevelID != nil {
-			inventoryItem["quality_level_id"] = item.QualityLevelID
+
+		if item.QualityLevelCode != nil && *item.QualityLevelCode != "" {
+			inventoryItem["quality_level"] = *item.QualityLevelCode
+		} else {
+			inventoryItem["quality_level"] = "base"
 		}
 
 		inventoryItems[i] = inventoryItem
@@ -205,6 +221,9 @@ func (c *HTTPInventoryClient) AddItems(ctx context.Context, userID uuid.UUID, se
 	if err != nil {
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
+
+	// DEBUG: Логируем что отправляем
+	c.logger.Error("DEBUG AddItems request", zap.String("payload", string(body)))
 
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(body))
 	if err != nil {

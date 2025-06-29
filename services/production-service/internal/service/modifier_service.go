@@ -127,7 +127,12 @@ func (s *ModifierService) ApplyProductionTimeModifiers(baseTime int, modifiers [
 
 	// Применяем скоростные бонусы
 	finalTime := float64(baseTime) * (1 - speedBonus)
-	if finalTime < 1 {
+
+	// Мгновенные задания (базовое время 0) остаются мгновенными
+	if baseTime == 0 {
+		finalTime = 0
+	} else if finalTime < 1 {
+		// Обычные задания не могут быть быстрее 1 секунды
 		finalTime = 1
 	}
 
@@ -169,7 +174,7 @@ func (s *ModifierService) ApplyQuantityModifiers(minQty, maxQty int, modifiers [
 }
 
 // ApplyProbabilityModifiers применяет модификаторы вероятности к шансам выпадения
-func (s *ModifierService) ApplyProbabilityModifiers(baseProbability int, modifiers []Modifier) ModificationResult {
+func (s *ModifierService) ApplyProbabilityModifiers(baseProbability float64, modifiers []Modifier) ModificationResult {
 	probabilityBonus := 0.0
 	var appliedModifiers []AppliedModifierInfo
 
@@ -188,7 +193,7 @@ func (s *ModifierService) ApplyProbabilityModifiers(baseProbability int, modifie
 	}
 
 	// Применяем бонусы вероятности
-	finalProbability := int(math.Min(100, float64(baseProbability)*(1+probabilityBonus)))
+	finalProbability := math.Min(100.0, baseProbability*(1+probabilityBonus))
 
 	return ModificationResult{
 		OriginalValue:    baseProbability,

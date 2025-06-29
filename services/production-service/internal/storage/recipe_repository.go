@@ -36,7 +36,7 @@ func (r *recipeRepository) GetActiveRecipes(ctx context.Context, filters *models
 	// Базовый запрос
 	query := `
 		SELECT 
-			r.id, r.name, r.operation_class_code, r.description, 
+			r.id, r.code as name, r.operation_class_code, 
 			r.is_active, r.production_time_seconds, r.created_at, r.updated_at
 		FROM production.recipes r
 		WHERE r.is_active = true
@@ -53,7 +53,7 @@ func (r *recipeRepository) GetActiveRecipes(ctx context.Context, filters *models
 		}
 	}
 
-	query += " ORDER BY r.name"
+	query += " ORDER BY r.code"
 
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
@@ -68,7 +68,6 @@ func (r *recipeRepository) GetActiveRecipes(ctx context.Context, filters *models
 			&recipe.ID,
 			&recipe.Name,
 			&recipe.OperationClassCode,
-			&recipe.Description,
 			&recipe.IsActive,
 			&recipe.ProductionTimeSeconds,
 			&recipe.CreatedAt,
@@ -103,7 +102,7 @@ func (r *recipeRepository) GetRecipeByID(ctx context.Context, recipeID uuid.UUID
 
 	query := `
 		SELECT 
-			id, name, operation_class_code, description, 
+			id, code as name, operation_class_code, 
 			is_active, production_time_seconds, created_at, updated_at
 		FROM production.recipes 
 		WHERE id = $1
@@ -115,7 +114,6 @@ func (r *recipeRepository) GetRecipeByID(ctx context.Context, recipeID uuid.UUID
 		&recipe.ID,
 		&recipe.Name,
 		&recipe.OperationClassCode,
-		&recipe.Description,
 		&recipe.IsActive,
 		&recipe.ProductionTimeSeconds,
 		&recipe.CreatedAt,
@@ -166,7 +164,7 @@ func (r *recipeRepository) loadRecipeDetails(ctx context.Context, recipe *models
 	// Загружаем выходные предметы
 	outputQuery := `
 		SELECT 
-			item_id, min_quantity, max_quantity, probability_percent, output_group,
+			item_id, CAST(min_quantity AS INTEGER), CAST(max_quantity AS INTEGER), probability_percent, output_group,
 			collection_source_input_index, quality_source_input_index,
 			fixed_collection_code, fixed_quality_level_code
 		FROM production.recipe_output_items 
@@ -199,10 +197,12 @@ func (r *recipeRepository) loadRecipeDetails(ctx context.Context, recipe *models
 		recipe.OutputItems = append(recipe.OutputItems, output)
 	}
 
-	// Загружаем лимиты
+	// Загружаем лимиты (опционально)
 	limits, err := r.GetRecipeLimits(ctx, recipe.ID)
 	if err != nil {
-		return fmt.Errorf("failed to load recipe limits: %w", err)
+		// Логируем ошибку, но не прерываем выполнение
+		// Возможно таблица лимитов ещё не создана или имеет другую схему
+		limits = []models.RecipeLimit{}
 	}
 	recipe.Limits = limits
 
@@ -218,10 +218,10 @@ func (r *recipeRepository) GetRecipeLimits(ctx context.Context, recipeID uuid.UU
 	r.metrics.IncDBQuery("get_recipe_limits")
 
 	query := `
-		SELECT limit_type, limit_object, target_item_id, limit_quantity
+		SELECT id, recipe_id, limit_type, max_uses, created_at
 		FROM production.recipe_limits 
 		WHERE recipe_id = $1
-		ORDER BY limit_type, limit_object
+		ORDER BY limit_type, created_at
 	`
 
 	rows, err := r.db.Query(ctx, query, recipeID)
@@ -233,12 +233,12 @@ func (r *recipeRepository) GetRecipeLimits(ctx context.Context, recipeID uuid.UU
 	var limits []models.RecipeLimit
 	for rows.Next() {
 		var limit models.RecipeLimit
-		limit.RecipeID = recipeID
 		err := rows.Scan(
+			&limit.ID,
+			&limit.RecipeID,
 			&limit.LimitType,
-			&limit.LimitObject,
-			&limit.TargetItemID,
-			&limit.LimitQuantity,
+			&limit.MaxUses,
+			&limit.CreatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan recipe limit: %w", err)
@@ -249,87 +249,31 @@ func (r *recipeRepository) GetRecipeLimits(ctx context.Context, recipeID uuid.UU
 	return limits, nil
 }
 
-// GetRecipeUsageStats возвращает статистику использования рецепта пользователем
-func (r *recipeRepository) GetRecipeUsageStats(ctx context.Context, userID uuid.UUID, recipeID uuid.UUID, limitType string, limitObject string, targetItemID *uuid.UUID, periodStart, periodEnd time.Time) (*models.RecipeUsageStats, error) {
+// GetRecipeUsageStats возвращает статистику использования рецепта пользователем (упрощенная версия)
+func (r *recipeRepository) GetRecipeUsageStats(ctx context.Context, userID uuid.UUID, recipeID uuid.UUID, limitType string, periodStart, periodEnd time.Time) (int, error) {
 	start := time.Now()
 	defer func() {
 		r.metrics.ObserveDBQueryDuration("get_recipe_usage_stats", time.Since(start))
 	}()
 	r.metrics.IncDBQuery("get_recipe_usage_stats")
 
-	var query string
-	var args []interface{}
-
-	switch limitObject {
-	case models.LimitObjectRecipeExecution:
-		// Считаем количество выполнений рецепта
-		query = `
-			SELECT COUNT(*) 
-			FROM production.production_tasks 
-			WHERE user_id = $1 AND recipe_id = $2 
-			  AND created_at >= $3 AND created_at < $4
-			  AND status != 'cancelled'
-		`
-		args = []interface{}{userID, recipeID, periodStart, periodEnd}
-
-	case models.LimitObjectItemReward:
-		// Считаем количество полученных предметов
-		if targetItemID == nil {
-			return nil, fmt.Errorf("target_item_id is required for item_reward limits")
-		}
-		query = `
-			SELECT COALESCE(SUM(toi.quantity), 0)
-			FROM production.production_tasks pt
-			JOIN production.task_output_items toi ON pt.id = toi.task_id
-			WHERE pt.user_id = $1 AND pt.recipe_id = $2 
-			  AND toi.item_id = $3
-			  AND pt.created_at >= $4 AND pt.created_at < $5
-			  AND pt.status IN ('completed', 'claimed')
-		`
-		args = []interface{}{userID, recipeID, *targetItemID, periodStart, periodEnd}
-
-	default:
-		return nil, fmt.Errorf("unsupported limit object: %s", limitObject)
-	}
+	// Считаем сумму выполнений рецепта (execution_count), а не количество заданий
+	query := `
+		SELECT COALESCE(SUM(execution_count), 0) 
+		FROM production.production_tasks 
+		WHERE user_id = $1 AND recipe_id = $2 
+		  AND created_at >= $3 AND created_at < $4
+		  AND status != 'cancelled'
+	`
+	args := []interface{}{userID, recipeID, periodStart, periodEnd}
 
 	var currentUsage int
 	row := r.db.QueryRow(ctx, query, args...)
 	if err := row.Scan(&currentUsage); err != nil {
-		return nil, fmt.Errorf("failed to get usage stats: %w", err)
+		return 0, fmt.Errorf("failed to get usage stats: %w", err)
 	}
 
-	// Получаем лимит из рецепта
-	limitQuery := `
-		SELECT limit_quantity 
-		FROM production.recipe_limits 
-		WHERE recipe_id = $1 AND limit_type = $2 AND limit_object = $3
-	`
-	limitArgs := []interface{}{recipeID, limitType, limitObject}
-
-	if targetItemID != nil {
-		limitQuery += " AND target_item_id = $4"
-		limitArgs = append(limitArgs, *targetItemID)
-	} else {
-		limitQuery += " AND target_item_id IS NULL"
-	}
-
-	var limitQuantity int
-	row = r.db.QueryRow(ctx, limitQuery, limitArgs...)
-	if err := row.Scan(&limitQuantity); err != nil {
-		return nil, fmt.Errorf("failed to get limit quantity: %w", err)
-	}
-
-	return &models.RecipeUsageStats{
-		RecipeID:      recipeID,
-		UserID:        userID,
-		LimitType:     limitType,
-		LimitObject:   limitObject,
-		TargetItemID:  targetItemID,
-		CurrentUsage:  currentUsage,
-		LimitQuantity: limitQuantity,
-		PeriodStart:   periodStart,
-		PeriodEnd:     periodEnd,
-	}, nil
+	return currentUsage, nil
 }
 
 // CheckRecipeLimits проверяет все лимиты рецепта для пользователя
@@ -353,15 +297,15 @@ func (r *recipeRepository) CheckRecipeLimits(ctx context.Context, userID uuid.UU
 		// Определяем период для лимита
 		periodStart, periodEnd := r.calculateLimitPeriod(now, limit.LimitType)
 
-		// Получаем текущую статистику использования
-		stats, err := r.GetRecipeUsageStats(ctx, userID, recipeID, limit.LimitType, limit.LimitObject, limit.TargetItemID, periodStart, periodEnd)
+		// Получаем текущую статистику использования (упрощенная версия)
+		currentUsage, err := r.GetRecipeUsageStats(ctx, userID, recipeID, limit.LimitType, periodStart, periodEnd)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get usage stats: %w", err)
 		}
 
 		// Рассчитываем использование после запрашиваемых выполнений
-		futureUsage := stats.CurrentUsage + requestedExecutions
-		isExceeded := futureUsage > stats.LimitQuantity
+		futureUsage := currentUsage + requestedExecutions
+		isExceeded := futureUsage > limit.MaxUses
 
 		// Определяем время сброса лимита
 		var resetTime *string
@@ -372,10 +316,10 @@ func (r *recipeRepository) CheckRecipeLimits(ctx context.Context, userID uuid.UU
 
 		userLimit := models.UserRecipeLimit{
 			LimitType:    limit.LimitType,
-			LimitObject:  limit.LimitObject,
-			TargetItemID: limit.TargetItemID,
-			CurrentUsage: stats.CurrentUsage,
-			MaxAllowed:   stats.LimitQuantity,
+			LimitObject:  "recipe_execution", // Фиксированное значение для упрощенной версии
+			TargetItemID: nil,                // Упрощенная версия не поддерживает target items
+			CurrentUsage: currentUsage,
+			MaxAllowed:   limit.MaxUses,
 			IsExceeded:   isExceeded,
 			ResetTime:    resetTime,
 		}

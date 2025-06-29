@@ -55,11 +55,16 @@ func (s *MockDataService) GetProfileData(userID string, telegramID int64) models
 func (s *MockDataService) GetProductionSlots(userID string) models.ProductionSlotsResponse {
 	return models.ProductionSlotsResponse{
 		UserID:     userID,
-		TotalSlots: 2,
+		TotalSlots: 3, // 1 chest_opening + 2 smithy
 		Slots: []models.ProductionSlot{
 			{
-				SlotType:            "universal",
-				SupportedOperations: []string{"crafting", "smelting", "chest_opening"},
+				SlotType:            "chest_opening",
+				SupportedOperations: []string{"chest_opening"},
+				Count:               1,
+			},
+			{
+				SlotType:            "smithy",
+				SupportedOperations: []string{"crafting", "smelting"},
 				Count:               2,
 			},
 		},

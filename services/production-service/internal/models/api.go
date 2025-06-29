@@ -1,6 +1,8 @@
 package models
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 )
 
@@ -41,18 +43,22 @@ type BoosterItem struct {
 
 // ReservationItem представляет предмет для резервирования
 type ReservationItem struct {
-	ItemID         uuid.UUID  `json:"item_id"`
-	Quantity       int        `json:"quantity"`
-	CollectionID   *uuid.UUID `json:"collection_id,omitempty"`
-	QualityLevelID *uuid.UUID `json:"quality_level_id,omitempty"`
+	ItemID           uuid.UUID  `json:"item_id"`
+	Quantity         int        `json:"quantity"`
+	CollectionID     *uuid.UUID `json:"collection_id,omitempty"`
+	QualityLevelID   *uuid.UUID `json:"quality_level_id,omitempty"`
+	CollectionCode   *string    `json:"collection_code,omitempty"`
+	QualityLevelCode *string    `json:"quality_level_code,omitempty"`
 }
 
 // AddItem представляет предмет для добавления в инвентарь
 type AddItem struct {
-	ItemID         uuid.UUID  `json:"item_id"`
-	Quantity       int        `json:"quantity"`
-	CollectionID   *uuid.UUID `json:"collection_id,omitempty"`
-	QualityLevelID *uuid.UUID `json:"quality_level_id,omitempty"`
+	ItemID           uuid.UUID  `json:"item_id"`
+	Quantity         int        `json:"quantity"`
+	CollectionID     *uuid.UUID `json:"collection_id,omitempty"`
+	QualityLevelID   *uuid.UUID `json:"quality_level_id,omitempty"`
+	CollectionCode   *string    `json:"collection_code,omitempty"`
+	QualityLevelCode *string    `json:"quality_level_code,omitempty"`
 }
 
 // UserProductionSlots представляет производственные слоты пользователя
@@ -127,10 +133,24 @@ type ClaimResponse struct {
 	UpdatedQueueStatus *QueueResponse   `json:"updated_queue_status,omitempty"`
 }
 
+// PublicProductionTask представляет задание для публичного API (без спойлеров)
+type PublicProductionTask struct {
+	ID             uuid.UUID  `json:"id"`
+	UserID         uuid.UUID  `json:"user_id"`
+	RecipeID       uuid.UUID  `json:"recipe_id"`
+	SlotNumber     int        `json:"slot_number"`
+	Status         string     `json:"status"`
+	StartedAt      *time.Time `json:"started_at,omitempty"`
+	CompletionTime *time.Time `json:"completion_time,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+	// OutputItems намеренно исключены - игрок узнает результат только при claim
+}
+
 // QueueResponse представляет ответ GET /factory/queue
 type QueueResponse struct {
-	Tasks          []ProductionTask `json:"tasks"`
-	AvailableSlots SlotInfo         `json:"available_slots"`
+	Tasks          []PublicProductionTask `json:"tasks"`
+	AvailableSlots SlotInfo               `json:"available_slots"`
 }
 
 // SlotInfo представляет информацию о доступных слотах

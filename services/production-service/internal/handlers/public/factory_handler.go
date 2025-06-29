@@ -44,11 +44,29 @@ func (h *FactoryHandler) GetQueue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Рассчитываем информацию о слотах
-	slotInfo := h.taskService.CalculateSlotInfo(tasks)
+	// Конвертируем в публичный формат (без output_items)
+	publicTasks := h.convertToPublicTasks(tasks)
+	
+	// Логируем для отладки
+	h.logger.Error("DEBUG: Converting tasks to public format", 
+		zap.Int("original_tasks_count", len(tasks)),
+		zap.Int("public_tasks_count", len(publicTasks)))
+	
+	// Проверим первый элемент если есть
+	if len(tasks) > 0 {
+		h.logger.Error("DEBUG: Original task has output_items", 
+			zap.Int("output_items_count", len(tasks[0].OutputItems)))
+	}
+	if len(publicTasks) > 0 {
+		h.logger.Error("DEBUG: Public task type", 
+			zap.String("task_id", publicTasks[0].ID.String()))
+	}
+
+	// Рассчитываем информацию о слотах с данными от User Service
+	slotInfo := h.taskService.CalculateSlotInfoWithUserService(ctx, userID, tasks)
 
 	response := models.QueueResponse{
-		Tasks:          tasks,
+		Tasks:          publicTasks,
 		AvailableSlots: slotInfo,
 	}
 
@@ -258,4 +276,24 @@ func (h *FactoryHandler) writeError(w http.ResponseWriter, statusCode int, error
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	json.NewEncoder(w).Encode(response)
+}
+
+// convertToPublicTasks конвертирует ProductionTask в PublicProductionTask (убирает спойлеры)
+func (h *FactoryHandler) convertToPublicTasks(tasks []models.ProductionTask) []models.PublicProductionTask {
+	publicTasks := make([]models.PublicProductionTask, len(tasks))
+	for i, task := range tasks {
+		publicTasks[i] = models.PublicProductionTask{
+			ID:             task.ID,
+			UserID:         task.UserID,
+			RecipeID:       task.RecipeID,
+			SlotNumber:     task.SlotNumber,
+			Status:         task.Status,
+			StartedAt:      task.StartedAt,
+			CompletionTime: task.CompletionTime,
+			CreatedAt:      task.CreatedAt,
+			UpdatedAt:      task.UpdatedAt,
+			// OutputItems намеренно исключены
+		}
+	}
+	return publicTasks
 }

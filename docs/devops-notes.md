@@ -57,6 +57,13 @@ go run .
 npx https://github.com/google-gemini/gemini-cli
 ```
 
+Запрос в БД - список рецептов
+```bash
+docker compose -f deploy/dev/docker-compose.yml exec -T postgres \
+  psql -U slcw_user -d shard_legends_dev \
+  -c "SELECT id, code, operation_class_code, is_active FROM production.recipes;"
+```
+
   1. Откройте Grafana: http://localhost:15000
   2. Войдите: admin / 
   3. Проверьте логи:

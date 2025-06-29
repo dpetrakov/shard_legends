@@ -26,6 +26,17 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      inventory-service:
+        condition: service_healthy
+      production-service:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      telegram-bot-service:
+        condition: service_healthy
 
   # Frontend service
   frontend:
@@ -200,7 +211,7 @@ services:
       dockerfile: Dockerfile
     container_name: slcw-production-service-dev
     ports:
-      - "127.0.0.1:22004:8090"  # Internal port for nginx
+      - "127.0.0.1:22004:8090"  # Internal API port for development access
     environment:
       # Required configuration (PROD_SVC_ prefix)
       - PROD_SVC_DATABASE_URL=postgresql://${POSTGRES_USER:-slcw_user}:${POSTGRES_PASSWORD:-dev_password_2024}@postgres:5432/${POSTGRES_DB:-shard_legends_dev}?sslmode=disable
@@ -211,7 +222,7 @@ services:
       - PROD_SVC_SERVER_INTERNAL_PORT=8090
       - PROD_SVC_AUTH_PUBLIC_KEY_URL=http://auth-service:8090/public-key.pem
       - PROD_SVC_EXTERNAL_SERVICES_INVENTORY_SERVICE_BASE_URL=http://inventory-service:8090
-      - PROD_SVC_EXTERNAL_SERVICES_USER_SERVICE_BASE_URL=http://user-service:8080
+      - PROD_SVC_EXTERNAL_SERVICES_USER_SERVICE_BASE_URL=http://user-service:8090
       # Optional configuration with dev-optimized values
       - PROD_SVC_DATABASE_MAX_CONNECTIONS=25
       - PROD_SVC_REDIS_MAX_CONNECTIONS=10

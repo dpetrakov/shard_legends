@@ -122,9 +122,9 @@ func (c *ProductionCalculator) calculateSingleExecution(ctx context.Context, cal
 	for _, item := range ungroupedItems {
 		// Применяем модификаторы вероятности
 		probResult := c.modifierService.ApplyProbabilityModifiers(item.ProbabilityPercent, calcCtx.Modifiers)
-		finalProbability := probResult.ModifiedValue.(int)
+		finalProbability := probResult.ModifiedValue.(float64)
 
-		roll := c.rng.Intn(100)
+		roll := c.rng.Float64() * 100
 		if roll < finalProbability {
 			output, err := c.createOutputItem(ctx, item, calcCtx)
 			if err != nil {
@@ -142,17 +142,17 @@ func (c *ProductionCalculator) selectFromGroup(groupItems []models.RecipeOutputI
 	// Применяем модификаторы вероятности к каждому предмету в группе
 	var modifiedItems []struct {
 		item        models.RecipeOutputItem
-		probability int
+		probability float64
 	}
 
-	totalProbability := 0
+	totalProbability := 0.0
 	for _, item := range groupItems {
 		probResult := c.modifierService.ApplyProbabilityModifiers(item.ProbabilityPercent, modifiers)
-		finalProbability := probResult.ModifiedValue.(int)
+		finalProbability := probResult.ModifiedValue.(float64)
 
 		modifiedItems = append(modifiedItems, struct {
 			item        models.RecipeOutputItem
-			probability int
+			probability float64
 		}{
 			item:        item,
 			probability: finalProbability,
@@ -165,8 +165,8 @@ func (c *ProductionCalculator) selectFromGroup(groupItems []models.RecipeOutputI
 	}
 
 	// Выбираем предмет по накопленным вероятностям
-	roll := c.rng.Intn(totalProbability)
-	currentProb := 0
+	roll := c.rng.Float64() * totalProbability
+	currentProb := 0.0
 
 	for _, modItem := range modifiedItems {
 		currentProb += modItem.probability
@@ -250,7 +250,7 @@ func (c *ProductionCalculator) processQualityInheritance(ctx context.Context, ou
 		output.QualityLevelCode = recipeOutput.FixedQualityLevelCode
 
 		// Конвертируем код в UUID
-		qualityID, err := c.classifierRepo.ConvertCodeToUUID(ctx, "quality_levels", *recipeOutput.FixedQualityLevelCode)
+		qualityID, err := c.classifierRepo.ConvertCodeToUUID(ctx, "quality_level", *recipeOutput.FixedQualityLevelCode)
 		if err != nil {
 			c.logger.Warn("Failed to convert quality code to UUID",
 				zap.String("code", *recipeOutput.FixedQualityLevelCode),

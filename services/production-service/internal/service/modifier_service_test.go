@@ -101,6 +101,18 @@ func TestModifierService_ApplyProductionTimeModifiers(t *testing.T) {
 			},
 			expectedTime: 1, // Should not go below 1
 		},
+		{
+			name:     "Instant task (0 seconds) remains instant",
+			baseTime: 0,
+			modifiers: []Modifier{
+				{
+					ID:    uuid.New(),
+					Type:  ModifierTypeSpeed,
+					Value: 0.5, // 50% speed bonus
+				},
+			},
+			expectedTime: 0, // Should remain 0 for instant tasks
+		},
 	}
 
 	for _, tt := range tests {
@@ -219,9 +231,9 @@ func TestModifierService_ApplyProbabilityModifiers(t *testing.T) {
 
 	tests := []struct {
 		name                string
-		baseProbability     int
+		baseProbability     float64
 		modifiers           []Modifier
-		expectedProbability int
+		expectedProbability float64
 	}{
 		{
 			name:                "No modifiers",
