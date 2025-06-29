@@ -1,8 +1,7 @@
-
 "use client";
 
 import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from '@/components/ui/button';
@@ -24,6 +23,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Archive, Gem, FlaskConical, Wrench } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 import { useChests } from "@/contexts/ChestContext";
 import { useInventory } from "@/contexts/InventoryContext";
@@ -34,11 +35,19 @@ import type { ChestType } from '@/types/profile';
 import type { LootResult, InventoryItemType, BlueprintType, ResourceType, ProcessedItemType, ReagentType, CraftedToolType } from '@/types/inventory';
 import { AllResourceTypes, AllReagentTypes, AllBlueprintTypes, AllProcessedItemTypes, AllCraftedToolTypes } from '@/types/inventory';
 
+const TABS = [
+  { value: 'chests', label: 'Сундуки', icon: <Archive className="w-6 h-6" /> },
+  { value: 'resources', label: 'Ресурсы', icon: <Gem className="w-6 h-6" /> },
+  { value: 'reagents', label: 'Реагенты', icon: <FlaskConical className="w-6 h-6" /> },
+  { value: 'tools', label: 'Инструменты', icon: <Wrench className="w-6 h-6" /> },
+] as const;
+
 
 export default function InventoryPage() {
   const { chestCounts, getChestName, spendChests } = useChests();
   const { inventory, addItems, getItemName } = useInventory();
 
+  const [activeTab, setActiveTab] = useState<(typeof TABS)[number]['value']>('chests');
   const [selectedChest, setSelectedChest] = useState<ChestType | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAlertOpen, setIsAlertOpen] = useState(false);
@@ -175,20 +184,20 @@ export default function InventoryPage() {
   const ItemGrid = ({ items, imageMap, title }: { items: InventoryItemType[], imageMap: Record<string, string>, title?: string }) => (
     items.length > 0 ? (
       <div>
-        {title && <h4 className="text-lg font-semibold text-primary mb-2">{title}</h4>}
+        {title && <h4 className="text-lg font-semibold text-primary mb-4">{title}</h4>}
         <div className="grid grid-cols-4 sm:grid-cols-5 gap-4">
           {items.map(item => (
-            <div key={item} className="flex flex-col items-center justify-center space-y-1">
-              <div className="bg-black/20 p-2 rounded-lg border border-white/10">
-                <Image
-                  src={imageMap[item as keyof typeof imageMap]}
-                  alt={getItemName(item)}
-                  width={48}
-                  height={48}
-                  className="rounded-md"
-                />
-              </div>
-              <span className="font-bold text-sm text-primary">{formatNumber(inventory[item] || 0)}</span>
+            <div key={item} className="relative aspect-square flex items-center justify-center">
+              <Image
+                src={imageMap[item as keyof typeof imageMap]}
+                alt={getItemName(item)}
+                width={64}
+                height={64}
+                className="w-full h-full object-contain"
+              />
+              <span className="absolute bottom-0 right-0 bg-background/80 backdrop-blur-sm text-foreground text-xs font-bold px-1.5 py-0.5 rounded-full shadow-md">
+                {formatNumber(inventory[item] || 0)}
+              </span>
             </div>
           ))}
         </div>
@@ -200,25 +209,37 @@ export default function InventoryPage() {
     <>
       <div className="flex flex-col items-center justify-start min-h-full p-4 text-foreground">
         <Card className="w-full max-w-md bg-card/80 backdrop-blur-md shadow-xl">
-          <CardHeader>
-            <CardTitle className="text-3xl font-headline text-center text-primary">Инвентарь</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-2">
-            <Tabs defaultValue="chests" className="w-full">
-              <TabsList className="grid w-full grid-cols-4 mb-4 text-xs sm:text-sm">
-                <TabsTrigger value="chests">Сундуки</TabsTrigger>
-                <TabsTrigger value="resources">Ресурсы</TabsTrigger>
-                <TabsTrigger value="reagents">Реагенты</TabsTrigger>
-                <TabsTrigger value="tools">Инструменты</TabsTrigger>
+          <CardContent className="p-2 sm:p-4">
+            <Tabs defaultValue="chests" onValueChange={(value) => setActiveTab(value as any)} className="w-full">
+              <TabsList className="flex w-full items-center justify-around rounded-lg p-1 mb-4">
+                 {TABS.map((tab) => {
+                  const isActive = activeTab === tab.value;
+                  return (
+                    <TabsTrigger
+                      key={tab.value}
+                      value={tab.value}
+                      className={cn(
+                        "flex flex-col items-center justify-center transition-all duration-300 ease-in-out rounded-lg p-0",
+                        "data-[state=active]:bg-primary/20 data-[state=active]:shadow-lg",
+                        isActive
+                          ? "h-16 w-24 gap-1 text-primary"
+                          : "h-14 w-14 text-muted-foreground hover:bg-muted/50"
+                      )}
+                    >
+                      {tab.icon}
+                      {isActive && <span className="text-xs font-medium mt-1">{tab.label}</span>}
+                    </TabsTrigger>
+                  )
+                })}
               </TabsList>
 
               <TabsContent value="chests">
                 <ScrollArea className="h-96 w-full rounded-md border p-4 bg-background/50 shadow-inner">
-                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-4 sm:grid-cols-5 gap-4">
                     {ownedChests.map(chestType => (
                       <div
                         key={chestType}
-                        className="relative flex flex-col items-center justify-start p-1 space-y-1 cursor-pointer transition-transform hover:scale-105"
+                        className="relative aspect-square flex items-center justify-center cursor-pointer transition-transform hover:scale-105"
                         onClick={() => handleChestClick(chestType)}
                         role="button"
                         tabIndex={0}
@@ -229,14 +250,11 @@ export default function InventoryPage() {
                           alt={getChestName(chestType)}
                           width={64}
                           height={64}
-                          className="rounded-md"
+                          className="w-full h-full object-contain"
                           data-ai-hint={chestImageMap[chestType] ? undefined : chestDetails[chestType]?.hint || 'treasure chest'}
                         />
-                        <p className="text-center text-xs text-muted-foreground leading-tight min-h-[2rem] flex items-center justify-center">
-                          {getChestName(chestType)}
-                        </p>
-                        <span className="absolute -bottom-1 -right-1 bg-primary text-primary-foreground text-xs font-bold px-1.5 py-0.5 rounded-full shadow-md">
-                          {chestCounts[chestType]}
+                        <span className="absolute bottom-0 right-0 bg-background/80 backdrop-blur-sm text-foreground text-xs font-bold px-1.5 py-0.5 rounded-full shadow-md">
+                          {formatNumber(chestCounts[chestType] || 0)}
                         </span>
                       </div>
                     ))}
@@ -326,5 +344,3 @@ export default function InventoryPage() {
     </>
   );
 }
-
-    

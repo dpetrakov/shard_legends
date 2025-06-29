@@ -5,9 +5,11 @@ import React, { createContext, useContext, useState, useEffect, type ReactNode, 
 import type { CraftingContextType, ActiveCraftingProcess, CraftingRecipeInfo } from '@/types/crafting';
 import { useInventory } from './InventoryContext';
 import { TOOL_QUALITIES, CRAFTING_COST_PER_ITEM, CRAFTING_DURATION_SECONDS_PER_ITEM, getCraftedToolId } from '@/lib/crafting-definitions';
+import type { ActiveProcess } from '@/types/refining';
 
 const CRAFTING_STORAGE_KEY = 'crystalCascadeCraftingProcesses';
-const MAX_CRAFTING_SLOTS = 2;
+const REFINING_STORAGE_KEY = 'crystalCascadeRefiningProcesses';
+const MAX_FACTORY_SLOTS = 2;
 
 const CraftingContext = createContext<CraftingContextType | undefined>(undefined);
 
@@ -36,10 +38,14 @@ export const CraftingProvider = ({ children }: { children: ReactNode }) => {
     }, [activeProcesses, isLoaded]);
 
     const startProcess = useCallback((recipeInfo: CraftingRecipeInfo, quantity: number): boolean => {
-        if (activeProcesses.length >= MAX_CRAFTING_SLOTS) {
-            alert("Все слоты крафта заняты.");
+        const storedRefining = localStorage.getItem(REFINING_STORAGE_KEY);
+        const refiningProcesses: ActiveProcess[] = storedRefining ? JSON.parse(storedRefining) : [];
+
+        if (activeProcesses.length + refiningProcesses.length >= MAX_FACTORY_SLOTS) {
+            alert("Все слоты кузницы заняты.");
             return false;
         }
+
         if (!recipeInfo.tool || !recipeInfo.quality || quantity <= 0) {
             alert("Выберите инструмент, качество и корректное количество.");
             return false;
@@ -52,8 +58,8 @@ export const CraftingProvider = ({ children }: { children: ReactNode }) => {
         }
 
         const itemsToSpend = {
-            [recipeInfo.tool]: quantity, // Blueprints
-            [qualityInfo.material]: CRAFTING_COST_PER_ITEM * quantity, // Processed materials
+            [recipeInfo.tool]: quantity,
+            [qualityInfo.material]: CRAFTING_COST_PER_ITEM * quantity,
         };
 
         const canAfford = Object.keys(itemsToSpend).every(itemKey => {
@@ -99,7 +105,7 @@ export const CraftingProvider = ({ children }: { children: ReactNode }) => {
 
     const processSlots = {
         current: activeProcesses.length,
-        max: MAX_CRAFTING_SLOTS,
+        max: MAX_FACTORY_SLOTS,
     };
 
     return (

@@ -10,15 +10,51 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { FlaskConical, Anvil, Sparkles, Wrench, ArrowRight, Plus } from 'lucide-react';
 
 import { REFINING_RECIPES } from '@/lib/refining-definitions';
 import { TOOL_TYPES, TOOL_QUALITIES, CRAFTING_COST_PER_ITEM, CRAFTING_DURATION_SECONDS_PER_ITEM, getCraftedToolId } from '@/lib/crafting-definitions';
 import type { RefiningRecipe } from '@/types/refining';
-import type { BlueprintType, CraftedToolType } from '@/types/inventory';
+import type { BlueprintType, CraftedToolType, InventoryItemType, ResourceType, ReagentType, ProcessedItemType } from '@/types/inventory';
 import { useInventory } from '@/contexts/InventoryContext';
 import { useRefining } from '@/contexts/RefiningContext';
 import { useCrafting } from '@/contexts/CraftingContext';
 import { useMining } from '@/contexts/MiningContext';
+
+const resourceImageMap: Record<ResourceType, string> = {
+    stone: '/images/stone.png',
+    wood: '/images/wood.png',
+    ore: '/images/ore.png',
+    diamond: '/images/almaz.png',
+};
+
+const reagentImageMap: Record<ReagentType, string> = {
+    abrasive: '/images/ing-abraziv.png',
+    disc: '/images/ing-disk.png',
+    inductor: '/images/ing-ore.png',
+    paste: '/images/ing-pasta.png',
+};
+
+const processedItemImageMap: Record<ProcessedItemType, string> = {
+    wood_plank: '/images/block-wood.png',
+    stone_block: '/images/block-stone.png',
+    metal_ingot: '/images/block-ore.png',
+    cut_diamond: '/images/block-almaz.png',
+};
+
+const blueprintImageMap: Record<BlueprintType, string> = {
+    axe: '/images/blueprint-axie.png',
+    pickaxe: '/images/blueprint-pickaxie.png',
+    shovel: '/images/blueprint-shovel.png',
+    sickle: '/images/blueprint-sickle.png',
+};
+
+const itemImageMap: Record<string, string> = {
+    ...resourceImageMap,
+    ...reagentImageMap,
+    ...processedItemImageMap,
+    ...blueprintImageMap,
+};
 
 const craftedToolImageMap: Record<CraftedToolType, string> = {
     wooden_axe: '/images/axie-wood.png',
@@ -71,111 +107,178 @@ const CountdownTimer = ({ endTime }: { endTime: number }) => {
     return <span>{`${hours}:${minutes}:${seconds}`}</span>;
 };
 
+function ActiveProcessesDisplay() {
+    const { activeProcesses: refiningProcs, claimProcess: claimRefining } = useRefining();
+    const { activeProcesses: craftingProcs, claimProcess: claimCrafting } = useCrafting();
+    const { getItemName } = useInventory();
+
+    const allProcs = [
+        ...refiningProcs.map(p => ({
+            ...p,
+            type: 'refining' as const,
+            name: getItemName(p.recipe.output.item),
+            image: itemImageMap[p.recipe.output.item] as string,
+            claimFn: () => claimRefining(p.id)
+        })),
+        ...craftingProcs.map(p => ({
+            ...p,
+            type: 'crafting' as const,
+            name: p.outputItemName,
+            image: craftedToolImageMap[p.outputItem as CraftedToolType],
+            claimFn: () => claimCrafting(p.id)
+        }))
+    ];
+    
+    const MAX_FACTORY_SLOTS = 2;
+    const totalSlotsUsed = allProcs.length;
+
+    if (totalSlotsUsed === 0) {
+        return <div className="text-center text-muted-foreground py-2">Нет активных процессов</div>;
+    }
+
+    return (
+        <div className="mb-4 space-y-3 pt-4">
+            <div className="flex justify-between items-center px-2">
+                <h4 className="font-headline text-lg text-primary">Активные процессы</h4>
+                <div className="text-sm text-muted-foreground">
+                    Слотов занято: {totalSlotsUsed} / {MAX_FACTORY_SLOTS}
+                </div>
+            </div>
+            {allProcs.map(proc => {
+                const isFinished = Date.now() >= proc.endTime;
+                let totalDuration: number;
+                if (proc.type === 'refining') {
+                    totalDuration = proc.recipe.durationSeconds * proc.quantity * 1000;
+                } else { // crafting
+                    totalDuration = CRAFTING_DURATION_SECONDS_PER_ITEM * proc.quantity * 1000;
+                }
+                const timeElapsed = Date.now() - (proc.endTime - totalDuration);
+                const progress = isFinished ? 100 : Math.min(100, (timeElapsed / totalDuration) * 100);
+
+                return (
+                    <Card key={proc.id} className="bg-card/70 p-3">
+                        <div className="flex items-center gap-3">
+                            <div className="relative flex-shrink-0">
+                                <Image 
+                                    src={proc.image} 
+                                    alt={proc.name} 
+                                    width={48} 
+                                    height={48} 
+                                    className="bg-background/50 rounded-md p-1"
+                                />
+                                <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center border-2 border-card">
+                                    {proc.quantity}
+                                </span>
+                            </div>
+
+                            <div className="flex-grow space-y-1">
+                                <p className="font-semibold text-sm leading-tight">{proc.name}</p>
+                                <Progress value={progress} className="h-2" />
+                                <div className="flex justify-between items-center text-xs text-muted-foreground">
+                                    <CountdownTimer endTime={proc.endTime} />
+                                    <span>{isFinished ? '100%' : `${Math.floor(progress)}%`}</span>
+                                </div>
+                            </div>
+                            
+                            <div className="flex-shrink-0">
+                                <Button onClick={proc.claimFn} disabled={!isFinished} size="sm" className="px-4">
+                                    Забрать
+                                </Button>
+                            </div>
+                        </div>
+                    </Card>
+                );
+            })}
+        </div>
+    );
+}
+
 function RefiningTab() {
     const { inventory, getItemName } = useInventory();
-    const { activeProcesses, startProcess, claimProcess, processSlots } = useRefining();
-    const [quantities, setQuantities] = useState<Record<string, number>>({});
+    const { startProcess, processSlots } = useRefining();
+    const { processSlots: craftingSlots } = useCrafting();
+    const [selectedRecipe, setSelectedRecipe] = useState<RefiningRecipe | null>(REFINING_RECIPES[0] || null);
+    const [quantity, setQuantity] = useState<number>(1);
+    
+    const totalSlotsUsed = processSlots.current + craftingSlots.current;
+    const MAX_FACTORY_SLOTS = 2;
 
-    const handleQuantityChange = (recipeOutput: string, value: string) => {
-        const numValue = parseInt(value, 10);
-        setQuantities(prev => ({
-            ...prev,
-            [recipeOutput]: isNaN(numValue) || numValue < 1 ? 1 : numValue,
-        }));
+    const handleRecipeSelect = (recipe: RefiningRecipe) => {
+        setSelectedRecipe(recipe);
+        setQuantity(1);
+    };
+    
+    const handleStartProcess = () => {
+        if (!selectedRecipe) return;
+        startProcess(selectedRecipe, quantity);
+        setQuantity(1);
     };
 
-    const handleStartProcess = (recipe: RefiningRecipe) => {
-        const quantity = quantities[recipe.output.item] || 1;
-        startProcess(recipe, quantity);
-    };
+    const canAfford = selectedRecipe && selectedRecipe.input.every(
+        (ing) => (inventory[ing.item] || 0) >= ing.quantity * quantity
+    );
 
     return (
         <Card className="bg-background/50 shadow-inner">
-            <CardHeader>
-                <div className="flex justify-between items-center">
-                    <CardTitle className="text-xl font-headline text-accent">Переработка</CardTitle>
-                    <div className="text-sm text-muted-foreground">
-                        Слотов: {processSlots.max - processSlots.current}/{processSlots.max}
-                    </div>
-                </div>
-            </CardHeader>
-            <CardContent className="pt-4 space-y-6">
-                {activeProcesses.length > 0 && (
-                    <div className="space-y-4">
-                        <h4 className="font-headline text-lg text-primary">Активные процессы</h4>
-                        {activeProcesses.map(proc => {
-                             const isFinished = Date.now() >= proc.endTime;
-                             const totalDuration = proc.recipe.durationSeconds * proc.quantity * 1000;
-                             const timeElapsed = Date.now() - (proc.endTime - totalDuration);
-                             const progress = isFinished ? 100 : Math.min(100, (timeElapsed / totalDuration) * 100);
-
-                            return (
-                            <Card key={proc.id} className="bg-card/70">
-                                <CardHeader className="p-4">
-                                    <CardTitle className="text-base">{getItemName(proc.recipe.output.item)} x{proc.quantity}</CardTitle>
-                                </CardHeader>
-                                <CardContent className="p-4 pt-0">
-                                    <Progress value={progress} className="h-2 mb-2" />
-                                    <div className="flex justify-between items-center text-xs text-muted-foreground">
-                                        <CountdownTimer endTime={proc.endTime} />
-                                        <span>{isFinished ? '100%' : `${Math.floor(progress)}%`}</span>
+            <CardContent className="pt-6 space-y-6">
+                 {selectedRecipe ? (
+                    <Card className="bg-card/70 p-4">
+                        <div className="flex items-center justify-center gap-1 sm:gap-2 mb-4 text-primary font-bold">
+                            {selectedRecipe.input.map((ing, index) => (
+                                <React.Fragment key={ing.item}>
+                                    {index > 0 && <Plus className="h-5 w-5 text-muted-foreground" />}
+                                    <div className="flex flex-col items-center w-16 text-center">
+                                        <Image src={itemImageMap[ing.item] as string} alt={getItemName(ing.item)} width={40} height={40} />
+                                        <span className={cn("text-xs mt-1", (inventory[ing.item] || 0) < ing.quantity * quantity ? 'text-destructive' : 'text-muted-foreground')}>
+                                            {ing.quantity * quantity}/{inventory[ing.item] || 0}
+                                        </span>
                                     </div>
-                                </CardContent>
-                                <CardFooter className="p-4 pt-0">
-                                     <Button onClick={() => claimProcess(proc.id)} disabled={!isFinished} className="w-full">
-                                        Забрать
-                                    </Button>
-                                </CardFooter>
-                            </Card>
-                        )})}
+                                </React.Fragment>
+                            ))}
+                            <ArrowRight className="h-6 w-6 mx-1 sm:mx-2 text-primary" />
+                            <div className="flex flex-col items-center w-16 text-center">
+                                <Image src={itemImageMap[selectedRecipe.output.item] as string} alt={getItemName(selectedRecipe.output.item)} width={40} height={40} />
+                                <span className="text-xs mt-1 text-muted-foreground">
+                                    {selectedRecipe.output.quantity * quantity}
+                                </span>
+                            </div>
+                        </div>
+                        <div className="flex gap-2">
+                            <Input
+                                type="number"
+                                min="1"
+                                value={quantity}
+                                onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                                className="w-24"
+                            />
+                            <Button
+                                onClick={handleStartProcess}
+                                disabled={!canAfford || totalSlotsUsed >= MAX_FACTORY_SLOTS}
+                                className="flex-grow"
+                            >
+                                Переплавить
+                            </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground text-center mt-2">Время: {selectedRecipe.durationSeconds * quantity} сек.</p>
+                    </Card>
+                ) : <p className="text-center text-muted-foreground">Выберите предмет для переработки</p>}
+
+                <div>
+                    <h4 className="font-headline text-lg text-primary mb-2 text-center">Выберите, что переработать</h4>
+                    <div className="grid grid-cols-4 gap-3">
+                        {REFINING_RECIPES.map(recipe => (
+                            <button
+                                key={recipe.output.item}
+                                onClick={() => handleRecipeSelect(recipe)}
+                                className={cn(
+                                    "aspect-square flex items-center justify-center bg-card/50 rounded-lg p-2 transition-all border-2",
+                                    selectedRecipe?.output.item === recipe.output.item ? "border-primary ring-2 ring-primary/50 scale-105" : "border-transparent hover:border-primary/50"
+                                )}
+                            >
+                                <Image src={itemImageMap[recipe.output.item] as string} alt={getItemName(recipe.output.item)} width={48} height={48} />
+                            </button>
+                        ))}
                     </div>
-                )}
-                <div className="space-y-4">
-                    <h4 className="font-headline text-lg text-primary">Рецепты</h4>
-                    {REFINING_RECIPES.map(recipe => {
-                        const quantity = quantities[recipe.output.item] || 1;
-                        const canAfford = recipe.input.every(
-                            (ing) => (inventory[ing.item] || 0) >= ing.quantity * quantity
-                        );
-                        return (
-                            <Card key={recipe.output.item} className="bg-card/70">
-                                <CardHeader className="p-4">
-                                    <CardTitle className="text-base">
-                                        {getItemName(recipe.output.item)}
-                                    </CardTitle>
-                                    <CardDescription className="text-xs">
-                                        Время: {recipe.durationSeconds * quantity / 60} мин.
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent className="p-4 pt-0 text-sm space-y-2">
-                                    <p className="font-semibold">Требуется:</p>
-                                    <ul className="list-disc list-inside text-muted-foreground">
-                                        {recipe.input.map(ing => (
-                                            <li key={ing.item} className={ (inventory[ing.item] || 0) < ing.quantity * quantity ? 'text-destructive' : ''}>
-                                                {getItemName(ing.item)}: {ing.quantity * quantity} (у вас: {inventory[ing.item] || 0})
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </CardContent>
-                                <CardFooter className="p-4 pt-0 flex gap-2">
-                                    <Input
-                                        type="number"
-                                        min="1"
-                                        value={quantity}
-                                        onChange={(e) => handleQuantityChange(recipe.output.item, e.target.value)}
-                                        className="w-20"
-                                    />
-                                    <Button
-                                        onClick={() => handleStartProcess(recipe)}
-                                        disabled={!canAfford || processSlots.current >= processSlots.max}
-                                        className="flex-grow"
-                                    >
-                                        Переплавить
-                                    </Button>
-                                </CardFooter>
-                            </Card>
-                        );
-                    })}
                 </div>
             </CardContent>
         </Card>
@@ -184,140 +287,133 @@ function RefiningTab() {
 
 function CraftingTab() {
     const { inventory, getItemName } = useInventory();
-    const { activeProcesses, startProcess, claimProcess, processSlots } = useCrafting();
+    const { startProcess, processSlots } = useCrafting();
+    const { processSlots: refiningSlots } = useRefining();
 
-    const [selectedTool, setSelectedTool] = useState<BlueprintType | undefined>();
-    const [selectedQuality, setSelectedQuality] = useState<string | undefined>();
+    const [selectedCraft, setSelectedCraft] = useState<{ tool: BlueprintType; quality: string; } | null>(null);
     const [quantity, setQuantity] = useState<number>(1);
-
-    const ownedBlueprints = TOOL_TYPES.filter(bp => (inventory[bp] || 0) > 0);
-
-    useEffect(() => {
-        if (ownedBlueprints.length > 0 && !selectedTool) {
-            setSelectedTool(ownedBlueprints[0]);
-        }
-        if (TOOL_QUALITIES.length > 0 && !selectedQuality) {
-            setSelectedQuality(TOOL_QUALITIES[0].id);
-        }
-    }, [ownedBlueprints, selectedTool, selectedQuality]);
     
+    const totalSlotsUsed = processSlots.current + refiningSlots.current;
+    const MAX_FACTORY_SLOTS = 2;
+
+    const allCraftableItems: { tool: BlueprintType; quality: string; }[] = TOOL_TYPES.flatMap(tool => 
+        TOOL_QUALITIES.map(quality => ({ tool, quality: quality.id }))
+    );
+
+    // Auto-select first available if none selected and the user has the blueprint for it
+    useEffect(() => {
+        if (!selectedCraft) {
+            const firstOwnedCraftable = allCraftableItems.find(item => (inventory[item.tool] || 0) > 0);
+            if (firstOwnedCraftable) {
+                setSelectedCraft(firstOwnedCraftable);
+            }
+        }
+    }, [inventory, selectedCraft, allCraftableItems]);
+
+    const handleSelectCraft = (item: { tool: BlueprintType; quality: string; }) => {
+        setSelectedCraft(item);
+        setQuantity(1);
+    }
+
+    const selectedTool = selectedCraft?.tool;
+    const selectedQuality = selectedCraft?.quality;
     const qualityInfo = TOOL_QUALITIES.find(q => q.id === selectedQuality);
     const materialNeeded = qualityInfo ? qualityInfo.material : null;
     const materialCost = materialNeeded ? CRAFTING_COST_PER_ITEM * quantity : 0;
     const blueprintCost = quantity;
 
-    const canAfford = selectedTool && qualityInfo && materialNeeded &&
+    const hasBlueprintForSelected = selectedTool ? (inventory[selectedTool] || 0) > 0 : false;
+    
+    const canAfford = hasBlueprintForSelected && selectedTool && qualityInfo && materialNeeded &&
                       (inventory[selectedTool] || 0) >= blueprintCost &&
                       (inventory[materialNeeded] || 0) >= materialCost;
 
     const handleStartCrafting = () => {
         if (!selectedTool || !selectedQuality) return;
         startProcess({ tool: selectedTool, quality: selectedQuality }, quantity);
+        setQuantity(1); // Reset quantity after starting
     };
 
     return (
         <Card className="bg-background/50 shadow-inner">
-            <CardHeader>
-                <div className="flex justify-between items-center">
-                    <CardTitle className="text-xl font-headline text-accent">Крафт</CardTitle>
-                    <div className="text-sm text-muted-foreground">
-                        Слотов: {processSlots.max - processSlots.current}/{processSlots.max}
-                    </div>
-                </div>
-            </CardHeader>
-            <CardContent className="pt-4 space-y-6">
-                {activeProcesses.length > 0 && (
-                    <div className="space-y-4">
-                        <h4 className="font-headline text-lg text-primary">Активные процессы</h4>
-                        {activeProcesses.map(proc => {
-                            const isFinished = Date.now() >= proc.endTime;
-                            const totalDuration = CRAFTING_DURATION_SECONDS_PER_ITEM * proc.quantity * 1000;
-                            const timeElapsed = Date.now() - (proc.endTime - totalDuration);
-                            const progress = isFinished ? 100 : Math.min(100, (timeElapsed / totalDuration) * 100);
-
-                            return (
-                            <Card key={proc.id} className="bg-card/70">
-                                <CardHeader className="p-4">
-                                    <CardTitle className="text-base">{proc.outputItemName} x{proc.quantity}</CardTitle>
-                                </CardHeader>
-                                <CardContent className="p-4 pt-0">
-                                    <Progress value={progress} className="h-2 mb-2" />
-                                    <div className="flex justify-between items-center text-xs text-muted-foreground">
-                                        <CountdownTimer endTime={proc.endTime} />
-                                        <span>{isFinished ? '100%' : `${Math.floor(progress)}%`}</span>
-                                    </div>
-                                </CardContent>
-                                <CardFooter className="p-4 pt-0">
-                                     <Button onClick={() => claimProcess(proc.id)} disabled={!isFinished} className="w-full">
-                                        Забрать
-                                    </Button>
-                                </CardFooter>
-                            </Card>
-                        )})}
-                    </div>
-                )}
-                <div className="space-y-4">
-                    <h4 className="font-headline text-lg text-primary">Рецепты</h4>
-                    {ownedBlueprints.length > 0 ? (
-                        <Card className="bg-card/70 p-4 space-y-4">
-                             <div className="space-y-2">
-                                <label className="text-sm font-medium">Инструмент (нужен чертеж)</label>
-                                <Select value={selectedTool} onValueChange={(val: BlueprintType) => setSelectedTool(val)}>
-                                    <SelectTrigger><SelectValue placeholder="Выберите инструмент..." /></SelectTrigger>
-                                    <SelectContent>
-                                        {ownedBlueprints.map(bp => (
-                                            <SelectItem key={bp} value={bp}>{getItemName(bp)}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+            <CardContent className="pt-6 space-y-6">
+                <Card className="bg-card/70 p-4">
+                    {selectedTool && selectedQuality && qualityInfo && materialNeeded ? (
+                        <div className="space-y-4">
+                            <div className="flex justify-center items-center gap-2">
+                                <div className="flex flex-col items-center w-16 text-center">
+                                    <Image src={blueprintImageMap[selectedTool]} alt={getItemName(selectedTool)} width={40} height={40} />
+                                    <span className={cn("text-xs mt-1", (inventory[selectedTool] || 0) < blueprintCost ? 'text-destructive' : 'text-muted-foreground')}>
+                                        {blueprintCost}/{inventory[selectedTool] || 0}
+                                    </span>
+                                </div>
+                                <Plus className="h-5 w-5 text-muted-foreground" />
+                                <div className="flex flex-col items-center w-16 text-center">
+                                    <Image src={processedItemImageMap[materialNeeded]} alt={getItemName(materialNeeded)} width={40} height={40} />
+                                     <span className={cn("text-xs mt-1", (inventory[materialNeeded] || 0) < materialCost ? 'text-destructive' : 'text-muted-foreground')}>
+                                        {materialCost}/{inventory[materialNeeded] || 0}
+                                    </span>
+                                </div>
+                                <ArrowRight className="h-6 w-6 mx-1 sm:mx-2 text-primary" />
+                                <div className="flex flex-col items-center w-16 text-center">
+                                    <Image src={craftedToolImageMap[getCraftedToolId(selectedTool, selectedQuality)]} alt={getItemName(getCraftedToolId(selectedTool, selectedQuality))} width={40} height={40} />
+                                    <span className="text-xs mt-1 text-muted-foreground">
+                                        {quantity}
+                                    </span>
+                                </div>
                             </div>
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium">Качество</label>
-                                <Select value={selectedQuality} onValueChange={(val: string) => setSelectedQuality(val)}>
-                                    <SelectTrigger><SelectValue placeholder="Выберите качество..." /></SelectTrigger>
-                                    <SelectContent>
-                                        {TOOL_QUALITIES.map(q => (
-                                            <SelectItem key={q.id} value={q.id}>{q.name}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            
-                            {selectedTool && qualityInfo && materialNeeded && (
-                                <CardContent className="p-0 text-sm space-y-2">
-                                    <p className="font-semibold">Требуется на {quantity} шт.:</p>
-                                    <ul className="list-disc list-inside text-muted-foreground">
-                                        <li className={(inventory[selectedTool] || 0) < blueprintCost ? 'text-destructive' : ''}>
-                                            {getItemName(selectedTool)}: {blueprintCost} (у вас: {inventory[selectedTool] || 0})
-                                        </li>
-                                        <li className={(inventory[materialNeeded] || 0) < materialCost ? 'text-destructive' : ''}>
-                                            {getItemName(materialNeeded)}: {materialCost} (у вас: {inventory[materialNeeded] || 0})
-                                        </li>
-                                    </ul>
-                                    <p>Время: {CRAFTING_DURATION_SECONDS_PER_ITEM * quantity / 60} мин.</p>
-                                </CardContent>
-                            )}
 
-                            <CardFooter className="p-0 pt-2 flex gap-2">
+                            <div className="flex gap-2">
                                 <Input
                                     type="number"
                                     min="1"
                                     value={quantity}
                                     onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                                    className="w-20"
+                                    className="w-24"
                                 />
                                 <Button
                                     onClick={handleStartCrafting}
-                                    disabled={!canAfford || processSlots.current >= processSlots.max}
+                                    disabled={!canAfford || totalSlotsUsed >= MAX_FACTORY_SLOTS}
                                     className="flex-grow"
                                 >
                                     Создать
                                 </Button>
-                            </CardFooter>
-                        </Card>
+                            </div>
+                            <p className="text-xs text-muted-foreground text-center mt-2">Время: {CRAFTING_DURATION_SECONDS_PER_ITEM * quantity} сек.</p>
+                        </div>
                     ) : (
-                        <p className="text-center text-muted-foreground py-4">У вас нет чертежей для создания инструментов.</p>
+                        <p className="text-center text-muted-foreground">Выберите предмет для создания.</p>
                     )}
+                </Card>
+
+                <div>
+                    <h4 className="font-headline text-lg text-primary mb-2 text-center">Выберите, что создать</h4>
+                    <div className="grid grid-cols-4 gap-3">
+                        {allCraftableItems.map(item => {
+                            const toolId = getCraftedToolId(item.tool, item.quality);
+                            const isSelected = selectedCraft?.tool === item.tool && selectedCraft?.quality === item.quality;
+                            const hasBlueprint = (inventory[item.tool] || 0) > 0;
+                            return (
+                                <button
+                                    key={toolId}
+                                    onClick={() => hasBlueprint && handleSelectCraft(item)}
+                                    disabled={!hasBlueprint}
+                                    className={cn(
+                                        "aspect-square flex items-center justify-center bg-card/50 rounded-lg p-2 transition-all border-2",
+                                        isSelected ? "border-primary ring-2 ring-primary/50 scale-105" : "border-transparent",
+                                        hasBlueprint ? "hover:border-primary/50 cursor-pointer" : "opacity-50 grayscale cursor-not-allowed"
+                                    )}
+                                >
+                                    <Image src={craftedToolImageMap[toolId]} alt={getItemName(toolId)} width={48} height={48} />
+                                    {!hasBlueprint && (
+                                        <div className="absolute inset-0 bg-black/60 flex items-center justify-center rounded-lg">
+                                            <p className="text-white text-xs font-bold text-center">Нет чертежа</p>
+                                        </div>
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </div>
                 </div>
             </CardContent>
         </Card>
@@ -384,12 +480,15 @@ function RepairingTab() {
     );
 }
 
-const SharpeningTab = () => {
+function SharpeningTab() {
     const { getItemName, inventory } = useInventory();
     const [toolType, setToolType] = useState<BlueprintType>('pickaxe');
     const [quality, setQuality] = useState<string>('wooden');
     const [selectedLevel, setSelectedLevel] = useState<number | null>(null);
     const [quantity, setQuantity] = useState(1);
+
+    const SHARPENING_DURATION_SECONDS = 120; // Placeholder
+    const SHARPENING_GOLD_COST_MULTIPLIER = 1000; // Placeholder
 
     const toolTypeDisplayNames: Record<BlueprintType, string> = {
         axe: 'Топор',
@@ -411,7 +510,7 @@ const SharpeningTab = () => {
         10: 'bg-yellow-500/30 border-yellow-500/70 text-yellow-300 font-bold',
     };
 
-    const getSharpenedItemName = (level: number) => {
+    const getSharpenedItemName = (level: number): string => {
         const baseToolId = getCraftedToolId(toolType, quality);
         const baseToolName = getItemName(baseToolId);
         if (level > 0) {
@@ -419,127 +518,158 @@ const SharpeningTab = () => {
         }
         return baseToolName;
     };
-
-    const selectedToolImage = craftedToolImageMap[getCraftedToolId(toolType, quality)];
-
-    const getRequiredItemInfo = () => {
-        if (!selectedLevel) return null;
-
-        if (selectedLevel === 1) {
-            const baseToolId = getCraftedToolId(toolType, quality);
-            return {
-                name: getItemName(baseToolId),
-                countInInventory: inventory[baseToolId] || 0
-            };
-        } else {
-            return {
-                name: getSharpenedItemName(selectedLevel - 1),
-                // Inventory system doesn't support sharpened items yet.
-                countInInventory: 0
-            };
-        }
-    };
     
-    const requiredItemInfo = getRequiredItemInfo();
+    const selectedToolBaseImage = craftedToolImageMap[getCraftedToolId(toolType, quality)];
+    const requiredItemName = selectedLevel ? getSharpenedItemName(selectedLevel - 1) : '';
+    // Simplified inventory check: only checks for base (level 0) items.
+    const requiredItemCountInInv = selectedLevel === 1 ? (inventory[getCraftedToolId(toolType, quality)] || 0) : 0;
+    const requiredItemsForOne = 2;
+    const totalRequired = requiredItemsForOne * quantity;
+    const canAfford = requiredItemCountInInv >= totalRequired; // Only for level 1 sharpening for now
 
     return (
         <Card className="bg-background/50 shadow-inner">
-            <CardHeader>
-                <CardTitle className="text-xl font-headline text-accent">Заточка</CardTitle>
-                <CardDescription>Улучшайте инструменты, чтобы повысить их характеристики.</CardDescription>
-            </CardHeader>
-            <CardContent className="pt-4 space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium">Категория</label>
-                        <Select value={toolType} onValueChange={(val: BlueprintType) => setToolType(val)}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                                {TOOL_TYPES.map(t => <SelectItem key={t} value={t}>{toolTypeDisplayNames[t]}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium">Качество</label>
-                        <Select value={quality} onValueChange={setQuality}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                                {TOOL_QUALITIES.map(q => <SelectItem key={q.id} value={q.id}>{q.name}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </div>
+            <CardContent className="pt-6 space-y-6">
+                <Card className="bg-card/70 p-4">
+                    {selectedLevel ? (
+                        <div className="space-y-4">
+                            <div className="flex justify-center items-center gap-1 sm:gap-2 mb-2 text-primary font-bold">
+                                <div className="flex flex-col items-center w-16 text-center">
+                                    <Image src={selectedToolBaseImage} alt={requiredItemName} width={40} height={40} />
+                                    <span className="text-xs mt-1 text-muted-foreground">{getSharpenedItemName(selectedLevel - 1)}</span>
+                                </div>
+                                <Plus className="h-5 w-5 text-muted-foreground" />
+                                <div className="flex flex-col items-center w-16 text-center">
+                                     <Image src={selectedToolBaseImage} alt={requiredItemName} width={40} height={40} />
+                                     <span className="text-xs mt-1 text-muted-foreground">{getSharpenedItemName(selectedLevel - 1)}</span>
+                                </div>
+                                <ArrowRight className="h-6 w-6 mx-1 sm:mx-2 text-primary" />
+                                <div className="flex flex-col items-center w-16 text-center">
+                                    <Image src={selectedToolBaseImage} alt={getSharpenedItemName(selectedLevel)} width={40} height={40} />
+                                     <span className="text-xs mt-1 text-muted-foreground">{getSharpenedItemName(selectedLevel)}</span>
+                                </div>
+                            </div>
+                            
+                            <div className="text-sm space-y-2 text-center">
+                                <p className="font-semibold">Требуется для x{quantity}:</p>
+                                <div className="flex justify-center items-center gap-4 text-muted-foreground">
+                                    <span className={!canAfford && selectedLevel === 1 ? 'text-destructive' : ''}>
+                                      {requiredItemName}: {totalRequired} (у вас: {requiredItemCountInInv})
+                                    </span>
+                                    <span>
+                                      Золото: {(selectedLevel * SHARPENING_GOLD_COST_MULTIPLIER * quantity).toLocaleString()}
+                                    </span>
+                                </div>
+                            </div>
 
-                <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
-                    {Array.from({ length: 10 }, (_, i) => i + 1).map(level => (
-                        <button
-                            key={level}
-                            className={cn(
-                                "h-auto p-2 flex flex-col items-center justify-center transition-all rounded-lg border aspect-square",
-                                levelColorClasses[level],
-                                selectedLevel === level ? 'ring-2 ring-primary' : 'hover:ring-1 hover:ring-primary/50'
-                            )}
-                            onClick={() => setSelectedLevel(level)}
-                        >
-                            {selectedToolImage && (
-                                <Image src={selectedToolImage} alt={getSharpenedItemName(level)} width={48} height={48} className="flex-shrink-0" />
-                            )}
-                            <span className="text-sm font-bold mt-1">+{level}</span>
-                        </button>
-                    ))}
-                </div>
+                            <div className="flex gap-2">
+                                <Input
+                                    type="number"
+                                    min="1"
+                                    value={quantity}
+                                    onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                                    className="w-24"
+                                />
+                                <Button
+                                    disabled 
+                                    className="flex-grow"
+                                >
+                                    Заточить
+                                </Button>
+                            </div>
+                            <p className="text-xs text-muted-foreground text-center mt-2">Время: {SHARPENING_DURATION_SECONDS * quantity} сек.</p>
+                        </div>
+                    ) : (
+                        <p className="text-center text-muted-foreground">Выберите уровень заточки.</p>
+                    )}
+                </Card>
 
-                {selectedLevel && requiredItemInfo && (
-                    <Card className="bg-card/70 p-4">
-                        <CardTitle className="text-base mb-2">
-                            Создать: {getSharpenedItemName(selectedLevel)}
-                        </CardTitle>
-                        <CardContent className="p-0 text-sm space-y-2">
-                            <p className="font-semibold">Требуется:</p>
-                            <ul className="list-disc list-inside text-muted-foreground">
-                                <li className={requiredItemInfo.countInInventory < 2 * quantity ? 'text-destructive' : ''}>
-                                    {requiredItemInfo.name}: {2 * quantity} (у вас: {requiredItemInfo.countInInventory})
-                                </li>
-                                <li>Золото: {(selectedLevel * 1000 * quantity).toLocaleString()} (у вас: 0)</li>
-                            </ul>
-                        </CardContent>
-                        <CardFooter className="p-0 pt-4 flex gap-2">
-                            <Input
-                                type="number"
-                                min="1"
-                                value={quantity}
-                                onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                                className="w-20"
-                            />
-                            <Button
-                                disabled // Заточка будет реализована на следующем шаге
-                                className="flex-grow"
+                <div>
+                    <h4 className="font-headline text-lg text-primary mb-4 text-center">Выберите, что и до какого уровня заточить</h4>
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Категория</label>
+                            <Select value={toolType} onValueChange={(val: BlueprintType) => {setSelectedLevel(null); setToolType(val)}}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    {TOOL_TYPES.map(t => <SelectItem key={t} value={t}>{toolTypeDisplayNames[t]}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Качество</label>
+                            <Select value={quality} onValueChange={(val) => {setSelectedLevel(null); setQuality(val)}}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    {TOOL_QUALITIES.map(q => <SelectItem key={q.id} value={q.id}>{q.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
+                        {Array.from({ length: 10 }, (_, i) => i + 1).map(level => (
+                            <button
+                                key={level}
+                                className={cn(
+                                    "h-auto p-2 flex flex-col items-center justify-center transition-all rounded-lg border aspect-square",
+                                    levelColorClasses[level],
+                                    selectedLevel === level ? 'ring-2 ring-primary' : 'hover:ring-1 hover:ring-primary/50'
+                                )}
+                                onClick={() => setSelectedLevel(level)}
                             >
-                                Заточить
-                            </Button>
-                        </CardFooter>
-                    </Card>
-                )}
+                                {selectedToolBaseImage && (
+                                    <Image src={selectedToolBaseImage} alt={getSharpenedItemName(level)} width={48} height={48} className="flex-shrink-0" />
+                                )}
+                                <span className="text-sm font-bold mt-1">+{level}</span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
             </CardContent>
         </Card>
     );
-};
+}
+
+const TABS = [
+  { value: 'refining', label: 'Переработка', icon: <FlaskConical className="w-6 h-6" /> },
+  { value: 'crafting', label: 'Крафт', icon: <Anvil className="w-6 h-6" /> },
+  { value: 'sharpening', label: 'Заточка', icon: <Sparkles className="w-6 h-6" /> },
+  { value: 'repairing', label: 'Починка', icon: <Wrench className="w-6 h-6" /> },
+] as const;
 
 export default function FactoryPage() {
+  const [activeTab, setActiveTab] = useState<(typeof TABS)[number]['value']>('refining');
+
   return (
     <div className="flex flex-col items-center justify-start min-h-full p-4 space-y-6 text-foreground">
       <Card className="w-full max-w-md bg-card/80 backdrop-blur-md shadow-xl">
-        <CardHeader>
-          <CardTitle className="text-3xl font-headline text-center text-primary">Кузница</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-2">
-          <Tabs defaultValue="refining" className="w-full">
-            <TabsList className="grid w-full grid-cols-4 mb-4 text-xs sm:text-sm">
-              <TabsTrigger value="refining">Переработка</TabsTrigger>
-              <TabsTrigger value="crafting">Крафт</TabsTrigger>
-              <TabsTrigger value="sharpening">Заточка</TabsTrigger>
-              <TabsTrigger value="repairing">Починка</TabsTrigger>
+        <CardContent className="p-2 sm:p-4">
+          <Tabs defaultValue="refining" onValueChange={(value) => setActiveTab(value as any)} className="w-full">
+            <TabsList className="flex w-full items-center justify-around rounded-lg p-1 mb-2">
+               {TABS.map((tab) => {
+                  const isActive = activeTab === tab.value;
+                  return (
+                    <TabsTrigger
+                      key={tab.value}
+                      value={tab.value}
+                      className={cn(
+                        "flex flex-col items-center justify-center transition-all duration-300 ease-in-out rounded-lg p-0",
+                        "data-[state=active]:bg-primary/20 data-[state=active]:shadow-lg",
+                        isActive
+                          ? "h-16 w-24 gap-1 text-primary"
+                          : "h-14 w-14 text-muted-foreground hover:bg-muted/50"
+                      )}
+                    >
+                      {tab.icon}
+                      {isActive && <span className="text-xs font-medium mt-1">{tab.label}</span>}
+                    </TabsTrigger>
+                  )
+                })}
             </TabsList>
+            
+            <ActiveProcessesDisplay />
+
             <TabsContent value="refining">
                 <RefiningTab />
             </TabsContent>
