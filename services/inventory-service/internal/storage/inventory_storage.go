@@ -698,7 +698,7 @@ func (s *InventoryStorage) GetUserInventoryOptimized(ctx context.Context, userID
 			ORDER BY db.user_id, db.section_id, db.item_id, db.collection_id, db.quality_level_id, db.balance_date DESC
 		),
 		operations_only AS (
-			-- Добавляем предметы, которые есть только в операциях за сегодня
+			-- Добавляем предметы, которые есть только в операциях (без daily_balance)
 			SELECT DISTINCT 
 				op.user_id,
 				op.section_id,
@@ -709,7 +709,6 @@ func (s *InventoryStorage) GetUserInventoryOptimized(ctx context.Context, userID
 				CURRENT_DATE as balance_date
 			FROM inventory.operations op
 			WHERE op.user_id = $1 AND op.section_id = $2 
-				AND DATE(op.created_at) = CURRENT_DATE
 				AND NOT EXISTS (
 					SELECT 1 FROM inventory.daily_balances db2 
 					WHERE db2.user_id = op.user_id 
@@ -725,7 +724,7 @@ func (s *InventoryStorage) GetUserInventoryOptimized(ctx context.Context, userID
 			SELECT * FROM operations_only
 		),
 		operations_sum AS (
-			-- Сумма операций за сегодня для каждого предмета
+			-- Сумма операций с даты последнего daily_balance
 			SELECT 
 				op.user_id,
 				op.section_id,
@@ -735,7 +734,15 @@ func (s *InventoryStorage) GetUserInventoryOptimized(ctx context.Context, userID
 				COALESCE(SUM(op.quantity_change), 0) as today_operations
 			FROM inventory.operations op
 			WHERE op.user_id = $1 AND op.section_id = $2 
-				AND DATE(op.created_at) = CURRENT_DATE
+				AND op.created_at > (
+					SELECT COALESCE(MAX(db.balance_date) + INTERVAL '1 day', '1970-01-01'::timestamp)
+					FROM inventory.daily_balances db
+					WHERE db.user_id = op.user_id 
+						AND db.section_id = op.section_id
+						AND db.item_id = op.item_id
+						AND db.collection_id = op.collection_id
+						AND db.quality_level_id = op.quality_level_id
+				)
 			GROUP BY op.user_id, op.section_id, op.item_id, op.collection_id, op.quality_level_id
 		),
 		final_balances AS (

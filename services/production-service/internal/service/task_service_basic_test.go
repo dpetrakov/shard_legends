@@ -48,7 +48,7 @@ func TestTaskService_CalculateSlotInfo(t *testing.T) {
 				{
 					ID:                 uuid.New(),
 					Status:             models.TaskStatusInProgress,
-					OperationClassCode: "basic",
+					SlotNumber: 1,
 				},
 			},
 		},
@@ -58,12 +58,12 @@ func TestTaskService_CalculateSlotInfo(t *testing.T) {
 				{
 					ID:                 uuid.New(),
 					Status:             models.TaskStatusInProgress,
-					OperationClassCode: "basic",
+					SlotNumber: 1,
 				},
 				{
-					ID:                 uuid.New(),
-					Status:             models.TaskStatusPending,
-					OperationClassCode: "advanced",
+					ID:         uuid.New(),
+					Status:     models.TaskStatusPending,
+					SlotNumber: 2,
 				},
 			},
 		},

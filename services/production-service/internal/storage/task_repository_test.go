@@ -184,14 +184,13 @@ func TestTaskRepository_CreateTask(t *testing.T) {
 	repo := NewTaskRepository(deps)
 
 	task := &models.ProductionTask{
-		ID:                    uuid.New(),
-		UserID:                uuid.New(),
-		RecipeID:              uuid.New(),
-		OperationClassCode:    models.OperationClassCrafting,
-		Status:                models.TaskStatusPending,
-		ProductionTimeSeconds: 3600,
-		CreatedAt:             time.Now(),
-		AppliedModifiers:      models.AppliedModifiers{"test": "value"},
+		ID:               uuid.New(),
+		UserID:           uuid.New(),
+		RecipeID:         uuid.New(),
+		SlotNumber:       1,
+		Status:           models.TaskStatusPending,
+		CreatedAt:        time.Now(),
+		ModifiersApplied: models.AppliedModifiers{"test": "value"},
 		OutputItems: []models.TaskOutputItem{
 			{
 				ItemID:   uuid.New(),
@@ -243,16 +242,19 @@ func TestTaskRepository_GetUserTasks(t *testing.T) {
 	mockRows := &MockRows{
 		data: [][]interface{}{
 			{
-				taskID,
-				userID,
-				recipeID,
-				models.OperationClassCrafting,
-				models.TaskStatusPending,
-				3600,
-				now,
-				nil,
-				nil,
-				models.AppliedModifiers{},
+				taskID,                                // id
+				userID,                                // user_id  
+				recipeID,                              // recipe_id
+				1,                                     // slot_number
+				models.TaskStatusPending,              // status
+				nil,                                   // started_at
+				nil,                                   // completion_time
+				nil,                                   // claimed_at
+				models.AppliedModifiers{},             // pre_calculated_results
+				models.AppliedModifiers{},             // modifiers_applied
+				nil,                                   // reservation_id
+				now,                                   // created_at
+				now,                                   // updated_at
 			},
 		},
 	}

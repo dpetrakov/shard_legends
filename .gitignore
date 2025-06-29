@@ -49,3 +49,5 @@ scripts/jwt_gen/private_key
 scripts/jwt_gen/token.jwt
 scripts/jwt_gen/user_id
 services/inventory-service/server
+
+coverage.out

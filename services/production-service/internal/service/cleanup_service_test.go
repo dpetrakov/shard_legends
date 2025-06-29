@@ -247,7 +247,7 @@ func TestCleanupService_Start_StopWithContext(t *testing.T) {
 	service := NewCleanupService(mockTaskRepo, mockInventoryClient, zap.NewNop(), config)
 	
 	// Mock at least one cleanup run
-	mockTaskRepo.On("GetOrphanedDraftTasks", mock.AnythingOfType("*context.timerCtx"), mock.AnythingOfType("time.Time")).Return([]models.ProductionTask{}, nil).Maybe()
+	mockTaskRepo.On("GetOrphanedDraftTasks", mock.Anything, mock.AnythingOfType("time.Time")).Return([]models.ProductionTask{}, nil).Maybe()
 	
 	// Create context with short timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
