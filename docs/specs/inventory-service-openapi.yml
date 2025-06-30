@@ -86,6 +86,37 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
+  /items:
+    get:
+      tags:
+        - Public
+      summary: Получить инвентарь пользователя (alias)
+      description: |
+        Alias для `/inventory` эндпоинта для обратной совместимости.
+        Возвращает текущее состояние инвентаря пользователя.
+        Остатки рассчитываются динамически на основе дневных остатков и операций.
+      operationId: getUserInventoryAlias
+      parameters:
+        - name: section
+          in: query
+          description: Раздел инвентаря
+          required: false
+          schema:
+            type: string
+            enum: [main, factory, trade]
+            default: main
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
   /inventory/reserve:
     post:
       tags:

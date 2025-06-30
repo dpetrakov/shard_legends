@@ -51,3 +51,5 @@ scripts/jwt_gen/user_id
 services/inventory-service/server
 
 coverage.out
+scripts/jwt_gen/*
+scripts/jwt_gen/*.jwt
