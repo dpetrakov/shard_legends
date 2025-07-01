@@ -219,11 +219,11 @@ services:
       - REDIS_AUTH_URL=redis://redis:6379/0
       - PRODUCTION_INTERNAL_URL=http://production-service:8090
       - PRODUCTION_EXTERNAL_URL=http://production-service:8080
-      - INVENTORY_INTERNAL_URL=http://inventory-service:8090
+      - INVENTORY_INTERNAL_URL=http://inventory-service:8080
       - AUTH_PUBLIC_KEY_URL=http://auth-service:8090/public-key.pem
       - PORT_PUBLIC=8080
       - PORT_INTERNAL=8090
-      - COOLDOWN_SEC=30
+      - COOLDOWN_SEC=10
       - DAILY_CHEST_RECIPE_ID=9b9a4a62-7e79-4f1c-8dbe-62784be4c9d2
       - LOG_LEVEL=info
     networks:

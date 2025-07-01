@@ -15,6 +15,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/shard-legends/deck-game-service/internal/config"
 	"github.com/shard-legends/deck-game-service/internal/database"
+	"github.com/shard-legends/deck-game-service/internal/handlers"
+	"github.com/shard-legends/deck-game-service/internal/middleware"
+	"github.com/shard-legends/deck-game-service/internal/service"
+	"github.com/shard-legends/deck-game-service/internal/storage"
+	"github.com/shard-legends/deck-game-service/pkg/jwt"
 	"github.com/shard-legends/deck-game-service/pkg/logger"
 	"github.com/shard-legends/deck-game-service/pkg/metrics"
 )
@@ -86,8 +91,32 @@ func main() {
 	// Metrics endpoint for Prometheus scraping
 	internalRouter.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
-	// TODO: Register public API routes here
-	// This will be implemented in later tasks (D-Deck-004, D-Deck-005)
+	// Initialize JWT key provider
+	keyProvider := jwt.NewKeyProvider(cfg.AuthPublicKeyURL)
+
+	// Initialize JWT auth middleware
+	jwtMiddleware := middleware.NewJWTAuthMiddleware(keyProvider, redis, log)
+
+	// Initialize repositories
+	dailyChestRepo := storage.NewDailyChestStorage(postgres.Pool(), log)
+
+	// Initialize external service clients
+	productionClient := service.NewProductionClient(cfg.ProductionExternalURL, log)
+	inventoryClient := service.NewInventoryClient(cfg.InventoryInternalURL, log)
+
+	// Initialize services
+	deckGameService := service.NewDeckGameService(dailyChestRepo, productionClient, inventoryClient, cfg, log)
+
+	// Initialize handlers
+	deckGameHandler := handlers.NewDeckGameHandler(deckGameService, log)
+
+	// Register public API routes
+	deckAPI := publicRouter.Group("/deck")
+	deckAPI.Use(jwtMiddleware.AuthenticateJWT())
+	{
+		deckAPI.GET("/daily-chest/status", deckGameHandler.GetDailyChestStatus)
+		deckAPI.POST("/daily-chest/claim", deckGameHandler.ClaimDailyChest)
+	}
 
 	// Create public HTTP server
 	publicServer := &http.Server{
