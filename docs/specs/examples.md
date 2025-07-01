@@ -1,13 +1,12 @@
+## deck 
 
-## Users
-
- ## Запрос статуса по дейли-сундукам
+### Запрос статуса по дейли-сундукам
 
  ```bash
  curl -L 'https://dev-forly.slcw.dimlight.online//api/deck/daily-chest/status' -H 'Authorization: Bearer {{jwt}}'
  ```
 
-### Пример ответа
+#### Пример ответа
 ```json
 {
     "expected_combo": 7,
@@ -17,13 +16,13 @@
 }
 ```
 
-## Запрос дейли-сундука
+### Запрос дейли-сундука
 
  ```bash
  curl -L 'https://dev-forly.slcw.dimlight.online//api/deck/daily-chest/claim' -H 'Content-Type: application/json' -H 'Authorization: Bearer {{jwt}}' -d '{"combo":6,"chest_indices":[1]}'
  ```
 
-### Пример ответа
+#### Пример ответа
 ```json
 {
     "items": [
@@ -44,6 +43,7 @@
 
 ----
 
+## Users
 
 Получние профиля пользователя:
 ```bash
