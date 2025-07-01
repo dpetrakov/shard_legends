@@ -238,12 +238,14 @@ func TestInventoryService_AddItems(t *testing.T) {
 
 	// Mock collection mapping
 	collectionMapping := map[string]uuid.UUID{
+		"base":     uuid.New(), // Required base default
 		collection: uuid.New(),
 	}
 	classifierRepo.On("GetCodeToUUIDMapping", ctx, models.ClassifierCollection).Return(collectionMapping, nil)
 
 	// Mock quality level mapping
 	qualityMapping := map[string]uuid.UUID{
+		"base":       uuid.New(), // Required base default
 		qualityLevel: uuid.New(),
 	}
 	classifierRepo.On("GetCodeToUUIDMapping", ctx, models.ClassifierQualityLevel).Return(qualityMapping, nil)
@@ -347,7 +349,9 @@ func TestInventoryService_ReserveItems_InsufficientBalance(t *testing.T) {
 	inventoryRepo.On("GetOperations", ctx, userID, mainSectionID, itemID, defaultCollectionID, defaultQualityID, time.Time{}).Return(operations, nil).Maybe()
 
 	// Mock CreateDailyBalance call
-	inventoryRepo.On("CreateDailyBalance", ctx, mock.AnythingOfType("*models.DailyBalance")).Return(nil).Maybe()
+	inventoryRepo.On("CreateDailyBalance", ctx, mock.MatchedBy(func(balance *models.DailyBalance) bool {
+		return balance.Quantity == 75
+	})).Return(nil).Maybe()
 
 	// Mock operations for balance calculation (called second)
 	inventoryRepo.On("GetOperations", ctx, userID, mainSectionID, itemID, defaultCollectionID, defaultQualityID, mock.AnythingOfType("time.Time")).Return(operations, nil).Maybe()
@@ -605,7 +609,8 @@ func TestInventoryService_GetItemsDetails(t *testing.T) {
 	// Check first item
 	item1 := result.Items[0]
 	assert.Equal(t, itemID1, item1.ItemID)
-	assert.Equal(t, "stone", item1.Code)
+	assert.Equal(t, "resources", item1.ItemClass)
+	assert.Equal(t, "stone", item1.ItemType)
 	assert.Equal(t, "Камень", item1.Name)
 	assert.Equal(t, "Базовый строительный материал", item1.Description)
 	assert.Equal(t, "https://cdn.example.com/items/stone_winter_2025_stone.png", item1.ImageURL)
@@ -615,7 +620,8 @@ func TestInventoryService_GetItemsDetails(t *testing.T) {
 	// Check second item
 	item2 := result.Items[1]
 	assert.Equal(t, itemID2, item2.ItemID)
-	assert.Equal(t, "disc", item2.Code)
+	assert.Equal(t, "reagents", item2.ItemClass)
+	assert.Equal(t, "disc", item2.ItemType)
 	assert.Equal(t, "Диск", item2.Name)
 	assert.Equal(t, "Реагент для обработки", item2.Description)
 	assert.Equal(t, "https://cdn.example.com/items/disc_default.png", item2.ImageURL)
@@ -697,6 +703,8 @@ func TestInventoryService_GetItemsDetails_WithFallback(t *testing.T) {
 
 	item := result.Items[0]
 	assert.Equal(t, itemID, item.ItemID)
+	assert.Equal(t, "resources", item.ItemClass)
+	assert.Equal(t, "stone", item.ItemType)
 	assert.Equal(t, "Stone", item.Name)                                // Fallback name from English
 	assert.Equal(t, "Базовый строительный материал", item.Description) // Russian description
 

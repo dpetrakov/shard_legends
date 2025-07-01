@@ -458,11 +458,10 @@ paths:
       parameters:
         - name: lang
           in: query
-          description: Код языка (ru, en)
+          description: Код языка локализации. Если не передан – используется язык, помеченный как default в системе i18n.
           required: false
           schema:
             type: string
-            default: ru
             enum: [ru, en]
       requestBody:
         required: true
@@ -827,7 +826,8 @@ components:
             type: object
             required:
               - item_id
-              - code
+              - item_class
+              - item_type
               - name
               - description
               - image_url
@@ -836,7 +836,11 @@ components:
                 type: string
                 format: uuid
                 description: UUID предмета
-              code:
+              item_class:
+                type: string
+                description: Код класса предмета
+                example: chests
+              item_type:
                 type: string
                 description: Код типа предмета
                 example: stone

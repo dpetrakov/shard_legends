@@ -665,7 +665,8 @@ func (is *inventoryService) GetItemsDetails(ctx context.Context, req *models.Ite
 
 		responseItem := models.ItemDetailResponseItem{
 			ItemID:       requestItem.ItemID,
-			Code:         item.ItemType, // Using item type as code for now
+			ItemClass:    item.ItemClass,
+			ItemType:     item.ItemType,
 			Name:         name,
 			Description:  description,
 			ImageURL:     imageURL,

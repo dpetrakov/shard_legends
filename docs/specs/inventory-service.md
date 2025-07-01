@@ -103,6 +103,39 @@ GET /inventory
 
 **Изменения в БД:** Нет (только чтение)
 
+#### Получение локализованной информации о предметах
+```
+POST /items/details?lang=<ru|en>
+```
+
+**Описание:** Возвращает локализованные названия, описания и изображения для списка предметов. Использует кеширование и fallback на дефолтный язык при отсутствии перевода.
+
+**Входные параметры:**
+- Query-параметр `lang` – язык локализации (`ru`, `en`). Если параметр не указан, Inventory Service определяет язык по классификатору `i18n.languages`, где помечён `is_default = true`.
+- Тело запроса: `{ "items": [ { "item_id": "uuid", "collection": "winter_2025", "quality_level": "stone" } ] }`
+
+**Аутентификация**: Требует валидный JWT токен `Authorization: Bearer <token>`
+
+**Пример ответа:**
+```json
+{
+  "items": [
+    {
+      "item_id": "1ac8c2b0-0a7d-4e0e-a6d2-9a90b9094b60",
+      "item_class": "chests",
+      "item_type": "stone",
+      "name": "Каменный сундук",
+      "description": "Содержит случайную награду из набора Stone",
+      "image_url": "https://cdn.example.com/items/stone_chest.png",
+      "collection": "winter_2025",
+      "quality_level": "stone"
+    }
+  ]
+}
+```
+
+**Изменения:** В версии 1.0.1 поле `code` переименовано в `item_type`, добавлено поле `item_class`.
+
 ### Внутренние эндпоинты (для других сервисов)
 
 #### Резервирование предметов (для Factory Service)

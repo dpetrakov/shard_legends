@@ -77,7 +77,8 @@ type ItemDetailsResponse struct {
 // ItemDetailResponseItem represents a single item with its localized details
 type ItemDetailResponseItem struct {
 	ItemID       uuid.UUID `json:"item_id"`
-	Code         string    `json:"code"`
+	ItemClass    string    `json:"item_class"`
+	ItemType     string    `json:"item_type"`
 	Name         string    `json:"name"`
 	Description  string    `json:"description"`
 	ImageURL     string    `json:"image_url"`
