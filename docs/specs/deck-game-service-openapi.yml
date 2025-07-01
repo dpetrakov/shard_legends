@@ -1,0 +1,186 @@
+openapi: 3.0.3
+info:
+  title: Deck Game Service API
+  description: |
+    Публичные эндпоинты мини-игры «Дека» для выдачи ежедневных сундуков.
+  version: 1.0.0
+  contact:
+    name: Shard Legends Team
+
+servers:
+  - url: http://localhost:8080
+    description: Local Dev (direct)
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Public
+    description: Публичные методы для фронтенда
+
+paths:
+  /deck/daily-chest/status:
+    get:
+      tags: [Public]
+      summary: Получить ожидаемый комбо и статус сундуков
+      operationId: getDailyChestStatus
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /deck/daily-chest/claim:
+    post:
+      tags: [Public]
+      summary: Получить награду за выполненное комбо
+      operationId: claimDailyChest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClaimRequest'
+      responses:
+        '200':
+          description: Награда получена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+        '400':
+          description: Ошибка бизнес-валидации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Рецепт не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Пользовательский JWT c RS256-подписью Auth Service
+
+  schemas:
+    StatusResponse:
+      type: object
+      required: [expected_combo, finished, crafts_done]
+      properties:
+        expected_combo:
+          type: integer
+          minimum: 5
+          maximum: 15
+        finished:
+          type: boolean
+        crafts_done:
+          type: integer
+          minimum: 0
+          maximum: 10
+        last_reward_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    ClaimRequest:
+      type: object
+      required: [combo, chest_indices]
+      properties:
+        combo:
+          type: integer
+          minimum: 5
+          maximum: 15
+        chest_indices:
+          type: array
+          minItems: 1
+          maxItems: 6
+          items:
+            type: integer
+            minimum: 1
+            maximum: 6
+
+    ItemInfo:
+      type: object
+      required: [item_id, item_class, item_type, name, description, image_url, collection, quality_level, quantity]
+      properties:
+        item_id:
+          type: string
+          format: uuid
+        item_class:
+          type: string
+        item_type:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        image_url:
+          type: string
+        collection:
+          type: string
+          nullable: true
+        quality_level:
+          type: string
+        quantity:
+          type: integer
+          minimum: 1
+
+    ClaimResponse:
+      type: object
+      required: [items, next_expected_combo, crafts_done]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ItemInfo'
+        next_expected_combo:
+          type: integer
+        crafts_done:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+
+  responses:
+    Unauthorized:
+      description: Отсутствует или недействительный JWT
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: missing_token
+            message: Missing Authorization header
+
+    InternalError:
+      description: Внутренняя ошибка сервера
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: internal_error
+            message: Unexpected server error 

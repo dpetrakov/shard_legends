@@ -55,7 +55,7 @@ sequenceDiagram
     DGS->>PSDB: SELECT COUNT(completed tasks) WHERE recipe_id = DAILY_CHEST_RECIPE_ID AND today
     DGS-->>FE: 200 {expected_combo, finished}
     
-    FE->>DGS: POST /deck/daily-chest/claim {combo,chestIndex}
+    FE->>DGS: POST /deck/daily-chest/claim {combo,chest_indices}
     DGS->>PSDB: SELECT COUNT(completed tasks) WHERE recipe_id = DAILY_CHEST_RECIPE_ID AND today
     DGS-->>FE: 400 daily_finished if combo < expected OR finished
     DGS->>PSAPI: POST /production/factory/start
@@ -96,23 +96,30 @@ sequenceDiagram
 ```json
 {
   "combo": 8,
-  "chest_index": 3
+  "chest_indices": [1, 3]
 }
 ```
+
+**Требования к полю `chest_indices`:**
+• Массив целых чисел от 1 до 6 включительно.  
+• Должен содержать **как минимум один** индекс.  
+• Дубли допускаются, порядок не важен.  
+• На текущем этапе индексы не участвуют в бизнес-логике, проверяется только валидность значений.
 
 **Ответ 200**
 ```json
 {
   "items": [
     {
-      "item_id": "bb3b0f2d-…",
-      "code": "daily_chest",
-      "name": "Daily Chest",
-      "description": "Сундук с ежедневной наградой",
-      "collection": null,
-      "quality_level": "rare",
-      "quantity": 1,
-      "image_url": "https://…/daily_chest_rare.png"
+      "item_id": "359e86d5-d094-4b2b-b96e-6114e3c66d6b",
+      "item_class": "chests",
+      "item_type": "reagent_chest",
+      "name": "Большой сундук реагентов",
+      "description": "Содержит большое количество реагентов с максимальной выгодой.",
+      "image_url": "/images/items/default.png",
+      "collection": "base",
+      "quality_level": "base",
+      "quantity": 1
     }
   ],
   "next_expected_combo": 9,
@@ -157,13 +164,12 @@ WHERE user_id = :user_id
 | `PORT_PUBLIC` | `8080` | HTTP порт публичного API |
 | `PORT_INTERNAL` | `8090` | HTTP порт внутреннего API |
 | `DATABASE_URL` | — | PostgreSQL DSN (production schema) |
-| `PRODUCTION_INTERNAL_URL` | `http://production-service:8080` | Внутренние эндпоинты (start/claim) |
-| `PRODUCTION_EXTERNAL_URL` | `https://api.shardlegends.com/production` | Внешние эндпоинты через API Gateway |
+| `PRODUCTION_INTERNAL_URL` | `http://production-service:8090` | Внутренний порт 8090 (health/metrics, internal calls) |
+| `PRODUCTION_EXTERNAL_URL` | `http://production-service:8080` | Публичные эндпоинты Production (start/claim) |
 | `INVENTORY_INTERNAL_URL` | `http://inventory-service:8080` | Внутренние эндпоинты Inventory |
 | `COOLDOWN_SEC` | `30` | Минимальный интервал между наградами |
 | `DAILY_CHEST_RECIPE_ID` | см. выше | Идентификатор рецепта |
-| `JWT_PUBLIC_KEYS_URL` | `http://auth-service:8090/keys` | Для валидации JWT |
-| `AUTH_PUBLIC_KEY_PEM_URL` | `http://auth-service:8080/public-key.pem` | PEM-ключ (используется по умолчанию, как в Inventory) |
+| `AUTH_PUBLIC_KEY_URL` | `http://auth-service:8090/public-key.pem` | Публичный RSA-ключ (PEM) от Auth Service |
 | `REDIS_URL` | `redis://redis:6379/0` | Проверка отзыва токенов |
 
 
@@ -175,16 +181,16 @@ WHERE user_id = :user_id
 | Запуск задания | `POST /production/factory/start` | `{ "recipe_id": DAILY_CHEST_RECIPE_ID, "execution_count": 1 }` |
 | Claim награды | `POST /production/factory/claim` | `{ "task_id": "<uuid>" }` |
 
-Ответ `POST /production/factory/claim` соответствует схеме `ClaimResponse` Production Service. DGS преобразует поле `items_received` в массив `items` (см. пример ответа выше) через Inventory Service.
+Ответ `POST /production/factory/claim` соответствует схеме `ClaimResponse` Production Service. DGS берёт поле `items_received` и запрашивает подробные данные по каждому предмету через Inventory Service, формируя массив `items` (см. пример ответа выше).
 
 ### Inventory Service
 | Действие | HTTP | Тело |
 |----------|------|------|
-| Получить локализованные данные предметов | `POST /items/details?lang=<ru|en>` | `{ "items": [ { "item_id": "…" } ] }` |
+| Получить локализованные данные предметов | `POST /items/details?lang=<ru\|en>` | `{ "items": [ { "item_id": "…" } ] }` |
 
 
 ## Безопасность
-- Все публичные эндпоинты защищены JWT (RS256, валидация по JWKS от Auth Service).
+- Все публичные эндпоинты защищены JWT (RS256, валидация подписи с публичным ключом Auth Service).
 - Внутренний API доступен только в сети docker-compose, mTLS по необходимости.
 - Rate limiter: не более 20 POST `/deck/daily-chest/claim` в минуту на IP.
 
@@ -216,66 +222,5 @@ Grafana dashboard ID — TBD.
 - v1.0: реализовать описанные эндпоинты.
 - v1.1: вынести Production call в async очередь для лучшей отказоустойчивости.
 - v1.2: добавить геймификацию (leaderboard по combo).
-
----
-
-# JWT Аутентификация
-
-Все публичные эндпоинты DGS требуют валидного пользовательского JWT токена с RS256-подписью от Auth Service.
-
-### Алгоритм проверки токена (аналогично Inventory Service)
-
-1. **Извлечение токена**
-   • Заголовок `Authorization: Bearer <token>` обязателен.  
-   • Ошибка `missing_token` при отсутствии.  
-   • Проверяется префикс `Bearer ` → ошибка `invalid_token_format` при несоответствии.
-
-2. **Валидация RS256 подписи**
-   • Публичный ключ загружается с Auth Service (см. `JWT_PUBLIC_KEYS_URL`) в формате PEM.  
-   • Загрузка выполняется при старте сервиса и кэшируется в памяти; обновление каждые 12 часов (cron-job), либо при ошибке валидации выполняется «lazy refresh».  
-   • Используется библиотека `github.com/golang-jwt/jwt/v5`, метод `jwt.Parse` с проверкой алгоритма `RS256`.
-
-3. **Проверка времени жизни**  
-   • Библиотека автоматически валидирует `exp`.  
-   • При истечении срока ответа — `token_expired`.
-
-4. **Проверка отзыва токена в Redis**
-   • Из claim `jti` извлекается идентификатор токена.  
-   • Redis-ключ: `revoked:{jti}`.  
-   • Если ключ существует → `token_revoked` (401).  
-   • В случае недоступности Redis запрос не прерывается (только warning-лог), идентичное поведение Inventory Service.
-
-5. **Извлечение пользовательских данных**  
-   • `sub` → `user_id` (UUID).  
-   • `telegram_id` (float64 → int64).  
-   • При отсутствии — ошибки `missing_user_id` или `missing_telegram_id`.
-
-6. **Запись в контекст запроса**  
-   В Gin-контекст помещаются `user` (структура `{user_id, telegram_id}`) и `jti`.
-
-### Заголовок запроса
-```
-Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
-```
-
-### Возможные ошибки аутентификации (401)
-| Код | Сообщение |
-|-----|-----------|
-| `missing_token` | Отсутствует Authorization header |
-| `invalid_token_format` | Неправильный формат Bearer токена |
-| `invalid_token_signature` | Неверная RS256-подпись |
-| `invalid_token` | Структурно некорректный токен |
-| `token_expired` | Токен просрочен (`exp`) |
-| `token_revoked` | Токен отозван в Redis |
-| `missing_token_id` | Отсутствует JTI в claims |
-| `missing_user_id` | Отсутствует user_id (`sub`) |
-| `missing_telegram_id` | Отсутствует telegram_id |
-
-### ENV-переменные для JWT
-| Переменная | По умолчанию | Назначение |
-|------------|--------------|-------------|
-| `JWT_PUBLIC_KEYS_URL` | `http://auth-service:8090/keys` | JWKS endpoint (fallback / rotation) |
-| `AUTH_PUBLIC_KEY_PEM_URL` | `http://auth-service:8080/public-key.pem` | PEM-ключ (используется по умолчанию, как в Inventory) |
-| `REDIS_URL` | `redis://redis:6379/0` | Проверка отзыва токенов |
 
 ---

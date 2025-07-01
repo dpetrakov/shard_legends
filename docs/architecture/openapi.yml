@@ -19,3 +19,7 @@ paths:
     $ref: "../specs/inventory-service-openapi.yml#/paths/~1inventory"
   /items/details:
     $ref: "../specs/inventory-service-openapi.yml#/paths/~1items~1details"
+  /deck/daily-chest/status:
+    $ref: "../specs/deck-game-service-openapi.yml#/paths/~1deck~1daily-chest~1status"
+  /deck/daily-chest/claim:
+    $ref: "../specs/deck-game-service-openapi.yml#/paths/~1deck~1daily-chest~1claim"

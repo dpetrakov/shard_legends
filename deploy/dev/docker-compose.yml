@@ -37,6 +37,8 @@ services:
         condition: service_healthy
       telegram-bot-service:
         condition: service_healthy
+      deck-game-service:
+        condition: service_healthy
 
   # Frontend service
   frontend:
@@ -202,6 +204,51 @@ services:
       redis:
         condition: service_healthy
       auth-service:
+        condition: service_healthy
+
+  # Deck Game Service - Daily chest mini-game mechanics
+  deck-game-service:
+    build:
+      context: ../../services/deck-game-service
+      dockerfile: Dockerfile
+    container_name: slcw-deck-game-service-dev
+    ports:
+      - "127.0.0.1:22006:8090"  # Internal API endpoint
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-slcw_user}:${POSTGRES_PASSWORD:-dev_password_2024}@postgres:5432/${POSTGRES_DB:-shard_legends_dev}?sslmode=disable
+      - REDIS_AUTH_URL=redis://redis:6379/0
+      - PRODUCTION_INTERNAL_URL=http://production-service:8090
+      - PRODUCTION_EXTERNAL_URL=http://production-service:8080
+      - INVENTORY_INTERNAL_URL=http://inventory-service:8090
+      - AUTH_PUBLIC_KEY_URL=http://auth-service:8090/public-key.pem
+      - PORT_PUBLIC=8080
+      - PORT_INTERNAL=8090
+      - COOLDOWN_SEC=30
+      - DAILY_CHEST_RECIPE_ID=9b9a4a62-7e79-4f1c-8dbe-62784be4c9d2
+      - LOG_LEVEL=info
+    networks:
+      - slcw-dev
+      - slcw-monitoring
+    restart: unless-stopped
+    labels:
+      - "logging.service=deck-game-service"
+      - "logging.environment=dev"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "logging.service,logging.environment"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8090/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   # Production Service - Production recipes and manufacturing

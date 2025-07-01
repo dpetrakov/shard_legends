@@ -53,3 +53,4 @@ services/inventory-service/server
 coverage.out
 scripts/jwt_gen/*
 scripts/jwt_gen/*.jwt
+services/deck-game-service/deck-game-service
