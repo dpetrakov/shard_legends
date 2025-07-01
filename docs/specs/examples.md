@@ -1,6 +1,50 @@
 
 ## Users
 
+ ## Запрос статуса по дейли-сундукам
+
+ ```bash
+ curl -L 'https://dev-forly.slcw.dimlight.online//api/deck/daily-chest/status' -H 'Authorization: Bearer {{jwt}}'
+ ```
+
+### Пример ответа
+```json
+{
+    "expected_combo": 7,
+    "finished": false,
+    "crafts_done": 2,
+    "last_reward_at": "2025-07-01T16:08:18.69328Z"
+}
+```
+
+## Запрос дейли-сундука
+
+ ```bash
+ curl -L 'https://dev-forly.slcw.dimlight.online//api/deck/daily-chest/claim' -H 'Content-Type: application/json' -H 'Authorization: Bearer {{jwt}}' -d '{"combo":6,"chest_indices":[1]}'
+ ```
+
+### Пример ответа
+```json
+{
+    "items": [
+        {
+            "item_id": "9421cc9f-a56e-4c7d-b636-4c8fdfef7166",
+            "item_class": "chests",
+            "item_type": "resource_chest",
+            "name": "Маленький ресурсный сундук",
+            "description": "Содержит небольшое количество базовых ресурсов.",
+            "image_url": "/images/items/default.png",
+            "quantity": 1
+        }
+    ],
+    "next_expected_combo": 7,
+    "crafts_done": 2
+}
+```
+
+----
+
+
 Получние профиля пользователя:
 ```bash
 curl -L 'https://dev.slcw.dimlight.online/api/user/profile' -H 'Authorization: Bearer {{jwt}}'
@@ -56,3 +100,5 @@ curl -L 'https://dev.slcw.dimlight.online/api/production/factory/completed' -H '
  ```bash
  curl -L 'https://dev.slcw.dimlight.online/api/production/factory/start' -H 'Content-Type: application/json' -H 'Authorization: Bearer {{jwt}}' -d '{"recipe_id":"9b9a4a62-7e79-4f1c-8dbe-62784be4c9d2","execution_count":1}'
  ```
+
+
