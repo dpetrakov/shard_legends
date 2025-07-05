@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import type { GameBoard, Position, CrystalIcon } from '@/types/crystal-cascade';
 import CrystalCell from './CrystalCell';
 import { BOARD_ROWS, BOARD_COLS } from './crystal-definitions';
@@ -9,8 +9,6 @@ import { isAdjacent, swapCrystals as logicalSwap, findMatchGroups, shiftAndFillC
 import { useIconSet } from '@/contexts/IconSetContext';
 
 interface GameBoardProps {
-  onScoreUpdate: (scoreIncrement: number) => void;
-  onPossibleMoveUpdate: (hasPossibleMoves: boolean) => void;
   onMatchProcessed: (numberOfDistinctGroupsInStep: number, isFirstStepInChain: boolean) => void;
   onNoMatchOrComboEnd: () => void;
   gameKeyProp: number;
@@ -18,8 +16,6 @@ interface GameBoardProps {
 }
 
 const GameBoardComponent: React.FC<GameBoardProps> = ({
-  onScoreUpdate,
-  onPossibleMoveUpdate,
   onMatchProcessed,
   onNoMatchOrComboEnd,
   gameKeyProp,
@@ -29,12 +25,19 @@ const GameBoardComponent: React.FC<GameBoardProps> = ({
   const [board, setBoard] = useState<GameBoard>([]);
   const [selectedCrystal, setSelectedCrystal] = useState<Position | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const activeIconsRef = useRef<CrystalIcon[]>(getActiveIconList());
-
 
   useEffect(() => {
-    activeIconsRef.current = getActiveIconList();
-    setBoard(generateInitialBoard(activeIconsRef.current));
+    // This effect re-initializes the board when the game key or icon set changes.
+    const activeIcons = getActiveIconList();
+    if (activeIcons && activeIcons.length > 0) {
+      const newBoard = generateInitialBoard(activeIcons);
+      if (checkForPossibleMoves(newBoard)) {
+        setBoard(newBoard);
+      } else {
+        // Retry generation if no moves are possible, to avoid a stuck board
+        setBoard(generateInitialBoard(activeIcons));
+      }
+    }
     setSelectedCrystal(null);
     setIsProcessing(false);
   }, [getActiveIconList, gameKeyProp]);
@@ -67,98 +70,78 @@ const GameBoardComponent: React.FC<GameBoardProps> = ({
     return false;
   }, []);
 
-  useEffect(() => {
-    if (board.length === BOARD_ROWS &&
-        board.every(row => Array.isArray(row) && row.length === BOARD_COLS &&
-                         row.every(cell => cell === null || (typeof cell === 'object' && cell !== null && cell.type !== undefined))) &&
-        !isProcessing && !isProcessingExternally) {
-      const hasMoves = checkForPossibleMoves(board);
-      onPossibleMoveUpdate(hasMoves);
-    }
-  }, [board, isProcessing, checkForPossibleMoves, onPossibleMoveUpdate, isProcessingExternally]);
+  const processMatchesAndRefill = useCallback((boardAfterSwap: GameBoard, isInitialPlayerMatch: boolean) => {
+    let currentBoard = boardAfterSwap;
+    let isFirstStepInChain = isInitialPlayerMatch;
+    let chainEnded = false;
+    const activeIcons = getActiveIconList();
 
-  const processMatchesInternal = useCallback(async (currentBoard: GameBoard, isInitialPlayerMatchChain: boolean): Promise<GameBoard> => {
-    let boardAfterMatches = currentBoard;
-    let matchGroups = findMatchGroups(boardAfterMatches);
-    let isFirstStepInChainLoop = isInitialPlayerMatchChain;
+    const processStep = () => {
+      const matchGroups = findMatchGroups(currentBoard);
 
-    while (matchGroups.length > 0) {
-      onMatchProcessed(matchGroups.length, isFirstStepInChainLoop);
-      isFirstStepInChainLoop = false;
-
-      const allMatchedPositions = matchGroups.flat();
-      const boardWithMarkedMatches = boardAfterMatches.map(row =>
-        row.map(crystal => {
-          if (crystal && allMatchedPositions.some(p => p.row === crystal.row && p.col === crystal.col)) {
-            return { ...crystal, isMatched: true };
-          }
-          return crystal;
-        })
-      );
-      setBoard(boardWithMarkedMatches);
-
-      const pointsForThisMatch = allMatchedPositions.length * 10;
-      onScoreUpdate(pointsForThisMatch);
+      if (matchGroups.length === 0) {
+        if (!chainEnded) {
+          onNoMatchOrComboEnd();
+          chainEnded = true;
+        }
+        setIsProcessing(false);
+        return;
+      }
       
-      await new Promise(resolve => setTimeout(resolve, 300)); // Duration for matched crystals to animate (e.g., fade out/shrink)
+      onMatchProcessed(matchGroups.length, isFirstStepInChain);
+      isFirstStepInChain = false;
 
-      const { newBoard: shiftedBoard } = shiftAndFillCrystals(boardAfterMatches, matchGroups, activeIconsRef.current);
-      boardAfterMatches = shiftedBoard;
-      setBoard(boardAfterMatches);
+      let boardWithMatchesRemoved = currentBoard.map(row => [...row]);
+      matchGroups.flat().forEach(pos => {
+        boardWithMatchesRemoved[pos.row][pos.col] = null;
+      });
+      setBoard(boardWithMatchesRemoved);
 
-      await new Promise(resolve => setTimeout(resolve, 300)); // Duration for new crystals to fall and settle
+      // Wait for exit animation
+      setTimeout(() => {
+        const { newBoard: boardAfterRefill } = shiftAndFillCrystals(boardWithMatchesRemoved, [], activeIcons);
+        setBoard(boardAfterRefill);
+        currentBoard = boardAfterRefill;
+        
+        // Wait for fall animation then check for new matches
+        setTimeout(processStep, 400); 
+      }, 350);
+    };
 
-      matchGroups = findMatchGroups(boardAfterMatches);
-    }
+    processStep();
 
-    if (matchGroups.length === 0) { // Ensure this is called only once after all cascades
-       onNoMatchOrComboEnd();
-    }
-    return boardAfterMatches;
-  }, [onScoreUpdate, onMatchProcessed, onNoMatchOrComboEnd]);
+  }, [onMatchProcessed, onNoMatchOrComboEnd, getActiveIconList]);
 
-  const performSwapAndProcess = useCallback(async (pos1: Position, pos2: Position) => {
+  const performSwapAndProcess = useCallback((pos1: Position, pos2: Position) => {
     if (isProcessing || isProcessingExternally) return;
+    
     setIsProcessing(true);
-
-    const tempSwappedBoard = logicalSwap(board, pos1, pos2);
-    setBoard(tempSwappedBoard); // Update UI to show swapped crystals. `layout` in CrystalCell animates positions.
     
-    // Wait for the visual swap animation to complete (or be clearly visible)
-    await new Promise(resolve => setTimeout(resolve, 250)); 
-
-    const matchGroupsFound = findMatchGroups(tempSwappedBoard);
+    const originalBoard = board;
+    const swappedBoard = logicalSwap(board, pos1, pos2);
+    setBoard(swappedBoard);
     
-    if (matchGroupsFound.length > 0) {
-      // Matches found, proceed with match processing.
-      // processMatchesInternal will handle further setBoard calls for match animations & refilling.
-      const finalBoard = await processMatchesInternal(tempSwappedBoard, true);
-      setBoard(finalBoard); // Set the board to the state after all cascades
-    } else {
-      // No matches found, animate swap back.
-      // Board is currently showing tempSwappedBoard. Wait a bit for user to see the "no match" state.
-      await new Promise(resolve => setTimeout(resolve, 200)); 
+    // Wait for swap animation to finish
+    setTimeout(() => {
+      const matchGroupsFound = findMatchGroups(swappedBoard);
       
-      const boardToSwapBack = logicalSwap(tempSwappedBoard, pos2, pos1);
-      setBoard(boardToSwapBack); // Animate swap back
-      
-      // Wait for swap back animation to complete
-      await new Promise(resolve => setTimeout(resolve, 250)); 
-      
-      onNoMatchOrComboEnd(); 
-    }
-    setIsProcessing(false);
-  }, [board, isProcessing, processMatchesInternal, onNoMatchOrComboEnd, isProcessingExternally]);
+      if (matchGroupsFound.length > 0) {
+        processMatchesAndRefill(swappedBoard, true);
+      } else {
+        // No match, swap back
+        setBoard(originalBoard); // Re-render with original board state to trigger swap back animation
+        setTimeout(() => {
+          setIsProcessing(false);
+          onNoMatchOrComboEnd();
+        }, 300);
+      }
+    }, 300); // Duration should be close to the swap animation time
+
+  }, [board, isProcessing, isProcessingExternally, processMatchesAndRefill, onNoMatchOrComboEnd]);
 
 
   const handleCrystalClick = useCallback((position: Position) => {
     if (isProcessing || isProcessingExternally) return;
-
-    const clickedCrystalOnBoard = board[position.row]?.[position.col];
-    if (!clickedCrystalOnBoard) {
-      setSelectedCrystal(null);
-      return;
-    }
 
     if (!selectedCrystal) {
       setSelectedCrystal(position);
@@ -166,19 +149,16 @@ const GameBoardComponent: React.FC<GameBoardProps> = ({
       if (selectedCrystal.row === position.row && selectedCrystal.col === position.col) {
         setSelectedCrystal(null);
       } else if (isAdjacent(selectedCrystal, position)) {
-        const currentSelectedCrystalOnBoard = board[selectedCrystal.row]?.[selectedCrystal.col];
-        if (currentSelectedCrystalOnBoard) {
-           performSwapAndProcess(selectedCrystal, position);
-        }
+        performSwapAndProcess(selectedCrystal, position);
         setSelectedCrystal(null);
       } else {
         setSelectedCrystal(position); 
       }
     }
-  }, [isProcessing, board, selectedCrystal, performSwapAndProcess, isProcessingExternally]);
+  }, [isProcessing, selectedCrystal, performSwapAndProcess, isProcessingExternally]);
 
 
-  if (board.length !== BOARD_ROWS || !board.every(row => Array.isArray(row) && row.length === BOARD_COLS && row.every(cell => cell === null || (typeof cell === 'object' && cell !== null && 'id' in cell && 'type' in cell )))) {
+  if (board.length === 0) {
     return <div className="text-center p-8 font-headline text-accent">Loading Game Board...</div>;
   }
 
@@ -195,10 +175,9 @@ const GameBoardComponent: React.FC<GameBoardProps> = ({
       {board.map((row, r) =>
         row.map((crystal, c) => {
           const currentPosition = { row: r, col: c };
-          const cellKey = crystal ? `crystal-${crystal.id}` : `empty-${r}-${c}`;
           return (
             <CrystalCell
-              key={cellKey}
+              key={`${r}-${c}`} // Use stable cell key
               crystal={crystal}
               position={currentPosition}
               isSelected={!!selectedCrystal && selectedCrystal.row === currentPosition.row && selectedCrystal.col === currentPosition.col && !!crystal}

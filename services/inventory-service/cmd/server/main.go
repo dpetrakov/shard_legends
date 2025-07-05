@@ -224,7 +224,7 @@ func setupAPIWithJWT(cfg *config.Config, publicRouter *gin.Engine, internalRoute
 	// Initialize storage layer
 	inventoryRepo := storage.NewInventoryStorage(postgres.Pool(), redis, logger, metricsCollector)
 	classifierRepo := storage.NewClassifierStorage(postgres.Pool(), redis, logger, metricsCollector)
-	itemRepo := storage.NewItemStorage(postgres.Pool(), logger, metricsImpl, cacheImpl)
+	itemRepo := storage.NewItemStorage(postgres.Pool(), redis, logger, metricsImpl, cacheImpl)
 
 	// Create repository interfaces wrapper
 	repoInterfaces := &service.RepositoryInterfaces{
@@ -265,7 +265,6 @@ func setupAPIWithJWT(cfg *config.Config, publicRouter *gin.Engine, internalRoute
 		public.GET("/items", inventoryHandler.GetUserInventory)         // alias for compatibility
 		public.POST("/items/details", inventoryHandler.GetItemsDetails) // localized item details
 	}
-
 
 	// Setup internal API routes
 	internalAPI := internalRouter.Group("/api/inventory")

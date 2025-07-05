@@ -6,9 +6,11 @@ import { ChestProvider } from '@/contexts/ChestContext';
 import { IconSetProvider } from '@/contexts/IconSetContext';
 import { InventoryProvider } from '@/contexts/InventoryContext';
 import { RefiningProvider } from '@/contexts/RefiningContext';
-import { CraftingProvider } from '@/contexts/CraftingContext'; // Import CraftingProvider
+import { CraftingProvider } from '@/contexts/CraftingContext';
+import { MiningProvider } from '@/contexts/MiningContext';
 import Script from 'next/script';
 import Header from '@/components/layout/Header';
+import { cn } from '@/lib/utils';
 
 export const metadata: Metadata = {
   title: 'Crystal Cascade',
@@ -29,17 +31,19 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap" rel="stylesheet" />
         <Script src="https://telegram.org/js/telegram-web-app.js" strategy="beforeInteractive" />
       </head>
-      <body className="font-body antialiased min-h-screen text-foreground flex flex-col">
+      <body className={cn("font-body antialiased min-h-screen text-foreground flex flex-col relative")}>
         <IconSetProvider>
           <InventoryProvider>
             <ChestProvider>
               <RefiningProvider>
                 <CraftingProvider>
-                  <Header />
-                  <main className="flex-grow overflow-y-auto pt-16 pb-20">
-                  {children}
-                  </main>
-                  <BottomNavigationBar />
+                  <MiningProvider>
+                    <Header />
+                    <main className="flex-grow overflow-y-auto pt-16 pb-28">
+                    {children}
+                    </main>
+                    <BottomNavigationBar />
+                  </MiningProvider>
                 </CraftingProvider>
               </RefiningProvider>
             </ChestProvider>

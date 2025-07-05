@@ -2,16 +2,37 @@
 
 ## Обзор
 
-Стратегия развертывания Shard Legends: Clan Wars базируется на контейнеризации с Docker и оркестрации через Docker Compose. Ключевым элементом архитектуры является API Gateway, обеспечивающий единую точку входа для всех микросервисов.
+- **Стратегия развертывания** Shard Legends: Clan Wars базируется на контейнеризации с Docker и оркестрации через Docker Compose. Ключевыми элементами архитектуры являются:
+- **API Gateway**, обеспечивающий единую точку входа для всех динамических API-запросов.
+- **Выделенный сервер для статики**, отвечающий за быструю отдачу неизменяемых ресурсов (изображения, стили).
 
-## Архитектура с API Gateway
+## Архитектура развертывания
 
 ### Текущая инфраструктура
 
 ```mermaid
 graph LR
-    A[External nginx<br/>Port: 443<br/>/api/* routing] --> B[API Gateway<br/>Port: 9000<br/>nginx container]
-    B --> C[Microservices<br/>Port: 8080<br/>Internal only]
+    subgraph "Внешний мир"
+        User[Клиент]
+    end
+
+    subgraph "Сервер"
+        ExtNginx[Внешний nginx<br/>Порт: 443]
+        
+        subgraph "Docker-окружение"
+            Gateway[API Gateway<br/>nginx-контейнер<br/>Порт: 9000]
+            Statics[Static Server<br/>nginx-контейнер<br/>Порт: 8081]
+            Services[Микросервисы<br/>Go-контейнеры<br/>Внутренние порты]
+        end
+    end
+
+    User -- "https://domain.com/api/*" --> ExtNginx
+    User -- "https://domain.com/statics/*" --> ExtNginx
+
+    ExtNginx -- "/api/*" --> Gateway
+    ExtNginx -- "/statics/*" --> Statics
+    
+    Gateway --> Services
 ```
 
 ### Преимущества внедрения
@@ -62,14 +83,21 @@ graph LR
 ## Маршрутизация запросов
 
 ### Схема обработки запроса
-1. **Client**: `https://domain.com/api/ping`
-2. **External nginx**: перенаправляет на `http://127.0.0.1:9000/ping` (убирает `/api`)
-3. **API Gateway**: получает `/ping`, перенаправляет на `http://ping-service:8080/ping`
-4. **ping-service**: обрабатывает запрос, возвращает `{"message": "pong"}`
+1.  **Запрос к динамическому ресурсу**:
+    - **Client**: `https://domain.com/api/ping`
+    - **External nginx**: перенаправляет на `http://127.0.0.1:9000/ping` (убирает `/api`)
+    - **API Gateway**: получает `/ping`, перенаправляет на `http://ping-service:8080/ping`
+    - **ping-service**: обрабатывает запрос, возвращает `{"message": "pong"}`
+
+2.  **Запрос к статическому ресурсу**:
+    - **Client**: `https://domain.com/statics/images/items/axe.png`
+    - **External nginx**: перенаправляет запрос на `http://127.0.0.1:8081/images/items/axe.png` (убирает `/statics`)
+    - **Static Server**: находит и отдает файл из примонтированной папки `/static-assets`.
 
 ### Важные моменты
-- External nginx **убирает префикс `/api`** при проксировании
-- API Gateway работает **без префикса `/api`**
+- External nginx **убирает префикс `/api`** при проксировании в API Gateway.
+- External nginx **убирает префикс `/statics`** при проксировании на Static Server.
+- API Gateway работает **без префикса `/api`**.
 - Микросервисы получают **чистые пути** (`/ping`, `/webhook`)
 
 ### Текущие маршруты
@@ -92,6 +120,9 @@ deploy/
     docker-compose.yml
   prod/
     docker-compose.yml
+  static-assets/  # Новая директория
+    images/
+    sounds/
 ```
 
 ### API Gateway сервис
@@ -106,6 +137,21 @@ api-gateway:
   depends_on:
     - ping-service
     - telegram-bot-service
+```
+
+### Static Server (Новый сервис)
+
+```yaml
+static-server:
+  image: nginx:1.25-alpine
+  container_name: slcw-static-server-dev
+  ports:
+    - "127.0.0.1:8081:80" # Внутренний порт для доступа от внешнего nginx
+  volumes:
+    - ../../static-assets:/usr/share/nginx/html:ro # монтируем статику в read-only
+  networks:
+    - slcw-dev
+  restart: unless-stopped
 ```
 
 ### Микросервисы (без внешних портов)
@@ -151,10 +197,32 @@ location /newapi {
 }
 ```
 
-### 3. Пересборка и запуск
+### 3. Обновление внешнего Nginx
+
+Необходимо добавить новый `location` для проксирования запросов к статике.
+
+```nginx
+# /etc/nginx/sites-available/slcw.conf (пример)
+server {
+    # ... другие настройки
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:9000; # API Gateway
+        # ... другие proxy-настройки
+    }
+
+    location /statics/ {
+        proxy_pass http://127.0.0.1:8081/; # Static Server
+        # ... другие proxy-настройки
+    }
+}
+```
+
+### 4. Пересборка и запуск
 ```bash
-docker-compose build api-gateway
-docker-compose up -d
+docker-compose up -d --remove-orphans
+# Перезагрузка внешнего nginx, если его конфигурация менялась
+sudo systemctl reload nginx
 ```
 
 ## Процесс развертывания

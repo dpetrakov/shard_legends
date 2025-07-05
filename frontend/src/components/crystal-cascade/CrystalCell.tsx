@@ -1,11 +1,9 @@
-
 "use client";
 
 import type React from 'react';
 import type { Crystal, Position } from '@/types/crystal-cascade';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
-import Image from 'next/image';
 
 interface CrystalCellProps {
   crystal: Crystal | null;
@@ -39,45 +37,39 @@ const CrystalCell: React.FC<CrystalCellProps> = ({
       onClick={() => crystal && onCrystalClick(position)}
       aria-label={crystal ? `Crystal type ${crystal.type.name} at row ${position.row}, column ${position.col}` : `Empty cell at row ${position.row}, column ${position.col}`}
     >
-      <AnimatePresence mode="wait">
+      <AnimatePresence>
         {crystal && (
           <motion.div
-            key={`${crystal.id}-${crystal.type.name}`}
+            key={crystal.id}
             layout
-            initial={{ opacity: 0, y: -60, scale: 0.5 }}
-            animate={{
-              opacity: crystal.isMatched ? 0.2 : 1,
-              scale: crystal.isMatched ? 0.5 : 1,
-              y: 0,
-              transition: { duration: 0.3, ease: "easeInOut" }
-            }}
+            initial={{ y: -60, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
             exit={{
               opacity: 0,
-              scale: 0,
+              scale: 0.5,
               transition: { duration: 0.3, ease: "easeIn" }
             }}
+            transition={{ type: 'tween', ease: 'easeInOut', duration: 0.4 }}
             className={cn(
               "absolute inset-0 flex items-center justify-center cursor-pointer",
               crystalBgClass,
               "rounded-md shadow-lg backface-hidden",
               isSelected && "z-10 ring-2 ring-accent"
             )}
+            style={{ transform: 'translateZ(0)' }}
           >
-            <div className="relative w-full h-full backface-hidden">
-              {crystal.type.iconType === 'lucide' && LucideCrystalComponent ? (
-                <LucideCrystalComponent
-                  className={cn("w-3/4 h-3/4 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2", crystal.type.colorClass)}
+            {crystal.type.iconType === 'lucide' && LucideCrystalComponent ? (
+              <LucideCrystalComponent
+                className={cn("w-3/4 h-3/4", crystal.type.colorClass)}
+              />
+            ) : crystal.type.iconType === 'image' && crystal.type.imageSrc ? (
+                <img
+                  src={crystal.type.imageSrc}
+                  alt={crystal.type.name}
+                  className="object-contain w-5/6 h-5/6 backface-hidden"
+                  style={{ transform: 'translateZ(0)' }}
                 />
-              ) : crystal.type.iconType === 'image' && crystal.type.imageSrc ? (
-                  <Image
-                    src={crystal.type.imageSrc}
-                    alt={crystal.type.name}
-                    width={128}
-                    height={128}
-                    className="object-contain w-5/6 h-5/6 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 backface-hidden"
-                  />
-              ) : null}
-            </div>
+            ) : null}
           </motion.div>
         )}
       </AnimatePresence>

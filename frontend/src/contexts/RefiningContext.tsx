@@ -4,9 +4,11 @@
 import React, { createContext, useContext, useState, useEffect, type ReactNode, useCallback } from 'react';
 import type { RefiningContextType, ActiveProcess, RefiningRecipe } from '@/types/refining';
 import { useInventory } from './InventoryContext';
+import type { ActiveCraftingProcess } from '@/types/crafting';
 
 const REFINING_STORAGE_KEY = 'crystalCascadeRefiningProcesses';
-const MAX_PROCESS_SLOTS = 2;
+const CRAFTING_STORAGE_KEY = 'crystalCascadeCraftingProcesses';
+const MAX_FACTORY_SLOTS = 2;
 
 const RefiningContext = createContext<RefiningContextType | undefined>(undefined);
 
@@ -15,7 +17,6 @@ export const RefiningProvider = ({ children }: { children: ReactNode }) => {
     const [activeProcesses, setActiveProcesses] = useState<ActiveProcess[]>([]);
     const [isLoaded, setIsLoaded] = useState(false);
 
-    // Load from localStorage on mount
     useEffect(() => {
         const stored = localStorage.getItem(REFINING_STORAGE_KEY);
         if (stored) {
@@ -29,7 +30,6 @@ export const RefiningProvider = ({ children }: { children: ReactNode }) => {
         setIsLoaded(true);
     }, []);
 
-    // Save to localStorage whenever processes change
     useEffect(() => {
         if (isLoaded) {
             localStorage.setItem(REFINING_STORAGE_KEY, JSON.stringify(activeProcesses));
@@ -38,10 +38,14 @@ export const RefiningProvider = ({ children }: { children: ReactNode }) => {
 
 
     const startProcess = useCallback((recipe: RefiningRecipe, quantity: number): boolean => {
-        if (activeProcesses.length >= MAX_PROCESS_SLOTS) {
-            alert("Все слоты переработки заняты.");
+        const storedCrafting = localStorage.getItem(CRAFTING_STORAGE_KEY);
+        const craftingProcesses: ActiveCraftingProcess[] = storedCrafting ? JSON.parse(storedCrafting) : [];
+
+        if (activeProcesses.length + craftingProcesses.length >= MAX_FACTORY_SLOTS) {
+            alert("Все слоты кузницы заняты.");
             return false;
         }
+
         if (quantity <= 0) {
             alert("Укажите корректное количество.");
             return false;
@@ -71,7 +75,6 @@ export const RefiningProvider = ({ children }: { children: ReactNode }) => {
             setActiveProcesses(prev => [...prev, newProcess]);
             return true;
         } else {
-            // This should not happen if canAfford check passes, but as a safeguard:
             alert("Произошла ошибка при списании ресурсов.");
             return false;
         }
@@ -82,7 +85,7 @@ export const RefiningProvider = ({ children }: { children: ReactNode }) => {
     const claimProcess = useCallback((processId: string) => {
         const process = activeProcesses.find(p => p.id === processId);
         if (!process || process.endTime > Date.now()) {
-            return; // Cannot claim yet or process not found
+            return;
         }
         
         const itemsToAdd = {
@@ -95,7 +98,7 @@ export const RefiningProvider = ({ children }: { children: ReactNode }) => {
 
     const processSlots = {
         current: activeProcesses.length,
-        max: MAX_PROCESS_SLOTS,
+        max: MAX_FACTORY_SLOTS,
     };
 
     return (

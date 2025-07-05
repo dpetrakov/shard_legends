@@ -1,15 +1,34 @@
 
 "use client";
 
+import React from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { User, Gem, Candy, Skull as SkullIcon, Dog as DogIcon, Image as ImageIcon } from "lucide-react";
-import { useIconSet } from "@/contexts/IconSetContext";
-import { cn } from "@/lib/utils";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { User, Plus, Axe, Pickaxe, Shovel, Wheat, Users, Dices, Anvil, Banknote, FlaskConical } from "lucide-react";
+import Image from 'next/image';
+import { Separator } from "@/components/ui/separator";
+
+const ParameterItem = ({ icon, title, description, level }: { icon: React.ReactNode, title: string, description: string, level: number }) => (
+    <div className="flex items-center gap-4 py-3">
+        <div className="bg-primary/10 p-2 rounded-lg border border-primary/20">
+            {icon}
+        </div>
+        <div className="flex-grow">
+            <p className="font-semibold">{title}</p>
+            <p className="text-xs text-muted-foreground">{description}</p>
+        </div>
+        <div className="flex items-center gap-2">
+            <span className="font-bold text-lg w-12 text-center">Ур. {level}</span>
+            <Button size="icon" className="w-8 h-8" disabled>
+                <Plus className="h-4 w-4" />
+            </Button>
+        </div>
+    </div>
+);
+
 
 export default function ProfilePage() {
-  const { iconSet, setIconSet } = useIconSet();
 
   const handleTelegramAuth = async () => {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -81,6 +100,18 @@ export default function ProfilePage() {
     }
   };
 
+  const parameters = [
+    { id: 'builder', icon: <Shovel className="w-6 h-6 text-primary" />, title: 'Строитель', description: 'Увеличивает эффективность и прочность лопат.', level: 0 },
+    { id: 'reaper', icon: <Wheat className="w-6 h-6 text-primary" />, title: 'Жнец', description: 'Повышает скорость и удачу при использовании серпа.', level: 0 },
+    { id: 'leader', icon: <Users className="w-6 h-6 text-primary" />, title: 'Лидер', description: 'Позволяет приглашать больше друзей и увеличивает бонусы.', level: 0 },
+    { id: 'lumberjack', icon: <Axe className="w-6 h-6 text-primary" />, title: 'Лесоруб', description: 'Улучшает навыки владения топором для добычи дерева.', level: 0 },
+    { id: 'miner', icon: <Pickaxe className="w-6 h-6 text-primary" />, title: 'Шахтёр', description: 'Увеличивает силу и скорость добычи киркой.', level: 0 },
+    { id: 'player', icon: <Dices className="w-6 h-6 text-primary" />, title: 'Игрок', description: 'Повышает шанс найти редкие предметы и сокровища.', level: 0 },
+    { id: 'blacksmith', icon: <Anvil className="w-6 h-6 text-primary" />, title: 'Кузнец', description: 'Ускоряет процессы переплавки, ковки и починки.', level: 0 },
+    { id: 'trader', icon: <Banknote className="w-6 h-6 text-primary" />, title: 'Торговец', description: 'Снижает комиссии на рынке и улучшает условия обмена.', level: 0 },
+    { id: 'researcher', icon: <FlaskConical className="w-6 h-6 text-primary" />, title: 'Исследователь', description: 'Открывает новые рецепты и технологии быстрее.', level: 0 },
+  ];
+
   return (
     <div className="flex flex-col items-center justify-start min-h-full p-4 space-y-6 text-foreground">
       {/* User Info Section */}
@@ -103,71 +134,39 @@ export default function ProfilePage() {
           </div>
         </CardContent>
       </Card>
-
-      {/* Icon Set Selection Section */}
+      
+      {/* Parameters Section */}
       <Card className="w-full max-w-md backdrop-blur-md shadow-xl">
         <CardHeader>
-          <CardTitle className="text-2xl font-headline text-center text-primary">Набор иконок в игре</CardTitle>
-          <CardDescription className="text-center text-muted-foreground pt-1">
-            Выберите, какие фишки будут в игре "Поиск".
-          </CardDescription>
+            <CardTitle className="text-2xl font-headline text-center text-primary">Параметры</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-3">
-          <Button
-            variant={iconSet === 'classic' ? 'default' : 'outline'}
-            className={cn(
-              "py-3 text-sm sm:text-base",
-              iconSet === 'classic' ? "bg-primary text-primary-foreground" : "border-primary text-primary hover:bg-primary/10"
-            )}
-            onClick={() => setIconSet('classic')}
-          >
-            <Gem className="mr-2 h-5 w-5" />
-            Классика
-          </Button>
-          <Button
-            variant={iconSet === 'sweets' ? 'default' : 'outline'}
-            className={cn(
-              "py-3 text-sm sm:text-base",
-              iconSet === 'sweets' ? "bg-primary text-primary-foreground" : "border-primary text-primary hover:bg-primary/10"
-            )}
-            onClick={() => setIconSet('sweets')}
-          >
-            <Candy className="mr-2 h-5 w-5" />
-            Сладости
-          </Button>
-          <Button
-            variant={iconSet === 'gothic' ? 'default' : 'outline'}
-            className={cn(
-              "py-3 text-sm sm:text-base",
-              iconSet === 'gothic' ? "bg-primary text-primary-foreground" : "border-primary text-primary hover:bg-primary/10"
-            )}
-            onClick={() => setIconSet('gothic')}
-          >
-            <SkullIcon className="mr-2 h-5 w-5" />
-            Готика
-          </Button>
-          <Button
-            variant={iconSet === 'animals' ? 'default' : 'outline'}
-            className={cn(
-              "py-3 text-sm sm:text-base",
-              iconSet === 'animals' ? "bg-primary text-primary-foreground" : "border-primary text-primary hover:bg-primary/10"
-            )}
-            onClick={() => setIconSet('animals')}
-          >
-            <DogIcon className="mr-2 h-5 w-5" />
-            Животные
-          </Button>
-          <Button
-            variant={iconSet === 'in-match3' ? 'default' : 'outline'}
-            className={cn(
-              "py-3 text-sm sm:text-base",
-              iconSet === 'in-match3' ? "bg-primary text-primary-foreground" : "border-primary text-primary hover:bg-primary/10"
-            )}
-            onClick={() => setIconSet('in-match3')}
-          >
-            <ImageIcon className="mr-2 h-5 w-5" />
-            IN-match3
-          </Button>
+        <CardContent>
+            <div className="flex justify-between items-center bg-card/50 p-3 rounded-lg mb-4">
+                <div>
+                    <p className="text-sm text-muted-foreground">Свободные очки</p>
+                    <p className="text-2xl font-bold">0</p>
+                </div>
+                <Button>
+                    <Image src="/images/diamond.png" alt="Бриллианты" width={20} height={20} className="mr-2" />
+                    Купить
+                </Button>
+            </div>
+            
+            <Separator className="my-4 bg-border/50" />
+
+            <div>
+                {parameters.map((param, index) => (
+                    <React.Fragment key={param.id}>
+                        <ParameterItem 
+                            icon={param.icon}
+                            title={param.title}
+                            description={param.description}
+                            level={param.level}
+                        />
+                        {index < parameters.length - 1 && <Separator className="bg-border/30" />}
+                    </React.Fragment>
+                ))}
+            </div>
         </CardContent>
       </Card>
     </div>

@@ -349,12 +349,16 @@ func (is *inventoryService) AdjustInventory(ctx context.Context, req *models.Adj
 		// Convert collection and quality UUIDs back to codes
 		var collectionCode, qualityCode *string
 
-		if itemReq.Collection != nil && *itemReq.Collection != "" {
+		if itemReq.Collection != nil {
 			collectionCode = itemReq.Collection
+		} else {
+			collectionCode = stringPtr("base")
 		}
 
-		if itemReq.QualityLevel != nil && *itemReq.QualityLevel != "" {
+		if itemReq.QualityLevel != nil {
 			qualityCode = itemReq.QualityLevel
+		} else {
+			qualityCode = stringPtr("base")
 		}
 
 		// Calculate current balance after adjustment
@@ -574,14 +578,24 @@ func (is *inventoryService) GetItemsDetails(ctx context.Context, req *models.Ite
 			}
 		}
 
-		// Create image key for lookup (simplified approach)
+		// Create image key for lookup, ensuring consistency with storage layer
 		imageKey := requestItem.ItemID.String()
-		if requestItem.Collection != nil {
-			imageKey += "_" + *requestItem.Collection
+
+		var collection, qualityLevel string
+
+		if requestItem.Collection != nil && *requestItem.Collection != "" {
+			collection = *requestItem.Collection
+		} else {
+			collection = "base" // Default if not provided
 		}
-		if requestItem.QualityLevel != nil {
-			imageKey += "_" + *requestItem.QualityLevel
+
+		if requestItem.QualityLevel != nil && *requestItem.QualityLevel != "" {
+			qualityLevel = *requestItem.QualityLevel
+		} else {
+			qualityLevel = "base" // Default if not provided, to match storage logic
 		}
+
+		imageKey += "_" + collection + "_" + qualityLevel
 
 		imageURL := imagesMap[imageKey]
 		if imageURL == "" {

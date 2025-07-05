@@ -434,13 +434,64 @@ ON CONFLICT (entity_type, entity_id, field_name, language_code) DO UPDATE SET
     updated_at = now();
 
 -- =============================================================================
--- Шаг 5: Добавление индексов для новых полей (если нужно)
+-- Шаг 4: Загрузка изображений для предметов
 -- =============================================================================
--- Блок удален - индекс по полю code больше не нужен, так как поле code убрано из схемы
+-- В этом разделе мы связываем предметы с их изображениями.
+-- Для сундуков изображения зависят от качества (small, medium, large).
+
+DO $$
+DECLARE
+    v_collection_id uuid;
+    v_quality_small_id uuid;
+    v_quality_medium_id uuid;
+    v_quality_large_id uuid;
+    v_quality_base_id uuid;
+    v_resource_chest_id uuid;
+    v_reagent_chest_id uuid;
+    v_blueprint_chest_id uuid;
+BEGIN
+    -- Получаем ID классификаторов, которые будем использовать многократно
+    v_collection_id      := (SELECT id FROM inventory.classifier_items WHERE code = 'base' AND classifier_id = (SELECT id FROM inventory.classifiers WHERE code = 'collection'));
+    v_quality_small_id   := (SELECT id FROM inventory.classifier_items WHERE code = 'small' AND classifier_id = (SELECT id FROM inventory.classifiers WHERE code = 'quality_level'));
+    v_quality_medium_id  := (SELECT id FROM inventory.classifier_items WHERE code = 'medium' AND classifier_id = (SELECT id FROM inventory.classifiers WHERE code = 'quality_level'));
+    v_quality_large_id   := (SELECT id FROM inventory.classifier_items WHERE code = 'large' AND classifier_id = (SELECT id FROM inventory.classifiers WHERE code = 'quality_level'));
+    v_quality_base_id    := (SELECT id FROM inventory.classifier_items WHERE code = 'base' AND classifier_id = (SELECT id FROM inventory.classifiers WHERE code = 'quality_level'));
+
+    -- Получаем ID предметов-сундуков
+    v_resource_chest_id  := (SELECT id FROM inventory.items WHERE item_type_id = (SELECT id FROM inventory.classifier_items WHERE code = 'resource_chest'));
+    v_reagent_chest_id   := (SELECT id FROM inventory.items WHERE item_type_id = (SELECT id FROM inventory.classifier_items WHERE code = 'reagent_chest'));
+    v_blueprint_chest_id := (SELECT id FROM inventory.items WHERE item_type_id = (SELECT id FROM inventory.classifier_items WHERE code = 'blueprint_chest'));
+
+    RAISE NOTICE 'Inserting chest images...';
+
+    -- 1. Изображения для ресурсных сундуков (Resource Chests)
+    INSERT INTO inventory.item_images (item_id, collection_id, quality_level_id, image_url) VALUES
+        (v_resource_chest_id, v_collection_id, v_quality_small_id, '/statics/images/items/small-chess-res.png'),
+        (v_resource_chest_id, v_collection_id, v_quality_medium_id, '/statics/images/items/medium-chess-res.png'),
+        (v_resource_chest_id, v_collection_id, v_quality_large_id, '/statics/images/items/big-chess-res.png')
+    ON CONFLICT (item_id, collection_id, quality_level_id) DO UPDATE SET image_url = EXCLUDED.image_url;
+
+    -- 2. Изображения для реагентных сундуков (Reagent Chests)
+    INSERT INTO inventory.item_images (item_id, collection_id, quality_level_id, image_url) VALUES
+        (v_reagent_chest_id, v_collection_id, v_quality_small_id, '/statics/images/items/small-chess-ing.png'),
+        (v_reagent_chest_id, v_collection_id, v_quality_medium_id, '/statics/images/items/medium-chess-ing.png'),
+        (v_reagent_chest_id, v_collection_id, v_quality_large_id, '/statics/images/items/big-chess-ing.png')
+    ON CONFLICT (item_id, collection_id, quality_level_id) DO UPDATE SET image_url = EXCLUDED.image_url;
+    
+    -- 3. Изображение для сундука с чертежами (Blueprint Chest)
+    -- У этого сундука нет уровней качества, поэтому используем 'base'
+    INSERT INTO inventory.item_images (item_id, collection_id, quality_level_id, image_url) VALUES
+        (v_blueprint_chest_id, v_collection_id, v_quality_base_id, '/statics/images/items/chess-blueprint.png')
+    ON CONFLICT (item_id, collection_id, quality_level_id) DO UPDATE SET image_url = EXCLUDED.image_url;
+
+    RAISE NOTICE 'Chest images inserted successfully.';
+END $$;
+
 
 -- =============================================================================
--- Шаг 6: Проверка загруженных данных
+-- Шаг 5: Загрузка переводов для всех предметов
 -- =============================================================================
+
 DO $$
 DECLARE
     v_items_count INTEGER;

@@ -40,6 +40,36 @@ services:
       deck-game-service:
         condition: service_healthy
 
+  static-server:
+    build:
+      context: ./static-server
+      dockerfile: Dockerfile
+    container_name: slcw-static-server-dev
+    ports:
+      # Внешний порт только для локальной отладки. В проде доступ через внешний nginx.
+      - "127.0.0.1:22008:80"
+    volumes:
+      - ../../static-assets:/usr/share/nginx/html:ro
+    networks:
+      - slcw-dev
+      - slcw-monitoring
+    restart: unless-stopped
+    labels:
+      - "logging.service=static-server"
+      - "logging.environment=dev"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "logging.service,logging.environment"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
   # Frontend service
   frontend:
     build:

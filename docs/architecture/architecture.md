@@ -28,55 +28,31 @@ Shard Legends: Clan Wars - это многопользовательская с�
 ---
 config:
   look: handDrawn
-  theme: dark
 ---
 flowchart TD
-    User[Пользователь Telegram] --> Bot[Telegram Bot]
-    User --> TMA[Telegram Mini App]
-    Bot --> Gateway[API Gateway<br/>nginx]
-    TMA --> Gateway
-    Gateway --> AuthService[Auth Service<br/>Golang]
-    Gateway --> BotService[Telegram Bot Service<br/>Golang]
-    Gateway --> InventoryService[Inventory Service<br/>Golang]
-    Gateway --> ProductionService[Production Service<br/>Golang]
-    Gateway --> DeckGameService[Deck Game Service<br/>Golang]
-    Gateway --> UserService[User Service<br/>Golang - temporary]
+    User[Пользователь Telegram] --> TMA[Telegram Mini App]
     
-    
-    AuthService --> DB[(PostgreSQL 17)]
-    AuthService --> Cache[(Redis 8.0.2)]
-    BotService --> DB
-    InventoryService --> DB
-    InventoryService --> Cache
-%%    InventoryService --> AuthService
-    ProductionService --> DB
-    ProductionService --> Cache
-%%    ProductionService --> AuthService
-%%    ProductionService --> InventoryService
-%%    ProductionService --> UserService
-    DeckGameService --> DB
-    DeckGameService --> Cache
-    UserService --> Cache
-    
-    BotService -.->|Public API JWT validation| Cache
-    InventoryService -.->|Public API JWT validation| Cache
-    ProductionService -.->|Public API JWT validation| Cache
-    UserService -.->|Public API JWT validation| Cache
-    DeckGameService -.->|Public API JWT validation| Cache
-%%    DeckGameService --> ProductionService
-%%    DeckGameService --> InventoryService
-%%    DeckGameService --> AuthService
-    
-    subgraph "Docker Compose Environment"
-        Gateway
-        AuthService
-        BotService
-        InventoryService
-        ProductionService
-        DeckGameService
-        UserService
-        DB
-        Cache
+    subgraph "Инфраструктура на сервере"
+        TMA -- "API-запросы (/api/*)" --> Gateway[API Gateway<br/>nginx]
+        TMA -- "Статика (/statics/*)" --> StaticServer[Static Server<br/>nginx]
+
+        Gateway --> AuthService[Auth Service]
+        Gateway --> InventoryService[Inventory Service]
+        Gateway --> ProductionService[Production Service]
+        Gateway --> DeckGameService[Deck Game Service]
+        Gateway --> UserService[User Service]
+        Gateway --> BotService[Telegram Bot Service]
+        
+        AuthService --> DB[(Database)]
+        InventoryService --> DB
+        ProductionService --> DB
+        DeckGameService --> DB
+        
+        AuthService --> Cache[(Cache)]
+        InventoryService --> Cache
+        ProductionService --> Cache
+        DeckGameService --> Cache
+        UserService --> Cache
     end
 ```
 
@@ -98,7 +74,24 @@ flowchart TD
   - `/api/user` → user-service:8080/user
 - Health check: `/health` (внутренний)
 
-### 2. Telegram Bot Service (Golang)
+### 2. Управление статическими ресурсами
+
+Для обработки и раздачи статичных файлов (изображения предметов, иконки, UI-элементы и т.д.) применяется централизованный подход.
+
+**Ключевые принципы:**
+- **Единое хранилище:** Все статичные ресурсы хранятся в выделенной директории `static-assets` в корне проекта. Это обеспечивает порядок и упрощает управление файлами.
+- **Выделенный сервер раздачи:** Запросы к статике обрабатывает отдельный легковесный Nginx-сервер, а не бэкенд-сервисы на Golang. Это разгружает основные сервисы и позволяет им заниматься исключительно бизнес-логикой.
+- **URL-префикс:** Доступ ко всем статическим ресурсам осуществляется через единый URL-префикс `/statics/`. Например: `https://<your_domain>/statics/images/items/resource_chest_s.png`.
+- **Прямая маршрутизация:** Основной реверс-прокси (внешний Nginx) настроен так, чтобы напрямую маршрутизировать все запросы, начинающиеся с `/statics/`, на выделенный сервер раздачи статики, минуя API Gateway.
+
+**Преимущества:**
+- **Производительность:** Nginx оптимизирован для быстрой раздачи статичных файлов.
+- **Разгрузка бэкенда:** Go-сервисы не тратят ресурсы на задачи, для которых они не предназначены.
+- **Масштабируемость:** В будущем эту схему легко перевести на использование внешних CDN, просто изменив правила маршрутизации для префикса `/statics/`.
+- **Эффективное кэширование:** Позволяет настроить агрессивные стратегии кэширования для статичных ресурсов на уровне CDN и браузера клиента.
+
+
+### 3. Telegram Bot Service (Golang)
 
 **Ключевые возможности:**
 - Webhook обработка Telegram обновлений через `/webhook`
@@ -107,7 +100,7 @@ flowchart TD
 - Автоматическое определение имени бота для Mini App ссылок
 - Graceful shutdown при отключении
 
-### 3. Auth Service (Golang)
+### 4. Auth Service (Golang)
 
 **Назначение:**
 - Аутентификация и авторизация пользователей Telegram Mini App
@@ -138,7 +131,7 @@ flowchart TD
 
 Текущее решение: публичный ключ доступен только через `/public-key.pem` эндпоинт на внутреннем порту 8090. Поддержка JWKS (`/jwks` эндпоинт) отложена до следующих версий системы.
 
-### 4. Inventory Service (Golang)
+### 5. Inventory Service (Golang)
 
 **Назначение:**
 - Управление инвентарем пользователей и игровыми предметами
@@ -161,7 +154,7 @@ flowchart TD
 - Протоколирование всех операций с предметами
 - Интеграция с Production Service для резервирования материалов
 
-### 5. Production Service (Golang)
+### 6. Production Service (Golang)
 
 **Назначение:**
 - Управление производственными рецептами и заданиями
@@ -191,7 +184,7 @@ flowchart TD
 - База данных: PostgreSQL схема `production`
 - Кеширование: Redis DB 2 + проверка JWT в DB 0
 
-### 6. User Service (Golang) - временная версия
+### 7. User Service (Golang) - временная версия
 
 **Назначение:**
 - Управление пользовательскими данными и профилями
@@ -217,7 +210,7 @@ flowchart TD
 - База данных: отсутствует (временная версия)
 - Кеширование: Redis DB 3 + проверка JWT в DB 0
 
-### 7. Telegram Mini App (Frontend)
+### 8. Telegram Mini App (Frontend)
 
 **Ключевые возможности:**
 - Интеграция с Telegram через Web App SDK
@@ -226,7 +219,7 @@ flowchart TD
 - Клановая система
 - Responsive дизайн для мобильных устройств
 
-### 8. Game API (Golang) - планируется
+### 9. Game API (Golang) - планируется
 
 **Основная функциональность:**
 - RESTful API для всех игровых операций

@@ -94,12 +94,13 @@ func NewClassifierStorage(pool *pgxpool.Pool, redis *database.RedisDB, logger *s
 }
 
 // NewItemStorage creates a new item storage instance
-func NewItemStorage(pool *pgxpool.Pool, logger *slog.Logger, metrics service.MetricsInterface, cache service.CacheInterface) ItemRepository {
+func NewItemStorage(pool *pgxpool.Pool, redis *database.RedisDB, logger *slog.Logger, metrics service.MetricsInterface, cache service.CacheInterface) service.ItemRepositoryInterface {
 	return &itemStorage{
-		pool:    pool,
-		logger:  logger,
-		metrics: metrics,
-		cache:   cache,
+		pool:           pool,
+		logger:         logger,
+		metrics:        metrics,
+		cache:          cache,
+		classifierRepo: NewClassifierStorage(pool, redis, logger, nil), // Pass redisDB here
 	}
 }
 

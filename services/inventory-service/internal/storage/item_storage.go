@@ -19,6 +19,8 @@ type itemStorage struct {
 	logger  *slog.Logger
 	metrics service.MetricsInterface
 	cache   service.CacheInterface
+	// Add classifier repo to use its cached methods
+	classifierRepo service.ClassifierRepositoryInterface
 }
 
 func (s *itemStorage) GetItemByID(ctx context.Context, itemID uuid.UUID) (*models.Item, error) {
@@ -275,221 +277,162 @@ func (s *itemStorage) GetDefaultLanguage(ctx context.Context) (*models.Language,
 	return &lang, nil
 }
 
-// GetItemImagesBatch gets image URLs for multiple item variants
+// GetItemImagesBatch gets image URLs for multiple item variants with a fallback strategy.
+// 1. Exact match (item, collection, quality)
+// 2. Base collection match (item, 'base' collection, quality)
+// 3. Base fallback (item, 'base' collection, 'base' quality)
 func (s *itemStorage) GetItemImagesBatch(ctx context.Context, requests []models.ItemDetailRequestItem) (map[string]string, error) {
-	s.logger.Info("GetItemImagesBatch called", "item_count", len(requests))
-
+	s.logger.Info("GetItemImagesBatch called with fallback logic", "item_count", len(requests))
 	if len(requests) == 0 {
 		return make(map[string]string), nil
 	}
 
-	// Build maps to resolve codes to UUIDs for collections and quality levels
-	collectionCodeToID := make(map[string]uuid.UUID)
-	qualityCodeToID := make(map[string]uuid.UUID)
-
-	// Collect unique codes for batch resolution
-	collectionCodes := make(map[string]bool)
-	qualityCodes := make(map[string]bool)
-
-	for _, req := range requests {
-		if req.Collection != nil {
-			collectionCodes[*req.Collection] = true
-		}
-		if req.QualityLevel != nil {
-			qualityCodes[*req.QualityLevel] = true
-		}
+	// Get all classifier mappings once using the cached repository method.
+	collectionCodeToID, err := s.classifierRepo.GetCodeToUUIDMapping(ctx, "collection")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get collection mapping: %w", err)
+	}
+	qualityCodeToID, err := s.classifierRepo.GetCodeToUUIDMapping(ctx, "quality_level")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get quality level mapping: %w", err)
 	}
 
-	// Resolve collection codes to UUIDs if any
-	if len(collectionCodes) > 0 {
-		var codes []string
-		for code := range collectionCodes {
-			codes = append(codes, code)
-		}
+	// Final map for results, keyed by the composite key the service layer expects.
+	finalImageMap := make(map[string]string)
+	// Create a copy of requests to keep track of items that still need an image.
+	pendingRequests := make([]models.ItemDetailRequestItem, len(requests))
+	copy(pendingRequests, requests)
 
-		query := `
-			SELECT ci.code, ci.id
-			FROM inventory.classifier_items ci
-			JOIN inventory.classifiers c ON ci.classifier_id = c.id
-			WHERE c.code = 'collection' AND ci.code = ANY($1)
-		`
+	// --- Fallback Attempt 1: Exact Match ---
+	s.logger.Debug("Image fallback: Attempt 1 (Exact Match)", "pending_count", len(pendingRequests))
+	pendingRequests, err = s.findImagesForRequests(ctx, pendingRequests, finalImageMap, collectionCodeToID, qualityCodeToID, false, false)
+	if err != nil {
+		return nil, fmt.Errorf("error in fallback attempt 1 (exact match): %w", err)
+	}
 
-		rows, err := s.pool.Query(ctx, query, codes)
+	// --- Fallback Attempt 2: Base Collection, Original Quality ---
+	if len(pendingRequests) > 0 {
+		s.logger.Debug("Image fallback: Attempt 2 (Base Collection)", "pending_count", len(pendingRequests))
+		pendingRequests, err = s.findImagesForRequests(ctx, pendingRequests, finalImageMap, collectionCodeToID, qualityCodeToID, true, false)
 		if err != nil {
-			s.logger.Error("Failed to resolve collection codes", "error", err)
-			return nil, err
-		}
-		defer rows.Close()
-
-		for rows.Next() {
-			var code string
-			var id uuid.UUID
-			if err := rows.Scan(&code, &id); err != nil {
-				s.logger.Error("Failed to scan collection code", "error", err)
-				return nil, err
-			}
-			collectionCodeToID[code] = id
-		}
-
-		if err := rows.Err(); err != nil {
-			s.logger.Error("Collection codes query error", "error", err)
-			return nil, err
+			return nil, fmt.Errorf("error in fallback attempt 2 (base collection): %w", err)
 		}
 	}
 
-	// Resolve quality level codes to UUIDs if any
-	if len(qualityCodes) > 0 {
-		var codes []string
-		for code := range qualityCodes {
-			codes = append(codes, code)
-		}
-
-		query := `
-			SELECT ci.code, ci.id
-			FROM inventory.classifier_items ci
-			JOIN inventory.classifiers c ON ci.classifier_id = c.id
-			WHERE c.code = 'quality_level' AND ci.code = ANY($1)
-		`
-
-		rows, err := s.pool.Query(ctx, query, codes)
+	// --- Fallback Attempt 3: Base Collection & Base Quality ---
+	if len(pendingRequests) > 0 {
+		s.logger.Debug("Image fallback: Attempt 3 (Base Collection & Quality)", "pending_count", len(pendingRequests))
+		// This is the last attempt, so we don't need to update the pending list anymore.
+		_, err = s.findImagesForRequests(ctx, pendingRequests, finalImageMap, collectionCodeToID, qualityCodeToID, true, true)
 		if err != nil {
-			s.logger.Error("Failed to resolve quality level codes", "error", err)
-			return nil, err
-		}
-		defer rows.Close()
-
-		for rows.Next() {
-			var code string
-			var id uuid.UUID
-			if err := rows.Scan(&code, &id); err != nil {
-				s.logger.Error("Failed to scan quality level code", "error", err)
-				return nil, err
-			}
-			qualityCodeToID[code] = id
-		}
-
-		if err := rows.Err(); err != nil {
-			s.logger.Error("Quality level codes query error", "error", err)
-			return nil, err
+			return nil, fmt.Errorf("error in fallback attempt 3 (base fallback): %w", err)
 		}
 	}
 
-	// Build the main query for item images
-	type imageKey struct {
-		itemID         uuid.UUID
-		collectionID   uuid.UUID
-		qualityLevelID uuid.UUID
+	s.logger.Info("Finished image search", "total_requested", len(requests), "found", len(finalImageMap))
+	return finalImageMap, nil
+}
+
+// findImagesForRequests is a helper function that attempts to find images for a slice of requests using a specific strategy.
+// It returns a slice of requests for which an image was still not found.
+func (s *itemStorage) findImagesForRequests(
+	ctx context.Context,
+	requests []models.ItemDetailRequestItem,
+	finalImageMap map[string]string,
+	collectionCodeToID, qualityCodeToID map[string]uuid.UUID,
+	useBaseCollection, useBaseQuality bool,
+) ([]models.ItemDetailRequestItem, error) {
+
+	if len(requests) == 0 {
+		return nil, nil
 	}
 
-	var imageKeys []imageKey
-	requestKeyMap := make(map[imageKey]string) // maps imageKey to request identifier
+	baseCollectionID, baseCollOK := collectionCodeToID["base"]
+	baseQualityLevelID, baseQualOK := qualityCodeToID["base"]
+	if !baseCollOK || !baseQualOK {
+		return requests, fmt.Errorf("base collection or quality level not found in classifiers")
+	}
 
+	batch := &pgx.Batch{}
 	for _, req := range requests {
-		// Create identifier for this request
-		reqID := req.ItemID.String()
-		if req.Collection != nil {
-			reqID += "_" + *req.Collection
-		}
-		if req.QualityLevel != nil {
-			reqID += "_" + *req.QualityLevel
-		}
+		query := `SELECT image_url FROM inventory.item_images WHERE item_id = $1 AND collection_id = $2 AND quality_level_id = $3 LIMIT 1`
 
-		// Get collection and quality level UUIDs (use zero UUID if not specified)
 		var collectionID, qualityLevelID uuid.UUID
 
-		if req.Collection != nil {
-			if id, exists := collectionCodeToID[*req.Collection]; exists {
+		// Determine Collection ID for the query
+		if useBaseCollection {
+			collectionID = baseCollectionID
+		} else if req.Collection != nil {
+			id, ok := collectionCodeToID[*req.Collection]
+			if ok {
 				collectionID = id
 			} else {
-				s.logger.Warn("Collection code not found", "code", *req.Collection)
-				continue // Skip this request if collection not found
-			}
-		}
-
-		if req.QualityLevel != nil {
-			if id, exists := qualityCodeToID[*req.QualityLevel]; exists {
-				qualityLevelID = id
-			} else {
-				s.logger.Warn("Quality level code not found", "code", *req.QualityLevel)
-				continue // Skip this request if quality level not found
-			}
-		}
-
-		key := imageKey{
-			itemID:         req.ItemID,
-			collectionID:   collectionID,
-			qualityLevelID: qualityLevelID,
-		}
-		imageKeys = append(imageKeys, key)
-		requestKeyMap[key] = reqID
-	}
-
-	if len(imageKeys) == 0 {
-		s.logger.Warn("No valid image keys to query")
-		return make(map[string]string), nil
-	}
-
-	// Query item images with cache
-	result := make(map[string]string)
-	uncachedKeys := make([]imageKey, 0)
-
-	// Try to get images from cache first
-	for _, key := range imageKeys {
-		cacheKey := fmt.Sprintf("i18n:item_images:%s:%s:%s", key.itemID.String(), key.collectionID.String(), key.qualityLevelID.String())
-		var cachedImageURL string
-
-		if err := s.cache.Get(ctx, cacheKey, &cachedImageURL); err == nil && cachedImageURL != "" {
-			if reqID, exists := requestKeyMap[key]; exists {
-				result[reqID] = cachedImageURL
-				s.metrics.RecordCacheHit("item_images")
+				collectionID = baseCollectionID // Fallback to base if code is unknown
 			}
 		} else {
-			uncachedKeys = append(uncachedKeys, key)
-			s.metrics.RecordCacheMiss("item_images")
+			collectionID = baseCollectionID // Fallback to base if not provided
 		}
-	}
 
-	// Query uncached images from database
-	for _, key := range uncachedKeys {
-		query := `
-			SELECT image_url
-			FROM inventory.item_images
-			WHERE item_id = $1 AND collection_id = $2 AND quality_level_id = $3
-		`
-
-		var imageURL string
-		err := s.pool.QueryRow(ctx, query, key.itemID, key.collectionID, key.qualityLevelID).Scan(&imageURL)
-
-		if err != nil {
-			if err == pgx.ErrNoRows {
-				s.logger.Debug("No image found for item variant",
-					"item_id", key.itemID,
-					"collection_id", key.collectionID,
-					"quality_level_id", key.qualityLevelID)
-				// Cache empty result to prevent repeated queries
-				cacheKey := fmt.Sprintf("i18n:item_images:%s:%s:%s", key.itemID.String(), key.collectionID.String(), key.qualityLevelID.String())
-				if err := s.cache.Set(ctx, cacheKey, "", 24*time.Hour); err != nil {
-					s.logger.Warn("Failed to cache empty image result", "error", err)
-				}
-				continue
+		// Determine Quality Level ID for the query
+		if useBaseQuality {
+			qualityLevelID = baseQualityLevelID
+		} else if req.QualityLevel != nil {
+			id, ok := qualityCodeToID[*req.QualityLevel]
+			if ok {
+				qualityLevelID = id
+			} else {
+				qualityLevelID = baseQualityLevelID // Fallback to base if code is unknown
 			}
-			s.logger.Error("Failed to get item image", "error", err)
-			return nil, err
+		} else {
+			qualityLevelID = baseQualityLevelID // Fallback to base if not provided
 		}
 
-		// Cache the found image URL
-		cacheKey := fmt.Sprintf("i18n:item_images:%s:%s:%s", key.itemID.String(), key.collectionID.String(), key.qualityLevelID.String())
-		if err := s.cache.Set(ctx, cacheKey, imageURL, 24*time.Hour); err != nil {
-			s.logger.Warn("Failed to cache image URL", "error", err)
-		}
+		batch.Queue(query, req.ItemID, collectionID, qualityLevelID)
+	}
 
-		if reqID, exists := requestKeyMap[key]; exists {
-			result[reqID] = imageURL
+	results := s.pool.SendBatch(ctx, batch)
+	defer results.Close()
+
+	var stillPending []models.ItemDetailRequestItem
+	for _, req := range requests {
+		var imageURL string
+		err := results.QueryRow().Scan(&imageURL)
+
+		if err == nil && imageURL != "" {
+			// Found an image. Build the key that the service layer expects and add it to the final map.
+			key := s.buildImageMapKey(req)
+			finalImageMap[key] = imageURL
+		} else {
+			// Image not found with this strategy, keep it pending for the next attempt.
+			stillPending = append(stillPending, req)
+			if err != pgx.ErrNoRows {
+				s.logger.Warn("Failed to scan image_url during batch", "item_id", req.ItemID, "error", err)
+			}
 		}
 	}
 
-	s.logger.Info("Retrieved item images", "requested", len(requests), "found", len(result), "cached", len(imageKeys)-len(uncachedKeys), "from_db", len(uncachedKeys))
-	return result, nil
+	return stillPending, nil
+}
+
+// buildImageMapKey generates the composite key used by the service layer to look up an image URL.
+// This logic must be identical to the key generation in the service layer.
+func (s *itemStorage) buildImageMapKey(req models.ItemDetailRequestItem) string {
+	key := req.ItemID.String()
+	var collection, qualityLevel string
+
+	if req.Collection != nil && *req.Collection != "" {
+		collection = *req.Collection
+	} else {
+		collection = "base"
+	}
+
+	if req.QualityLevel != nil && *req.QualityLevel != "" {
+		qualityLevel = *req.QualityLevel
+	} else {
+		qualityLevel = "base"
+	}
+
+	return key + "_" + collection + "_" + qualityLevel
 }
 
 // GetItemsBatch gets multiple items by their IDs

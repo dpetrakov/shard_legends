@@ -6,50 +6,50 @@
 @layer base {
   /* FANTASY CASUAL THEME */
   .theme-fantasy-casual {
-    --background: 240 60% 12%; /* Deep, rich midnight blue */
+    --background: 248 45% 24%; /* Deep Blue from image */
     --foreground: 220 25% 95%; /* Soft, cool off-white */
 
-    --card: 240 50% 18%; /* Slightly lighter midnight blue */
+    --card: 248 45% 30%; /* Slightly lighter deep blue */
     --card-foreground: 220 25% 95%;
 
-    --popover: 240 50% 16%; /* Similar to card, a touch darker */
+    --popover: 248 45% 22%; /* Similar to card, a touch darker */
     --popover-foreground: 220 25% 95%;
 
-    --primary: 270 90% 65%; /* Vibrant, magical purple (amethyst) */
+    --primary: 332 84% 58%; /* Vibrant Pink from image */
     --primary-foreground: 0 0% 100%; /* Pure white */
 
     --secondary: 180 70% 50%; /* Playful Teal/Aqua */
     --secondary-foreground: 0 0% 100%; /* White */
 
-    --muted: 240 30% 25%; /* Desaturated blue-grey */
+    --muted: 240 30% 35%; /* Desaturated blue-grey */
     --muted-foreground: 220 20% 70%; /* Light grey-blue */
 
-    --accent: 330 85% 60%; /* Bright, whimsical Pink/Rose */
+    --accent: 332 84% 58%; /* Vibrant Pink from image */
     --accent-foreground: 0 0% 100%; /* White */
 
     --destructive: 0 80% 60%; /* Vibrant, but not overly harsh Red */
     --destructive-foreground: 0 0% 100%; /* White */
 
-    --border: 240 40% 22%; /* Subtle border, darker than card */
-    --input: 240 40% 20%; /* Slightly darker than border for input fields */
-    --ring: 270 90% 65%; /* Primary purple for rings */
+    --border: 248 45% 32%; /* Subtle border, darker than card */
+    --input: 248 45% 30%; /* Slightly darker than border for input fields */
+    --ring: 332 84% 58%; /* Primary pink for rings */
 
-    --chart-1: 270 90% 65%; /* Purple - Primary */
-    --chart-2: 330 85% 60%; /* Pink - Accent */
-    --chart-3: 180 70% 50%; /* Teal - Secondary */
-    --chart-4: 45 100% 55%; /* Sunny Yellow/Orange */
+    --chart-1: 332 84% 58%; /* Pink - Primary/Accent */
+    --chart-2: 180 70% 50%; /* Teal - Secondary */
+    --chart-3: 45 100% 55%; /* Sunny Yellow/Orange */
+    --chart-4: 270 90% 65%; /* Purple */
     /* --chart-5 removed as we are reducing to 5 crystal types */
 
     --radius: 0.75rem; /* Slightly more rounded */
 
     --sidebar-background: 240 60% 10%;
     --sidebar-foreground: 220 25% 90%;
-    --sidebar-primary: 270 90% 65%;
+    --sidebar-primary: 332 84% 58%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 330 85% 60%;
+    --sidebar-accent: 332 84% 58%;
     --sidebar-accent-foreground: 0 0% 100%;
     --sidebar-border: 240 40% 18%;
-    --sidebar-ring: 270 90% 65%;
+    --sidebar-ring: 332 84% 58%;
 
     /* Crystal specific colors for Fantasy Casual theme (Classic Set - 5 types) */
     --crystal-red: 0 90% 65%;
@@ -91,7 +91,7 @@
     --popover: 240 50% 16%;
     --popover-foreground: 220 25% 95%;
 
-    --primary: 270 90% 65%;
+    --primary: 332 84% 58%; /* Vibrant Pink from image */
     --primary-foreground: 0 0% 100%;
 
     --secondary: 180 70% 50%;
@@ -100,7 +100,7 @@
     --muted: 240 30% 25%;
     --muted-foreground: 220 20% 70%;
 
-    --accent: 330 85% 60%;
+    --accent: 332 84% 58%; /* Vibrant Pink from image */
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 80% 60%;
@@ -108,24 +108,24 @@
 
     --border: 240 40% 22%;
     --input: 240 40% 20%;
-    --ring: 270 90% 65%;
+    --ring: 332 84% 58%;
 
-    --chart-1: 270 90% 65%;
-    --chart-2: 330 85% 60%;
-    --chart-3: 180 70% 50%;
-    --chart-4: 45 100% 55%;
+    --chart-1: 332 84% 58%;
+    --chart-2: 180 70% 50%;
+    --chart-3: 45 100% 55%;
+    --chart-4: 270 90% 65%;
     /* --chart-5 removed */
 
     --radius: 0.75rem;
 
     --sidebar-background: 240 60% 10%;
     --sidebar-foreground: 220 25% 90%;
-    --sidebar-primary: 270 90% 65%;
+    --sidebar-primary: 332 84% 58%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 330 85% 60%;
+    --sidebar-accent: 332 84% 58%;
     --sidebar-accent-foreground: 0 0% 100%;
     --sidebar-border: 240 40% 18%;
-    --sidebar-ring: 270 90% 65%;
+    --sidebar-ring: 332 84% 58%;
 
     /* Crystal specific colors for Neon theme (Classic Set - 5 types) - same as Fantasy Casual */
     --crystal-red: 0 90% 65%;
@@ -201,9 +201,69 @@
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
   transform-style: preserve-3d;
-  will-change: transform;
 }
 
+.bg-lobby {
+  background-image: url('/images/lobby-background.jpg');
+}
 
+.text-shadow {
+  text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+}
 
+.text-shadow-lg {
+  text-shadow: 2px 2px 5px rgba(0,0,0,0.7);
+}
     
+/* Firefly Animation */
+.firefly-wrapper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 5; /* Above gradient, below main UI */
+}
+
+.firefly {
+  position: absolute;
+  background: #f7d754;
+  border-radius: 50%;
+  box-shadow: 0 0 6px 2px #f7d754, 0 0 12px 4px #ff8c00;
+  will-change: transform, opacity;
+  animation-name: fly;
+  animation-iteration-count: infinite;
+}
+
+@keyframes fly {
+  0% {
+    transform: translateX(0) translateY(0) scale(1);
+    opacity: 0.1; /* Start almost invisible */
+  }
+  10% {
+    transform: translateX(5vw) translateY(-10vh) scale(1.2);
+    opacity: 1; /* Quickly fade in and grow */
+  }
+  25% {
+    transform: translateX(20vw) translateY(-30vh) scale(0.7);
+    opacity: 0.8;
+  }
+  50% {
+    transform: translateX(-15vw) translateY(25vh) scale(1.1);
+    opacity: 1;
+  }
+  75% {
+    transform: translateX(10vw) translateY(15vh) scale(0.8);
+    opacity: 0.6;
+  }
+  90% {
+    transform: translateX(-5vw) translateY(-5vh) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(0) translateY(0) scale(1);
+    opacity: 0.1; /* Fade out at the end */
+  }
+}
