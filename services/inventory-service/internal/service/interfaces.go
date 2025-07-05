@@ -23,8 +23,6 @@ type InventoryService interface {
 
 	// High-level business operations
 	GetUserInventory(ctx context.Context, userID, sectionID uuid.UUID) ([]*models.InventoryItemResponse, error)
-	// D-15: Legacy method for performance comparison (not in public interface)
-	GetUserInventoryLegacy(ctx context.Context, userID, sectionID uuid.UUID) ([]*models.InventoryItemResponse, error)
 	AddItems(ctx context.Context, req *models.AddItemsRequest) ([]uuid.UUID, error)
 	AdjustInventory(ctx context.Context, req *models.AdjustInventoryRequest) (*models.AdjustInventoryResponse, error)
 
@@ -186,7 +184,6 @@ type InventoryRepositoryInterface interface {
 	GetOperations(ctx context.Context, userID, sectionID, itemID, collectionID, qualityLevelID uuid.UUID, fromDate time.Time) ([]*models.Operation, error)
 	GetOperationsByExternalID(ctx context.Context, operationID uuid.UUID) ([]*models.Operation, error)
 	CreateOperationsInTransaction(ctx context.Context, tx interface{}, operations []*models.Operation) error
-	GetUserInventoryItems(ctx context.Context, userID, sectionID uuid.UUID) ([]*models.ItemKey, error)
 	BeginTransaction(ctx context.Context) (interface{}, error)
 	CommitTransaction(tx interface{}) error
 	RollbackTransaction(tx interface{}) error
@@ -194,7 +191,7 @@ type InventoryRepositoryInterface interface {
 	// Atomic balance checking with row-level locking
 	CheckAndLockBalances(ctx context.Context, tx interface{}, items []BalanceLockRequest) ([]BalanceLockResult, error)
 
-	// D-15: Optimized methods to eliminate N+1 queries
+	// Optimized method to eliminate N+1 queries
 	GetUserInventoryOptimized(ctx context.Context, userID, sectionID uuid.UUID) ([]*models.InventoryItemResponse, error)
 }
 

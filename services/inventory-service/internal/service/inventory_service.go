@@ -73,94 +73,20 @@ func (is *inventoryService) InvalidateUserCache(ctx context.Context, userID uuid
 // High-level business operations
 
 // GetUserInventory returns all inventory items for a user in a specific section
-// D-15: Оптимизированная версия использует GetUserInventoryOptimized для устранения N+1 запросов
 func (is *inventoryService) GetUserInventory(ctx context.Context, userID, sectionID uuid.UUID) ([]*models.InventoryItemResponse, error) {
-	// D-15: Используем оптимизированный метод repository, который устраняет N+1 запросы
-	// Вместо множественных отдельных запросов выполняется один JOIN запрос
+	// Use optimized method that eliminates N+1 queries
+	// Executes a single JOIN query instead of multiple separate queries
 	result, err := is.deps.Repositories.Inventory.GetUserInventoryOptimized(ctx, userID, sectionID)
 	if err != nil {
 		if is.deps.Metrics != nil {
 			is.deps.Metrics.RecordInventoryOperation("get_inventory", sectionID.String(), "error")
 		}
-		return nil, errors.Wrap(err, "failed to get user inventory with optimized method")
+		return nil, errors.Wrap(err, "failed to get user inventory")
 	}
 
 	// Record metrics for successful operation
 	if is.deps.Metrics != nil {
 		is.deps.Metrics.RecordInventoryOperation("get_inventory", sectionID.String(), "success")
-	}
-
-	return result, nil
-}
-
-// GetUserInventoryLegacy - оригинальная версия с N+1 запросами (для сравнения производительности)
-// DEPRECATED: D-15 - используйте GetUserInventory вместо этого метода
-func (is *inventoryService) GetUserInventoryLegacy(ctx context.Context, userID, sectionID uuid.UUID) ([]*models.InventoryItemResponse, error) {
-	// Get all item keys for the user
-	itemKeys, err := is.deps.Repositories.Inventory.GetUserInventoryItems(ctx, userID, sectionID)
-	if err != nil {
-		if is.deps.Metrics != nil {
-			is.deps.Metrics.RecordInventoryOperation("get_inventory_legacy", sectionID.String(), "error")
-		}
-		return nil, errors.Wrap(err, "failed to get user inventory items")
-	}
-
-	var result []*models.InventoryItemResponse
-
-	// Calculate balance for each item (N+1 problem here)
-	for _, itemKey := range itemKeys {
-		// Get current balance
-		balanceReq := &BalanceRequest{
-			UserID:         itemKey.UserID,
-			SectionID:      itemKey.SectionID,
-			ItemID:         itemKey.ItemID,
-			CollectionID:   itemKey.CollectionID,
-			QualityLevelID: itemKey.QualityLevelID,
-		}
-
-		balance, err := is.balanceCalculator.CalculateCurrentBalance(ctx, balanceReq)
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to calculate balance for item %s", itemKey.ItemID.String())
-		}
-
-		// Skip items with zero balance
-		if balance <= 0 {
-			continue
-		}
-
-		// Get item details with classifier codes (N+1 problem here)
-		itemDetails, err := is.deps.Repositories.Item.GetItemWithDetails(ctx, itemKey.ItemID)
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to get item details for %s", itemKey.ItemID.String())
-		}
-
-		// Convert UUIDs to codes for response (N+1 problem here)
-		collectionCode, err := is.getCodeFromUUID(ctx, models.ClassifierCollection, itemKey.CollectionID)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to get collection code")
-		}
-
-		qualityCode, err := is.getCodeFromUUID(ctx, models.ClassifierQualityLevel, itemKey.QualityLevelID)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to get quality level code")
-		}
-
-		// Create response item
-		item := &models.InventoryItemResponse{
-			ItemID:       itemKey.ItemID,
-			ItemClass:    itemDetails.ItemClass,
-			ItemType:     itemDetails.ItemType,
-			Collection:   &collectionCode,
-			QualityLevel: &qualityCode,
-			Quantity:     balance,
-		}
-
-		result = append(result, item)
-	}
-
-	// Record metrics
-	if is.deps.Metrics != nil {
-		is.deps.Metrics.RecordInventoryOperation("get_inventory_legacy", sectionID.String(), "success")
 	}
 
 	return result, nil

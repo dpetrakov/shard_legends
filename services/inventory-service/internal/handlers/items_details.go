@@ -48,6 +48,15 @@ func (h *InventoryHandler) GetItemsDetails(c *gin.Context) {
 		return
 	}
 
+	// Log request details for debugging
+	for i, item := range req.Items {
+		h.logger.Info("DEBUG: Received item details request",
+			"index", i,
+			"item_id", item.ItemID,
+			"collection", item.Collection,
+			"quality_level", item.QualityLevel)
+	}
+
 	// Validate request
 	if len(req.Items) == 0 {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{

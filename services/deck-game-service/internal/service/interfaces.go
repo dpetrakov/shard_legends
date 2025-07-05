@@ -73,8 +73,8 @@ type ProductionClaimResponse struct {
 // TaskOutputItem represents an item received from production
 type TaskOutputItem struct {
 	ItemID       uuid.UUID `json:"item_id"`
-	Collection   *string   `json:"collection,omitempty"`
-	QualityLevel *string   `json:"quality_level,omitempty"`
+	Collection   *string   `json:"collection_code,omitempty"`
+	QualityLevel *string   `json:"quality_level_code,omitempty"`
 	Quantity     int       `json:"quantity"`
 }
 

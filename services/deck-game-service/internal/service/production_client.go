@@ -149,5 +149,15 @@ func (c *productionClient) ClaimProduction(ctx context.Context, jwtToken string,
 		"task_id", taskID,
 		"items_count", len(response.ItemsReceived))
 
+	// Log items received from production for debugging
+	for i, item := range response.ItemsReceived {
+		c.logger.Info("Item received from production",
+			"index", i,
+			"item_id", item.ItemID,
+			"collection", item.Collection,
+			"quality_level", item.QualityLevel,
+			"quantity", item.Quantity)
+	}
+
 	return &response, nil
 }

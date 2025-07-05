@@ -182,6 +182,13 @@ func (s *deckGameService) ClaimDailyChest(ctx context.Context, jwtToken string, 
 	// Get detailed item information
 	itemDetailsRequests := make([]ItemDetailsRequest, len(claimResp.ItemsReceived))
 	for i, item := range claimResp.ItemsReceived {
+		s.logger.Info("Processing item from production",
+			"user_id", userID,
+			"item_id", item.ItemID,
+			"collection", item.Collection,
+			"quality_level", item.QualityLevel,
+			"quantity", item.Quantity)
+
 		itemDetailsRequests[i] = ItemDetailsRequest{
 			ItemID:       item.ItemID,
 			Collection:   item.Collection,
@@ -212,6 +219,14 @@ func (s *deckGameService) ClaimDailyChest(ctx context.Context, jwtToken string, 
 			return nil, fmt.Errorf("item details not found for item %s", receivedItem.ItemID)
 		}
 
+		s.logger.Info("Item details retrieved",
+			"user_id", userID,
+			"item_id", details.ItemID,
+			"details_collection", details.Collection,
+			"details_quality_level", details.QualityLevel,
+			"filtered_collection", filterBaseValue(details.Collection),
+			"filtered_quality_level", filterBaseValue(details.QualityLevel))
+
 		responseItems[i] = models.ItemInfo{
 			ItemID:       details.ItemID.String(),
 			ItemClass:    details.ItemClass,
@@ -219,8 +234,8 @@ func (s *deckGameService) ClaimDailyChest(ctx context.Context, jwtToken string, 
 			Name:         details.Name,
 			Description:  details.Description,
 			ImageURL:     details.ImageURL,
-			Collection:   filterBaseValue(details.Collection),
-			QualityLevel: filterBaseValue(details.QualityLevel),
+			Collection:   filterBaseValue(receivedItem.Collection),
+			QualityLevel: filterBaseValue(receivedItem.QualityLevel),
 			Quantity:     receivedItem.Quantity,
 		}
 	}
@@ -331,6 +346,13 @@ func (s *deckGameService) OpenChest(ctx context.Context, jwtToken string, userID
 	// Get detailed item information
 	itemDetailsRequests := make([]ItemDetailsRequest, len(claimResp.ItemsReceived))
 	for i, item := range claimResp.ItemsReceived {
+		s.logger.Info("Processing received item",
+			"user_id", userID,
+			"item_id", item.ItemID,
+			"collection", item.Collection,
+			"quality_level", item.QualityLevel,
+			"quantity", item.Quantity)
+
 		itemDetailsRequests[i] = ItemDetailsRequest{
 			ItemID:       item.ItemID,
 			Collection:   item.Collection,
@@ -395,7 +417,7 @@ func filterBaseValue(s *string) *string {
 		return nil
 	}
 
-	// Filter out base/default values - they should not appear in the response
+	// Filter out only base/default values - quality levels like small/medium/large should be shown
 	value := *s
 	if value == "" || value == "base" || value == "default" {
 		return nil

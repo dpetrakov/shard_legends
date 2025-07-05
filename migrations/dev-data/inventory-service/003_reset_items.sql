@@ -163,44 +163,24 @@ INSERT INTO inventory.classifier_items (id, classifier_id, code, description) VA
     (gen_random_uuid(), (SELECT id FROM inventory.classifiers WHERE code = 'chest_type'), 'blueprint_chest', 'Сундук чертежей')
 ON CONFLICT (classifier_id, code) DO NOTHING;
 
--- Добавим сундуки (10 штук)
+-- Добавим сундуки (4 типа по одному ID)
 INSERT INTO inventory.items (id, item_class_id, item_type_id, quality_levels_classifier_id, collections_classifier_id) VALUES
+    -- Один ресурсный сундук (разные качества будут через quality_level_id в операциях)
     ('9421cc9f-a56e-4c7d-b636-4c8fdfef7166', 
      (SELECT id FROM inventory.classifier_items WHERE code = 'chests' AND classifier_id = (SELECT id FROM inventory.classifiers WHERE code = 'item_class')),
      (SELECT id FROM inventory.classifier_items WHERE code = 'resource_chest' AND classifier_id = (SELECT id FROM inventory.classifiers WHERE code = 'chest_type')),
      (SELECT id FROM inventory.classifiers WHERE code = 'quality_level'), (SELECT id FROM inventory.classifiers WHERE code = 'collection')),
-    ('6c0f7fd6-4a6e-4d42-b596-a1a2b775cdbc',
-     (SELECT id FROM inventory.classifier_items WHERE code = 'chests' AND classifier_id = (SELECT id FROM inventory.classifiers WHERE code = 'item_class')),
-     (SELECT id FROM inventory.classifier_items WHERE code = 'resource_chest' AND classifier_id = (SELECT id FROM inventory.classifiers WHERE code = 'chest_type')),
-     (SELECT id FROM inventory.classifiers WHERE code = 'quality_level'), (SELECT id FROM inventory.classifiers WHERE code = 'collection')),
-    ('0f8aa2c1-25b8-4aed-9d6b-8c1e927bf71f',
-     (SELECT id FROM inventory.classifier_items WHERE code = 'chests' AND classifier_id = (SELECT id FROM inventory.classifiers WHERE code = 'item_class')),
-     (SELECT id FROM inventory.classifier_items WHERE code = 'resource_chest' AND classifier_id = (SELECT id FROM inventory.classifiers WHERE code = 'chest_type')),
-     (SELECT id FROM inventory.classifiers WHERE code = 'quality_level'), (SELECT id FROM inventory.classifiers WHERE code = 'collection')),
+    -- Один реагентный сундук
     ('a2e20668-380d-43eb-87db-cb19e4fed0ab',
      (SELECT id FROM inventory.classifier_items WHERE code = 'chests' AND classifier_id = (SELECT id FROM inventory.classifiers WHERE code = 'item_class')),
      (SELECT id FROM inventory.classifier_items WHERE code = 'reagent_chest' AND classifier_id = (SELECT id FROM inventory.classifiers WHERE code = 'chest_type')),
      (SELECT id FROM inventory.classifiers WHERE code = 'quality_level'), (SELECT id FROM inventory.classifiers WHERE code = 'collection')),
-    ('b6dde60a-6530-4fa3-836b-415520d05f37',
-     (SELECT id FROM inventory.classifier_items WHERE code = 'chests' AND classifier_id = (SELECT id FROM inventory.classifiers WHERE code = 'item_class')),
-     (SELECT id FROM inventory.classifier_items WHERE code = 'reagent_chest' AND classifier_id = (SELECT id FROM inventory.classifiers WHERE code = 'chest_type')),
-     (SELECT id FROM inventory.classifiers WHERE code = 'quality_level'), (SELECT id FROM inventory.classifiers WHERE code = 'collection')),
-    ('359e86d5-d094-4b2b-b96e-6114e3c66d6b',
-     (SELECT id FROM inventory.classifier_items WHERE code = 'chests' AND classifier_id = (SELECT id FROM inventory.classifiers WHERE code = 'item_class')),
-     (SELECT id FROM inventory.classifier_items WHERE code = 'reagent_chest' AND classifier_id = (SELECT id FROM inventory.classifiers WHERE code = 'chest_type')),
-     (SELECT id FROM inventory.classifiers WHERE code = 'quality_level'), (SELECT id FROM inventory.classifiers WHERE code = 'collection')),
+    -- Один сундук ускорителей
     ('3b5c8322-c00d-44e2-875e-d5bd9097d1c4',
      (SELECT id FROM inventory.classifier_items WHERE code = 'chests' AND classifier_id = (SELECT id FROM inventory.classifiers WHERE code = 'item_class')),
      (SELECT id FROM inventory.classifier_items WHERE code = 'booster_chest' AND classifier_id = (SELECT id FROM inventory.classifiers WHERE code = 'chest_type')),
      (SELECT id FROM inventory.classifiers WHERE code = 'quality_level'), (SELECT id FROM inventory.classifiers WHERE code = 'collection')),
-    ('d9a3e79a-50d3-4ab5-be86-8137145c34e3',
-     (SELECT id FROM inventory.classifier_items WHERE code = 'chests' AND classifier_id = (SELECT id FROM inventory.classifiers WHERE code = 'item_class')),
-     (SELECT id FROM inventory.classifier_items WHERE code = 'booster_chest' AND classifier_id = (SELECT id FROM inventory.classifiers WHERE code = 'chest_type')),
-     (SELECT id FROM inventory.classifiers WHERE code = 'quality_level'), (SELECT id FROM inventory.classifiers WHERE code = 'collection')),
-    ('aa58eb38-5e91-47f0-bd4e-6ed02cb059b1',
-     (SELECT id FROM inventory.classifier_items WHERE code = 'chests' AND classifier_id = (SELECT id FROM inventory.classifiers WHERE code = 'item_class')),
-     (SELECT id FROM inventory.classifier_items WHERE code = 'booster_chest' AND classifier_id = (SELECT id FROM inventory.classifiers WHERE code = 'chest_type')),
-     (SELECT id FROM inventory.classifiers WHERE code = 'quality_level'), (SELECT id FROM inventory.classifiers WHERE code = 'collection')),
+    -- Один сундук чертежей
     ('012d9076-a37d-4e9d-a49a-fbc7a07e5bd9',
      (SELECT id FROM inventory.classifier_items WHERE code = 'chests' AND classifier_id = (SELECT id FROM inventory.classifiers WHERE code = 'item_class')),
      (SELECT id FROM inventory.classifier_items WHERE code = 'blueprint_chest' AND classifier_id = (SELECT id FROM inventory.classifiers WHERE code = 'chest_type')),
@@ -364,25 +344,25 @@ ON CONFLICT (entity_type, entity_id, field_name, language_code) DO UPDATE SET
     content = EXCLUDED.content,
     updated_at = now();
 
--- Переводы сундуков (сокращенно для экономии места - добавим основные)
+-- Переводы сундуков
 INSERT INTO i18n.translations (entity_type, entity_id, field_name, language_code, content) VALUES
-    -- Маленький ресурсный сундук
-    ('item', '9421cc9f-a56e-4c7d-b636-4c8fdfef7166', 'name', 'ru', 'Маленький ресурсный сундук'),
-    ('item', '9421cc9f-a56e-4c7d-b636-4c8fdfef7166', 'name', 'en', 'Small Resource Chest'),
-    ('item', '9421cc9f-a56e-4c7d-b636-4c8fdfef7166', 'description', 'ru', 'Содержит небольшое количество базовых ресурсов.'),
-    ('item', '9421cc9f-a56e-4c7d-b636-4c8fdfef7166', 'description', 'en', 'Contains a small amount of basic resources.'),
+    -- Ресурсный сундук (один предмет с разными качествами)
+    ('item', '9421cc9f-a56e-4c7d-b636-4c8fdfef7166', 'name', 'ru', 'Ресурсный сундук'),
+    ('item', '9421cc9f-a56e-4c7d-b636-4c8fdfef7166', 'name', 'en', 'Resource Chest'),
+    ('item', '9421cc9f-a56e-4c7d-b636-4c8fdfef7166', 'description', 'ru', 'Содержит случайные ресурсы. Размер и количество зависят от качества сундука.'),
+    ('item', '9421cc9f-a56e-4c7d-b636-4c8fdfef7166', 'description', 'en', 'Contains random resources. Size and quantity depend on chest quality.'),
     
-    -- Средний ресурсный сундук
-    ('item', '6c0f7fd6-4a6e-4d42-b596-a1a2b775cdbc', 'name', 'ru', 'Средний ресурсный сундук'),
-    ('item', '6c0f7fd6-4a6e-4d42-b596-a1a2b775cdbc', 'name', 'en', 'Medium Resource Chest'),
-    ('item', '6c0f7fd6-4a6e-4d42-b596-a1a2b775cdbc', 'description', 'ru', 'Содержит среднее количество ресурсов с экономической выгодой.'),
-    ('item', '6c0f7fd6-4a6e-4d42-b596-a1a2b775cdbc', 'description', 'en', 'Contains a medium amount of resources with economic benefits.'),
+    -- Реагентный сундук
+    ('item', 'a2e20668-380d-43eb-87db-cb19e4fed0ab', 'name', 'ru', 'Реагентный сундук'),
+    ('item', 'a2e20668-380d-43eb-87db-cb19e4fed0ab', 'name', 'en', 'Reagent Chest'),
+    ('item', 'a2e20668-380d-43eb-87db-cb19e4fed0ab', 'description', 'ru', 'Содержит случайные реагенты для крафта. Размер зависит от качества.'),
+    ('item', 'a2e20668-380d-43eb-87db-cb19e4fed0ab', 'description', 'en', 'Contains random reagents for crafting. Size depends on quality.'),
     
-    -- Большой ресурсный сундук
-    ('item', '0f8aa2c1-25b8-4aed-9d6b-8c1e927bf71f', 'name', 'ru', 'Большой ресурсный сундук'),
-    ('item', '0f8aa2c1-25b8-4aed-9d6b-8c1e927bf71f', 'name', 'en', 'Large Resource Chest'),
-    ('item', '0f8aa2c1-25b8-4aed-9d6b-8c1e927bf71f', 'description', 'ru', 'Содержит большое количество ресурсов с максимальной выгодой.'),
-    ('item', '0f8aa2c1-25b8-4aed-9d6b-8c1e927bf71f', 'description', 'en', 'Contains a large amount of resources with maximum benefits.'),
+    -- Сундук ускорителей
+    ('item', '3b5c8322-c00d-44e2-875e-d5bd9097d1c4', 'name', 'ru', 'Сундук ускорителей'),
+    ('item', '3b5c8322-c00d-44e2-875e-d5bd9097d1c4', 'name', 'en', 'Booster Chest'),
+    ('item', '3b5c8322-c00d-44e2-875e-d5bd9097d1c4', 'description', 'ru', 'Содержит случайные ускорители производства и крафта. Размер зависит от качества.'),
+    ('item', '3b5c8322-c00d-44e2-875e-d5bd9097d1c4', 'description', 'en', 'Contains random production and crafting boosters. Size depends on quality.'),
     
     -- Сундук чертежей
     ('item', '012d9076-a37d-4e9d-a49a-fbc7a07e5bd9', 'name', 'ru', 'Сундук чертежей'),
@@ -393,46 +373,7 @@ ON CONFLICT (entity_type, entity_id, field_name, language_code) DO UPDATE SET
     content = EXCLUDED.content,
     updated_at = now();
 
--- Дополнительные переводы сундуков (реагентные и ускорителей)
-INSERT INTO i18n.translations (entity_type, entity_id, field_name, language_code, content) VALUES
-    -- Маленький сундук реагентов
-    ('item', 'a2e20668-380d-43eb-87db-cb19e4fed0ab', 'name', 'ru', 'Маленький сундук реагентов'),
-    ('item', 'a2e20668-380d-43eb-87db-cb19e4fed0ab', 'name', 'en', 'Small Reagent Chest'),
-    ('item', 'a2e20668-380d-43eb-87db-cb19e4fed0ab', 'description', 'ru', 'Содержит небольшое количество реагентов для крафта.'),
-    ('item', 'a2e20668-380d-43eb-87db-cb19e4fed0ab', 'description', 'en', 'Contains a small amount of reagents for crafting.'),
-    
-    -- Средний сундук реагентов
-    ('item', 'b6dde60a-6530-4fa3-836b-415520d05f37', 'name', 'ru', 'Средний сундук реагентов'),
-    ('item', 'b6dde60a-6530-4fa3-836b-415520d05f37', 'name', 'en', 'Medium Reagent Chest'),
-    ('item', 'b6dde60a-6530-4fa3-836b-415520d05f37', 'description', 'ru', 'Содержит среднее количество реагентов с экономической выгодой.'),
-    ('item', 'b6dde60a-6530-4fa3-836b-415520d05f37', 'description', 'en', 'Contains a medium amount of reagents with economic benefits.'),
-    
-    -- Большой сундук реагентов
-    ('item', '359e86d5-d094-4b2b-b96e-6114e3c66d6b', 'name', 'ru', 'Большой сундук реагентов'),
-    ('item', '359e86d5-d094-4b2b-b96e-6114e3c66d6b', 'name', 'en', 'Large Reagent Chest'),
-    ('item', '359e86d5-d094-4b2b-b96e-6114e3c66d6b', 'description', 'ru', 'Содержит большое количество реагентов с максимальной выгодой.'),
-    ('item', '359e86d5-d094-4b2b-b96e-6114e3c66d6b', 'description', 'en', 'Contains a large amount of reagents with maximum benefits.'),
-    
-    -- Маленький сундук ускорителей
-    ('item', '3b5c8322-c00d-44e2-875e-d5bd9097d1c4', 'name', 'ru', 'Маленький сундук ускорителей'),
-    ('item', '3b5c8322-c00d-44e2-875e-d5bd9097d1c4', 'name', 'en', 'Small Booster Chest'),
-    ('item', '3b5c8322-c00d-44e2-875e-d5bd9097d1c4', 'description', 'ru', 'Содержит небольшой набор ускорителей производства и крафта.'),
-    ('item', '3b5c8322-c00d-44e2-875e-d5bd9097d1c4', 'description', 'en', 'Contains a small set of production and crafting boosters.'),
-    
-    -- Средний сундук ускорителей
-    ('item', 'd9a3e79a-50d3-4ab5-be86-8137145c34e3', 'name', 'ru', 'Средний сундук ускорителей'),
-    ('item', 'd9a3e79a-50d3-4ab5-be86-8137145c34e3', 'name', 'en', 'Medium Booster Chest'),
-    ('item', 'd9a3e79a-50d3-4ab5-be86-8137145c34e3', 'description', 'ru', 'Содержит средний набор ускорителей с экономической выгодой.'),
-    ('item', 'd9a3e79a-50d3-4ab5-be86-8137145c34e3', 'description', 'en', 'Contains a medium set of boosters with economic benefits.'),
-    
-    -- Большой сундук ускорителей
-    ('item', 'aa58eb38-5e91-47f0-bd4e-6ed02cb059b1', 'name', 'ru', 'Большой сундук ускорителей'),
-    ('item', 'aa58eb38-5e91-47f0-bd4e-6ed02cb059b1', 'name', 'en', 'Large Booster Chest'),
-    ('item', 'aa58eb38-5e91-47f0-bd4e-6ed02cb059b1', 'description', 'ru', 'Содержит большой набор ускорителей с максимальной выгодой.'),
-    ('item', 'aa58eb38-5e91-47f0-bd4e-6ed02cb059b1', 'description', 'en', 'Contains a large set of boosters with maximum benefits.')
-ON CONFLICT (entity_type, entity_id, field_name, language_code) DO UPDATE SET
-    content = EXCLUDED.content,
-    updated_at = now();
+
 
 -- Переводы чертежей
 INSERT INTO i18n.translations (entity_type, entity_id, field_name, language_code, content) VALUES
@@ -504,8 +445,8 @@ DO $$
 DECLARE
     v_items_count INTEGER;
     v_translations_count INTEGER;
-    v_expected_items INTEGER := 29; -- Ожидаемое количество предметов
-    v_expected_translations INTEGER := 116; -- Ожидаемое количество переводов (29 items * 2 fields * 2 languages)
+    v_expected_items INTEGER := 25; -- Ожидаемое количество предметов (убрали 6 дублирующих сундуков)
+    v_expected_translations INTEGER := 100; -- Ожидаемое количество переводов (25 items * 2 fields * 2 languages)
 BEGIN
     SELECT COUNT(*) INTO v_items_count FROM inventory.items;
     SELECT COUNT(*) INTO v_translations_count FROM i18n.translations WHERE entity_type = 'item';

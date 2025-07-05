@@ -60,6 +60,15 @@ func (c *inventoryClient) GetItemsDetails(ctx context.Context, jwtToken string, 
 		"lang", lang,
 		"url", url)
 
+	// Log request details for debugging
+	for i, item := range items {
+		c.logger.Info("Request item details",
+			"index", i,
+			"item_id", item.ItemID,
+			"collection", item.Collection,
+			"quality_level", item.QualityLevel)
+	}
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		c.logger.Error("Failed to get items details", "error", err, "url", url)
@@ -82,6 +91,17 @@ func (c *inventoryClient) GetItemsDetails(ctx context.Context, jwtToken string, 
 	c.logger.Info("Items details retrieved successfully",
 		"requested_items", len(items),
 		"returned_items", len(response.Items))
+
+	// Log response details for debugging
+	for i, item := range response.Items {
+		c.logger.Info("Response item details",
+			"index", i,
+			"item_id", item.ItemID,
+			"item_class", item.ItemClass,
+			"item_type", item.ItemType,
+			"collection", item.Collection,
+			"quality_level", item.QualityLevel)
+	}
 
 	return &response, nil
 }

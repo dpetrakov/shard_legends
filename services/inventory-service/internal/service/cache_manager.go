@@ -10,7 +10,7 @@ import (
 
 const (
 	// Cache key patterns for different types of data
-	userCachePattern       = "inventory:%s:*"
+	userCachePattern       = "inventory:%s:*" // Standard pattern for user inventory cache
 	classifierCachePattern = "inventory:classifier:%s*"
 	balanceCachePattern    = "inventory:%s:%s:*"
 )
@@ -113,29 +113,11 @@ func (cm *cacheManager) InvalidateSpecificItemCache(ctx context.Context, userID,
 
 // WarmupUserCache pre-loads frequently accessed data for a user
 func (cm *cacheManager) WarmupUserCache(ctx context.Context, userID, sectionID uuid.UUID) error {
-	// Get all items for the user in the section
-	itemKeys, err := cm.deps.Repositories.Inventory.GetUserInventoryItems(ctx, userID, sectionID)
+	// Pre-warm the cache by calling the main inventory method
+	// This will execute the optimized query and cache the result
+	_, err := cm.deps.Repositories.Inventory.GetUserInventoryOptimized(ctx, userID, sectionID)
 	if err != nil {
-		return errors.Wrap(err, "failed to get user inventory items for warmup")
-	}
-
-	// Pre-calculate and cache balances for all items
-	calculator := NewBalanceCalculator(cm.deps)
-	for _, itemKey := range itemKeys {
-		req := &BalanceRequest{
-			UserID:         itemKey.UserID,
-			SectionID:      itemKey.SectionID,
-			ItemID:         itemKey.ItemID,
-			CollectionID:   itemKey.CollectionID,
-			QualityLevelID: itemKey.QualityLevelID,
-		}
-
-		// Calculate balance (this will cache it)
-		_, err := calculator.CalculateCurrentBalance(ctx, req)
-		if err != nil {
-			// Log error but continue with other items
-			continue
-		}
+		return errors.Wrap(err, "failed to warm up user inventory cache")
 	}
 
 	return nil

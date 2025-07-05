@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/shard-legends/inventory-service/internal/database"
 	internalerrors "github.com/shard-legends/inventory-service/internal/errors"
@@ -28,7 +30,6 @@ type InventoryStorage struct {
 // InventoryRepository defines the interface for inventory data access
 type InventoryRepository interface {
 	// Inventory operations
-	GetUserInventoryItems(ctx context.Context, userID, sectionID uuid.UUID) ([]*models.ItemKey, error)
 	GetDailyBalance(ctx context.Context, userID, sectionID, itemID, collectionID, qualityLevelID uuid.UUID, date time.Time) (*models.DailyBalance, error)
 	GetLatestDailyBalance(ctx context.Context, userID, sectionID, itemID, collectionID, qualityLevelID uuid.UUID, beforeDate time.Time) (*models.DailyBalance, error)
 	CreateDailyBalance(ctx context.Context, balance *models.DailyBalance) error
@@ -47,7 +48,7 @@ type InventoryRepository interface {
 	// Atomic balance checking with row-level locking
 	CheckAndLockBalances(ctx context.Context, tx interface{}, items []service.BalanceLockRequest) ([]service.BalanceLockResult, error)
 
-	// D-15: Optimized methods to eliminate N+1 queries
+	// Optimized method to eliminate N+1 queries
 	GetUserInventoryOptimized(ctx context.Context, userID, sectionID uuid.UUID) ([]*models.InventoryItemResponse, error)
 }
 
@@ -103,61 +104,6 @@ func NewItemStorage(pool *pgxpool.Pool, logger *slog.Logger, metrics service.Met
 }
 
 // Inventory storage implementation
-
-func (s *InventoryStorage) GetUserInventoryItems(ctx context.Context, userID, sectionID uuid.UUID) ([]*models.ItemKey, error) {
-	s.logger.Info("GetUserInventoryItems called", "user_id", userID, "section_id", sectionID)
-
-	query := `
-		SELECT DISTINCT 
-			user_id, 
-			section_id, 
-			item_id, 
-			collection_id, 
-			quality_level_id
-		FROM inventory.daily_balances 
-		WHERE user_id = $1 AND section_id = $2
-		UNION
-		SELECT DISTINCT 
-			user_id, 
-			section_id, 
-			item_id, 
-			collection_id, 
-			quality_level_id
-		FROM inventory.operations 
-		WHERE user_id = $1 AND section_id = $2 AND created_at >= CURRENT_DATE
-	`
-
-	rows, err := s.pool.Query(ctx, query, userID, sectionID)
-	if err != nil {
-		s.logger.Error("Failed to get user inventory items", "error", err)
-		return nil, err
-	}
-	defer rows.Close()
-
-	var items []*models.ItemKey
-	for rows.Next() {
-		var item models.ItemKey
-		if err := rows.Scan(
-			&item.UserID,
-			&item.SectionID,
-			&item.ItemID,
-			&item.CollectionID,
-			&item.QualityLevelID,
-		); err != nil {
-			s.logger.Error("Failed to scan item key", "error", err)
-			return nil, err
-		}
-		items = append(items, &item)
-	}
-
-	if err := rows.Err(); err != nil {
-		s.logger.Error("Rows iteration error", "error", err)
-		return nil, err
-	}
-
-	s.logger.Info("Found inventory items", "count", len(items))
-	return items, nil
-}
 
 func (s *InventoryStorage) GetDailyBalance(ctx context.Context, userID, sectionID, itemID, collectionID, qualityLevelID uuid.UUID, date time.Time) (*models.DailyBalance, error) {
 	s.logger.Info("GetDailyBalance called", "user_id", userID, "date", date.Format("2006-01-02"))
@@ -666,10 +612,18 @@ func (s *InventoryStorage) CreateOperationsInTransaction(ctx context.Context, tx
 		return nil
 	}
 
+	// Debug log all operations before processing
+	for i, op := range operations {
+		s.logger.Info("DEBUG: Operation before processing", "index", i, "section_id", op.SectionID.String(), "user_id", op.UserID.String(), "item_id", op.ItemID.String())
+	}
+
 	// If no transaction provided, create operations normally
 	if tx == nil {
+		s.logger.Info("DEBUG: No transaction provided, using CreateOperations")
 		return s.CreateOperations(ctx, operations)
 	}
+
+	s.logger.Info("DEBUG: Transaction provided, proceeding with transaction-based creation")
 
 	// Cast to pgx.Tx
 	pgxTx, ok := tx.(pgx.Tx)
@@ -696,11 +650,14 @@ func (s *InventoryStorage) CreateOperationsInTransaction(ctx context.Context, tx
 	`
 
 	batch := &pgx.Batch{}
-	for _, op := range operations {
+	for i, op := range operations {
 		// Generate ID if not provided
 		if op.ID == uuid.Nil {
 			op.ID = uuid.New()
 		}
+
+		// Debug log the section_id being used
+		s.logger.Info("DEBUG: Adding operation to batch", "operation_index", i, "section_id", op.SectionID.String())
 
 		batch.Queue(query,
 			op.ID,
@@ -736,10 +693,37 @@ func (s *InventoryStorage) CreateOperationsInTransaction(ctx context.Context, tx
 	return nil
 }
 
-// GetUserInventoryOptimized - D-15: оптимизированный метод для устранения N+1 запросов
-// Использует единый JOIN запрос вместо множественных отдельных запросов
+// GetUserInventoryOptimized - efficient method that eliminates N+1 queries
+// Uses a single JOIN query instead of multiple separate queries
 func (s *InventoryStorage) GetUserInventoryOptimized(ctx context.Context, userID, sectionID uuid.UUID) ([]*models.InventoryItemResponse, error) {
 	s.logger.Info("GetUserInventoryOptimized called", "user_id", userID, "section_id", sectionID)
+
+	// Generate cache key for user inventory
+	cacheKey := fmt.Sprintf("inventory:%s:%s", userID.String(), sectionID.String())
+
+	// Try to get from cache first
+	cachedData, err := s.redis.Get(ctx, cacheKey)
+	if err != nil && err != redis.Nil {
+		// Log Redis error but don't fail the request
+		s.logger.Warn("Redis error while getting cache", "error", err, "user_id", userID, "section_id", sectionID)
+	} else if err == nil && cachedData != "" {
+		var cachedResult []*models.InventoryItemResponse
+		if err := json.Unmarshal([]byte(cachedData), &cachedResult); err == nil {
+			s.logger.Info("Retrieved inventory from cache", "user_id", userID, "section_id", sectionID, "items_count", len(cachedResult))
+			if s.metrics != nil {
+				s.metrics.RecordInventoryOperation("get_inventory_cache_hit", sectionID.String(), "success")
+			}
+			return cachedResult, nil
+		} else {
+			s.logger.Warn("Failed to unmarshal cached inventory data", "error", err, "user_id", userID, "section_id", sectionID)
+		}
+	}
+
+	// Cache miss - log and record metrics
+	s.logger.Info("Cache miss for inventory", "user_id", userID, "section_id", sectionID)
+	if s.metrics != nil {
+		s.metrics.RecordInventoryOperation("get_inventory_cache_miss", sectionID.String(), "info")
+	}
 
 	// Единый запрос с JOIN для получения всех данных за раз
 	// Устраняет N+1 проблему путем объединения:
@@ -857,7 +841,7 @@ func (s *InventoryStorage) GetUserInventoryOptimized(ctx context.Context, userID
 	if err != nil {
 		s.logger.Error("Failed to execute optimized inventory query", "error", err)
 		if s.metrics != nil {
-			s.metrics.RecordInventoryOperation("get_inventory_optimized", sectionID.String(), "error")
+			s.metrics.RecordInventoryOperation("get_inventory", sectionID.String(), "error")
 		}
 		return nil, err
 	}
@@ -895,9 +879,20 @@ func (s *InventoryStorage) GetUserInventoryOptimized(ctx context.Context, userID
 		return nil, err
 	}
 
+	// Cache the result for 5 minutes (short TTL since inventory changes frequently)
+	cacheTTL := 5 * time.Minute
+	if resultData, err := json.Marshal(result); err == nil {
+		if err := s.redis.Set(ctx, cacheKey, resultData, cacheTTL); err != nil {
+			s.logger.Warn("Failed to cache inventory result", "error", err, "user_id", userID, "section_id", sectionID)
+			// Don't fail the request if caching fails
+		} else {
+			s.logger.Info("Cached inventory result", "user_id", userID, "section_id", sectionID, "ttl", cacheTTL)
+		}
+	}
+
 	// Записываем метрики успеха
 	if s.metrics != nil {
-		s.metrics.RecordInventoryOperation("get_inventory_optimized", sectionID.String(), "success")
+		s.metrics.RecordInventoryOperation("get_inventory", sectionID.String(), "success")
 	}
 
 	s.logger.Info("Optimized inventory query completed",

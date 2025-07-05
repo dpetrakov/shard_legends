@@ -236,9 +236,10 @@ func (oc *operationCreator) CreateReservationOperations(ctx context.Context, req
 		return nil, errors.Wrap(err, "failed to begin reservation transaction")
 	}
 
-	// Ensure transaction is rolled back on any error
+	// Гарантируем завершение транзакции: откат, если Commit не выполнен
+	committed := false
 	defer func() {
-		if err != nil {
+		if !committed {
 			_ = oc.deps.Repositories.Inventory.RollbackTransaction(tx)
 		}
 	}()
@@ -391,6 +392,9 @@ func (oc *operationCreator) CreateReservationOperations(ctx context.Context, req
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to commit reservation transaction")
 	}
+
+	// Помечаем успешный коммит, чтобы defer не делал Rollback
+	committed = true
 
 	// Invalidate cache for affected users after successful transaction
 	err = oc.invalidateCacheForOperations(ctx, operations)

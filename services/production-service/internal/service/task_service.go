@@ -441,6 +441,16 @@ func (s *TaskService) ClaimTaskResults(ctx context.Context, userID uuid.UUID, ta
 			zap.Int("tasks_count", len(updatedQueue)))
 	}
 
+	// DEBUG: Логируем что возвращаем
+	for i, item := range allItemsReceived {
+		s.logger.Error("DEBUG: ClaimResponse item",
+			zap.Int("index", i),
+			zap.String("item_id", item.ItemID.String()),
+			zap.Any("collection_code", item.CollectionCode),
+			zap.Any("quality_level_code", item.QualityLevelCode),
+			zap.Int("quantity", item.Quantity))
+	}
+
 	response := &models.ClaimResponse{
 		Success:       true,
 		ItemsReceived: allItemsReceived,

@@ -215,12 +215,16 @@ func (c *ProductionCalculator) createOutputItem(ctx context.Context, recipeOutpu
 
 // processCollectionInheritance обрабатывает наследование коллекций
 func (c *ProductionCalculator) processCollectionInheritance(ctx context.Context, output *models.TaskOutputItem, recipeOutput models.RecipeOutputItem, inputItems []models.RecipeInputItem) error {
+	c.logger.Info("Processing collection inheritance",
+		zap.String("item_id", output.ItemID.String()),
+		zap.Bool("has_fixed_collection", recipeOutput.FixedCollectionCode != nil),
+		zap.Bool("has_source_input_index", recipeOutput.CollectionSourceInputIndex != nil))
 	// Фиксированная коллекция имеет приоритет
 	if recipeOutput.FixedCollectionCode != nil {
 		output.CollectionCode = recipeOutput.FixedCollectionCode
 
 		// Конвертируем код в UUID
-		collectionID, err := c.classifierRepo.ConvertCodeToUUID(ctx, "item_collections", *recipeOutput.FixedCollectionCode)
+		collectionID, err := c.classifierRepo.ConvertCodeToUUID(ctx, "collection", *recipeOutput.FixedCollectionCode)
 		if err != nil {
 			c.logger.Warn("Failed to convert collection code to UUID",
 				zap.String("code", *recipeOutput.FixedCollectionCode),
@@ -238,6 +242,29 @@ func (c *ProductionCalculator) processCollectionInheritance(ctx context.Context,
 		inputItem := inputItems[*recipeOutput.CollectionSourceInputIndex]
 		output.CollectionCode = inputItem.CollectionCode
 		output.CollectionID = inputItem.CollectionID
+		return nil
+	}
+
+	// Устанавливаем коллекцию по умолчанию, если ничего не указано
+	defaultCollectionCode := "base"
+	output.CollectionCode = &defaultCollectionCode
+
+	c.logger.Info("Setting default collection",
+		zap.String("code", defaultCollectionCode))
+
+	// Конвертируем код в UUID
+	collectionID, err := c.classifierRepo.ConvertCodeToUUID(ctx, "collection", defaultCollectionCode)
+	if err != nil {
+		c.logger.Warn("Failed to convert default collection code to UUID",
+			zap.String("code", defaultCollectionCode),
+			zap.Error(err))
+	} else if collectionID != nil {
+		output.CollectionID = collectionID
+		c.logger.Info("Successfully set collection ID",
+			zap.String("collection_id", collectionID.String()))
+	} else {
+		c.logger.Warn("Collection ID is nil after conversion",
+			zap.String("code", defaultCollectionCode))
 	}
 
 	return nil
@@ -268,6 +295,31 @@ func (c *ProductionCalculator) processQualityInheritance(ctx context.Context, ou
 		inputItem := inputItems[*recipeOutput.QualitySourceInputIndex]
 		output.QualityLevelCode = inputItem.QualityLevelCode
 		output.QualityLevelID = inputItem.QualityLevelID
+		return nil
+	}
+
+	// Устанавливаем качество по умолчанию, если ничего не указано
+	if output.QualityLevelCode == nil {
+		defaultQualityLevelCode := "base"
+		output.QualityLevelCode = &defaultQualityLevelCode
+
+		c.logger.Info("Setting default quality level",
+			zap.String("code", defaultQualityLevelCode))
+
+		// Конвертируем код в UUID
+		qualityID, err := c.classifierRepo.ConvertCodeToUUID(ctx, "quality_level", defaultQualityLevelCode)
+		if err != nil {
+			c.logger.Warn("Failed to convert default quality level code to UUID",
+				zap.String("code", defaultQualityLevelCode),
+				zap.Error(err))
+		} else if qualityID != nil {
+			output.QualityLevelID = qualityID
+			c.logger.Info("Successfully set quality level ID",
+				zap.String("quality_level_id", qualityID.String()))
+		} else {
+			c.logger.Warn("Quality level ID is nil after conversion",
+				zap.String("code", defaultQualityLevelCode))
+		}
 	}
 
 	return nil

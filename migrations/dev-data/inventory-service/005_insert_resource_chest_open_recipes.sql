@@ -51,7 +51,7 @@ BEGIN
         recipe_id, item_id, quality_level_code, quantity
     ) VALUES 
         -- сундук малого размера с правильным quality_level_code
-        (v_recipe_id, '9421cc9f-a56e-4c7d-b636-4c8fdfef7166', 'small', 1); -- resource_chest_s
+        (v_recipe_id, '9421cc9f-a56e-4c7d-b636-4c8fdfef7166', 'small', 1); -- resource_chest small
 
     -- -------------------------------------------------------------------------
     -- Выходные предметы (stone / wood / ore / diamond) – 100 ед., распределение 40/40/15/5
@@ -102,7 +102,7 @@ BEGIN
 
     -- Inputs: только средний сундук (без ключа)
     INSERT INTO production.recipe_input_items (recipe_id, item_id, quality_level_code, quantity) VALUES
-        (v_recipe_id, '6c0f7fd6-4a6e-4d42-b596-a1a2b775cdbc', 'medium', 1); -- resource_chest_m
+        (v_recipe_id, '9421cc9f-a56e-4c7d-b636-4c8fdfef7166', 'medium', 1); -- resource_chest medium
 
     -- Outputs quantities 3 500
     INSERT INTO production.recipe_output_items (
@@ -140,7 +140,7 @@ BEGIN
 
     -- Inputs: только большой сундук (без ключа)
     INSERT INTO production.recipe_input_items (recipe_id, item_id, quality_level_code, quantity) VALUES
-        (v_recipe_id, '0f8aa2c1-25b8-4aed-9d6b-8c1e927bf71f', 'large', 1); -- resource_chest_l
+        (v_recipe_id, '9421cc9f-a56e-4c7d-b636-4c8fdfef7166', 'large', 1); -- resource_chest large
 
     INSERT INTO production.recipe_output_items (
         recipe_id, item_id, min_quantity, max_quantity, probability_percent, output_group, fixed_quality_level_code
