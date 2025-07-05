@@ -2,9 +2,13 @@
 # nginx
 
 ```bash
+rm /etc/nginx/conf.d/slcw.conf
+cp ../nginx/slcw.conf /etc/nginx/conf.d/slcw.conf
+
 nano /etc/nginx/conf.d/slcw.conf
 sudo nginx -t
 sudo nginx -s reload
+systemctl restart nginx
 ```
 
 # ssh туннель 

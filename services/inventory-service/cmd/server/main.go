@@ -248,22 +248,22 @@ func setupAPIWithJWT(cfg *config.Config, publicRouter *gin.Engine, internalRoute
 	inventoryService := service.NewInventoryService(serviceDeps)
 	classifierService := service.NewClassifierService(serviceDeps)
 
-	// Initialize JWT middleware (required for public endpoints only)
-	jwtMiddleware := middleware.NewJWTAuthMiddleware(publicKey, redis, logger)
-
 	// Initialize handlers
 	inventoryHandler := handlers.NewInventoryHandler(inventoryService, classifierService, logger)
 
+	// Initialize JWT middleware (required for public endpoints only)
+	jwtMiddleware := middleware.NewJWTAuthMiddleware(publicKey, redis, logger)
+
 	// Setup public API routes
-	publicAPI := publicRouter.Group("/api/inventory")
+	publicAPI := publicRouter.Group("") // БЫЛО: /api/inventory
 
 	// Public endpoints (require JWT authentication)
 	public := publicAPI.Group("")
 	public.Use(jwtMiddleware.AuthenticateJWT())
 	{
-		public.GET("", inventoryHandler.GetUserInventory)
-		public.GET("/items", inventoryHandler.GetUserInventory)         // alias for compatibility
-		public.POST("/items/details", inventoryHandler.GetItemsDetails) // localized item details
+		public.GET("/inventory", inventoryHandler.GetUserInventory)
+		public.GET("/inventory/items", inventoryHandler.GetUserInventory)         // alias for compatibility
+		public.POST("/inventory/items/details", inventoryHandler.GetItemsDetails) // localized item details
 	}
 
 	// Setup internal API routes
@@ -279,7 +279,7 @@ func setupAPIWithJWT(cfg *config.Config, publicRouter *gin.Engine, internalRoute
 		internal.GET("/reservation/:operationID", inventoryHandler.GetReservationStatus)
 	}
 
-	// Administrative endpoints on internal API (no authentication required - isolated by network)
+	// Register admin routes on the internal router for restricted access
 	admin := internalAPI.Group("/admin")
 	{
 		admin.POST("/adjust", inventoryHandler.AdjustInventory)
