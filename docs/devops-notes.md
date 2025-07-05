@@ -81,6 +81,22 @@ docker compose -f deploy/dev/docker-compose.yml exec -T postgres \
         AND created_at::date = CURRENT_DATE;"
 ```
 
+## Перезалить скрипты инвентаря
+```bash
+    for file in ../../migrations/dev-data/inventory-service/*.sql; do
+      if [ -f "$file" ]; then
+        echo "Applying script: $file"
+        cat "$file" | docker-compose exec -T postgres psql -U slcw_user -d shard_legends_dev
+      else
+        echo "Warning: No SQL scripts found in migrations/dev-data/inventory-service/"
+        break
+      fi
+    done
+```
+
+``` bash
+    cat ../../migrations/dev-data/clean_orphan_items.sql | docker-compose exec -T postgres psql -U slcw_user -d shard_legends_dev
+```
 
   1. Откройте Grafana: http://localhost:15000
   2. Войдите: admin / 
