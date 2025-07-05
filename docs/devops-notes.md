@@ -70,6 +70,18 @@ docker compose -f deploy/dev/docker-compose.yml exec -T postgres \
   -c "UPDATE i18n.languages SET is_default = FALSE; UPDATE i18n.languages SET is_default = TRUE WHERE code = 'ru';"
 ```
 
+## Скрипт для сброса дейли сундуков
+```bash
+docker compose -f deploy/dev/docker-compose.yml exec -T postgres \
+  psql -U slcw_user -d shard_legends_dev -v ON_ERROR_STOP=1 --echo-queries \
+  -c "UPDATE production.production_tasks \
+        SET created_at = created_at - INTERVAL '1 day' \
+      WHERE recipe_id = '9b9a4a62-7e79-4f1c-8dbe-62784be4c9d2' \
+        AND status = 'claimed' \
+        AND created_at::date = CURRENT_DATE;"
+```
+
+
   1. Откройте Grafana: http://localhost:15000
   2. Войдите: admin / 
   3. Проверьте логи:

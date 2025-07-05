@@ -14,164 +14,160 @@
 **Критерии готовности:** что должно быть выполнено
 ```
 
+## A-R-1 Рецепт открытия resource_chest_s
+- **Описание:** Разработать и загрузить рецепт `resource_chest_s_opening` (operation_class_code `chest_opening`), который открывает малый ресурсный сундук. Рецепт потребляет 1× `resource_chest_s` и 1× `key` качества `small`, возвращает фиксированный набор ресурсов согласно бизнес-требованиям.
+- **Пошаговый план:**
+  1. Изучить бизнес-документ [`game-mechanics-chests-keys-deck-minigame.md`](docs/concept/game-mechanics-chests-keys-deck-minigame.md) — раздел «Ресурсные сундуки» (таблица количеств 100/40/40/15/5).
+  2. Проверить наличие классификаторов и уровней качества в [`002_reset_classifiers.sql`](migrations/dev-data/inventory-service/002_reset_classifiers.sql).
+  3. Определить UUID предметов `resource_chest_s`, `key` и ресурсов (`stone`, `wood`, `ore`, `diamond`) в [`003_reset_items.sql`](migrations/dev-data/inventory-service/003_reset_items.sql).
+  4. Ознакомиться с примером SQL-скрипта [`004_insert_reward_chest_recipe.sql`](migrations/dev-data/inventory-service/004_insert_reward_chest_recipe.sql) и YAML-форматом в [`production-recipes-initial.md`](docs/specs/production-recipes-initial.md) + [`reward-chest-recipe.yaml`](docs/specs/recipes/reward-chest-recipe.yaml).
+  5. Сформировать YAML-рецепт `resource-chest-open-recipes.yaml` (папка `docs/specs/recipes/`) со структурой:
+     - `id` — новый фиксированный UUID
+     - `code` — `resource_chest_s_open`
+     - `input_items` — сундук + ключ
+     - `output_items` — количество зависит от типа ресурса: stone 40, wood 40, ore 15, diamond 5; вероятности 40/40/15/5 % в сумме дают 100 %
+  6. На основе YAML создать миграцию `005_insert_resource_chest_open_recipes.sql` (dev-data) по образцу п. 3.
+  7. Добавить RU/EN переводы названия/описания через `i18n.translations`.
+  8. Протестировать скрипт локально: запустить проливку миграций через контейнер migrate:
+      ```bash
+      docker compose -f deploy/dev/docker-compose.yml --profile migrations run --rm \
+        --entrypoint /bin/sh migrate -c \
+        'psql "$DATABASE_URL" -f /migrations/dev-data/inventory-service/005_insert_resource_chest_open_recipes.sql'
+      ```
+      Убедиться в отсутствии ошибок и корректной сумме вероятностей 100 %.
+- **Приоритет:** Средний
+- **Оценка:** M
+- **Зависимости:** 002_reset_classifiers, 003_reset_items
+- **Критерии готовности:**
+  - [x] YAML-спецификация добавлена и прошла CI-валидацию
+  - [x] SQL-миграция выполняется без ошибок на чистой dev БД
+  - [x] Все item_id резолвятся, foreign keys валидны
+  - [x] Выходные количества ресурсов соответствуют 40/40/15/5 (итого 100)
+  - [x] Добавлены переводы RU/EN для name/description
+  - [ ] Unit-тест пред-загрузки рецепта (fixture test) зелёный
 
+## A-R-2 Рецепт открытия resource_chest_m
+- **Описание:** Аналогично `resource_chest_s_opening`, но для среднего сундука (`resource_chest_m`) и ключа `key` качества `medium`. Количество ресурсов масштабируется до 3 500: stone 1400, wood 1400, ore 525, diamond 175.
+- **Пошаговый план:**
+  1. Повторить шаги 1-4, используя данные для размера **M** (таблица в концепте).
+  2. Дописать рецепт в существующий YAML-файл [`resource-chest-open-recipes.yaml`](docs/specs/recipes/resource-chest-open-recipes.yaml):
+      - `output_items` имеют фиксированное количество **3 500** ед.; вероятности 40/40/15/5 % (stone/wood/ore/diamond).
+      - `fixed_quality_level_code: medium`.
+  3. Расширить SQL-скрипт [`005_insert_resource_chest_open_recipes.sql`](migrations/dev-data/inventory-service/005_insert_resource_chest_open_recipes.sql): добавить новые INSERT для input/output/translation блока рецепта `resource_chest_m_open`, гарантировать фикс. количество 3 500 и вероятности 40/40/15/5 %.
+  4. Пролить изменения тем же образом, что и для A-R-1 (см. bash команду выше).
+- **Приоритет:** Средний
+- **Оценка:** M
+- **Зависимости:** docs/specs/recipes/resource-chest-open-recipes.yaml, migrations/dev-data/inventory-service/005_insert_resource_chest_open_recipes.sql
+- **Критерии готовности:**
+  - [x] YAML-файл и миграция добавлены
+  - [x] Количество ресурсов 3 500, распределение 1400/1400/525/175
+  - [x] Ключ качества `medium` корректно проверяется
+  - [x] Переводы RU/EN присутствуют
 
----
-## ✅ D-Deck-002: Конфигурация и переменные окружения [ВЫПОЛНЕНО]
-**Описание:** Добавить пакет `internal/config` с загрузкой ENV-переменных, описанных в спецификации Deck Game Service (DATABASE_URL, PRODUCTION_INTERNAL_URL, AUTH_PUBLIC_KEY_URL и др.).
-**Приоритет:** Высокий
-**Оценка:** S
-**Зависимости:** D-Deck-001
-**Критерии готовности:**
-- ✅ Значения читаются через env переменные
-- ✅ Конфигурация валидируется
-- ✅ Сборка проходит успешно
-- ✅ Тесты написаны и проходят
-**Ресурсы:**
-- docs/specs/deck-game-service.md (ENV таблица)
-- docs/architecture/architecture.md
-- services/inventory-service/internal/config/*.go (пример)
-**Реализация:** services/deck-game-service/internal/config/config.go + config_test.go
+## A-R-3 Рецепт открытия resource_chest_l
+- **Описание:** Аналогично предыдущим, но для большого сундука (`resource_chest_l`) и ключа `key` качества `large`. Количество ресурсов 47 000: stone 18 800, wood 18 800, ore 7 050, diamond 2 350.
+- **Пошаговый план:**
+  1. Повторить шаги 1-4, используя данные для размера **L**.
+  2. Дописать рецепт в тот же YAML-файл [`resource-chest-open-recipes.yaml`](docs/specs/recipes/resource-chest-open-recipes.yaml):
+      - `output_items` имеют фиксированное количество **47 000** ед.; вероятности 40/40/15/5 %.
+      - `fixed_quality_level_code: large`.
+  3. Расширить SQL-скрипт [`005_insert_resource_chest_open_recipes.sql`](migrations/dev-data/inventory-service/005_insert_resource_chest_open_recipes.sql): добавить INSERT-ы для `resource_chest_l_open`, фикс. количество 47 000, вероятности 40/40/15/5 %.
+  4. Пролить изменения той же docker compose командой.
+- **Приоритет:** Средний
+- **Оценка:** M
+- **Зависимости:** docs/specs/recipes/resource-chest-open-recipes.yaml, migrations/dev-data/inventory-service/005_insert_resource_chest_open_recipes.sql
+- **Критерии готовности:**
+  - [x] YAML-файл и миграция добавлены
+  - [x] Количество ресурсов 47 000, распределение 18 800/18 800/7 050/2 350
+  - [x] Ключ качества `large` корректно проверяется
+  - [x] Переводы RU/EN присутствуют
 
----
-## ✅ D-Deck-003: JWT Middleware [ВЫПОЛНЕНО]
-**Описание:** Реализовать middleware проверки JWT, копируя логику `inventory-service/internal/middleware/auth.go` (проверка RS256 подписи, Redis-revocation, запись user в контекст).
-**Приоритет:** Высокий
-**Оценка:** S
-**Зависимости:** D-Deck-002
-**Критерии готовности:**
-- ✅ Middleware выдаёт 401 при невалидном токене
-- ✅ Тесты используют сгенерированный RSA-ключ и мок Redis
-- ✅ Проект собирается без ошибок
-- ✅ Все тесты проходят успешно
-**Ресурсы:**
-- docs/specs/deck-game-service.md (раздел JWT Аутентификация)
-- docs/specs/auth-service.md
-- services/inventory-service/internal/middleware/auth.go
-**Реализация:** services/deck-game-service/internal/middleware/auth.go + auth_test.go, internal/auth/context.go
-
----
-## ✅ D-Deck-004: Endpoint GET /deck/daily-chest/status [ВЫПОЛНЕНО]
-**Описание:** Реализовать handler, вычисляющий `expected_combo`, `finished`, `crafts_done`, `last_reward_at` по запросу к БД production (schema `production.production_tasks`).
-**Приоритет:** Высокий
-**Оценка:** M
-**Зависимости:** D-Deck-003
-**Критерии готовности:**
-- ✅ Handler возвращает данные, соответствующие `StatusResponse`
-- ✅ Unit-тесты для всех сценариев (success, error, finished user)
-- ✅ Сборка проходит успешно
-- ✅ Интеграция с JWT middleware и database
-**Ресурсы:**
-- docs/specs/deck-game-service.md
-- docs/specs/deck-game-service-openapi.yml
-- docs/architecture/database.dbml (schema production.production_tasks)
-- docs/specs/production-service-openapi.yml (для Contract)
-**Реализация:** 
-- internal/models/status.go - модели ответов
-- internal/service/ - бизнес-логика расчета статуса
-- internal/storage/ - работа с production.production_tasks
-- internal/handlers/ - HTTP endpoint
-- Роут GET /deck/daily-chest/status с JWT auth
-
----
-## ✅ I-Gateway-001: Интеграция Deck Game Service в API Gateway [ВЫПОЛНЕНО]
-**Описание:** Добавить deck-game-service в API Gateway (nginx.conf) для доступа к эндпоинтам через `/api/deck/*` по аналогии с inventory-service.
-**Приоритет:** Высокий
-**Оценка:** XS
-**Зависимости:** D-Deck-004
-**Критерии готовности:**
-- ✅ Добавлен upstream deck_game_service в nginx.conf
-- ✅ Настроены location /api/deck/ → deck-game-service:8080
-- ✅ Эндпоинт доступен через API Gateway: GET /api/deck/daily-chest/status
-- ✅ Обновлена документация endpoints в ответе "/"
-**Ресурсы:**
-- deploy/dev/api-gateway/nginx.conf (пример с inventory_service)
-- docker-compose.yml (deck-game-service на порту 8080)
-**Реализация:** 
-- Добавлен upstream deck_game_service в nginx.conf
-- Настроены location /api/deck/ для проксирования запросов
-- API Gateway пересобран и обновлен
-
----
-## ✅ D-Deck-005: Endpoint POST /deck/daily-chest/claim [ВЫПОЛНЕНО]
-**Описание:** Реализовать бизнес-логику выдачи сундука: валидация `combo`, `chest_indices`, запуск `POST /production/factory/start`, claim результата и обогащение данных через Inventory Service `/items/details`.
-**Приоритет:** Высокий
-**Оценка:** L
-**Зависимости:** D-Deck-004
-**Критерии готовности:**
-- ✅ Успешный путь и все ошибки 400/404 покрыты unit-тестами
-- ✅ Статусы ошибок и поля ответа соответствуют OpenAPI
-- ✅ Реализована валидация combo и chest_indices
-- ✅ Интеграция с Production Service (start/claim)
-- ✅ Интеграция с Inventory Service (items/details)
-- ✅ Обработка cooldown и daily limits
-- ✅ Comprehensive unit-тесты для всех сценариев
-- ✅ Сборка проходит успешно
-**Ресурсы:**
-- docs/specs/deck-game-service.md
-- docs/specs/deck-game-service-openapi.yml
-- docs/specs/production-service-openapi.yml
-- docs/specs/inventory-service-openapi.yml
-**Реализация:**
-- internal/models/status.go - расширены модели ClaimRequest, ClaimResponse, ItemInfo
-- internal/service/interfaces.go - добавлены интерфейсы ProductionClient, InventoryClient
-- internal/service/production_client.go - HTTP клиент для Production Service
-- internal/service/inventory_client.go - HTTP клиент для Inventory Service 
-- internal/service/deck_game_service.go - метод ClaimDailyChest с полной бизнес-логикой
-- internal/handlers/deck_game_handler.go - handler для POST /deck/daily-chest/claim
-- cmd/server/main.go - обновлены клиенты и роуты
-- Comprehensive unit-тесты для всех компонентов
-
----
-## D-Deck-006: Метрики и логирование
-**Описание:** Добавить Prometheus-метрики (`dgs_http_requests_total`, `dgs_daily_craft_total`, ... ) и structured-logging (slog) аналогично inventory-service.
+## Рецепт открытия reagent_chest_s
+**Описание:** Создать миграционный скрипт для рецепта открытия сундука `reagent_chest_s` (входящий предмет: `reagent_chest_s`)
 **Приоритет:** Средний
 **Оценка:** S
-**Зависимости:** D-Deck-005
-**Критерии готовности:**
-- `/metrics` содержит новые счётчики
-- Примерное покрытие логами INFO/WARN/ERROR
-**Ресурсы:**
-- docs/specs/deck-game-service.md (метрики)
-- services/inventory-service/internal/metrics/* (пример)
+**Зависимости:** 
+**Критерии готовности:** TBD
 
----
-## D-Deck-007: Dockerfile & Dev Compose
-**Описание:** Создать Dockerfile и обновить `deploy/dev/docker-compose.yml`, добавив контейнер `deck-game-service` (порт 8080 и 8090). Сеть и переменные окружения настроены как у inventory.
+## Рецепт открытия reagent_chest_m
+**Описание:** Создать миграционный скрипт для рецепта открытия сундука `reagent_chest_m` (входящий предмет: `reagent_chest_m`)
 **Приоритет:** Средний
 **Оценка:** S
-**Зависимости:** D-Deck-006
-**Критерии готовности:**
-- `docker compose up` поднимает сервис без ошибок
-- Health-check проходит в 5 сек.
-**Ресурсы:**
-- deploy/dev/docker-compose.yml (пример inventory)
-- services/inventory-service/Dockerfile
+**Зависимости:** 
+**Критерии готовности:** TBD
 
----
-## D-Deck-008: OpenAPI генерация и CI чек
-**Описание:** Автоматически публиковать `deck-game-service-openapi.yml` в aggregated `docs/architecture/openapi.yml`, валидировать в CI (spectral lint).
+## Рецепт открытия reagent_chest_l
+**Описание:** Создать миграционный скрипт для рецепта открытия сундука `reagent_chest_l` (входящий предмет: `reagent_chest_l`)
 **Приоритет:** Средний
 **Оценка:** S
-**Зависимости:** D-Deck-007
-**Критерии готовности:**
-- GitHub Actions (или Make target) валидирует спецификацию
-- PR не проходит без валидного OpenAPI
-**Ресурсы:**
-- docs/specs/deck-game-service-openapi.yml
-- docs/architecture/openapi.yml
-- .github/workflows/* (lint examples)
+**Зависимости:** 
+**Критерии готовности:** TBD
 
----
-## D-Deck-009: Unit-тесты бизнес-логики
-**Описание:** Добавить unit-тесты для расчёта combo, валидации `chest_indices`, работы cooldown и редиса, без e2e/интеграции.
+## Рецепт открытия booster_chest_s
+**Описание:** Создать миграционный скрипт для рецепта открытия сундука `booster_chest_s` (входящий предмет: `booster_chest_s`)
 **Приоритет:** Средний
 **Оценка:** S
-**Зависимости:** D-Deck-005
-**Критерии готовности:**
-- Покрытие >80 % для пакетов `service/` и `middleware/`
-- `go test ./...` проходит локально и в CI
-**Ресурсы:**
-- docs/specs/deck-game-service.md
-- services/inventory-service/internal/service/* (тесты примеры)
-- docs/architecture/architecture.md
+**Зависимости:** 
+**Критерии готовности:** TBD
+
+## Рецепт открытия booster_chest_m
+**Описание:** Создать миграционный скрипт для рецепта открытия сундука `booster_chest_m` (входящий предмет: `booster_chest_m`)
+**Приоритет:** Средний
+**Оценка:** S
+**Зависимости:** 
+**Критерии готовности:** TBD
+
+## Рецепт открытия booster_chest_l
+**Описание:** Создать миграционный скрипт для рецепта открытия сундука `booster_chest_l` (входящий предмет: `booster_chest_l`)
+**Приоритет:** Средний
+**Оценка:** S
+**Зависимости:** 
+**Критерии готовности:** TBD
+
+## Рецепт открытия blueprint_chest
+**Описание:** Создать миграционный скрипт для рецепта открытия сундука `blueprint_chest` (входящий предмет: `blueprint_chest`)
+**Приоритет:** Средний
+**Оценка:** S
+**Зависимости:** 
+**Критерии готовности:** TBD
+
+
+## D-O-1 Реализация эндпоинта открытия сундуков (/deck/chest/open)
+- **Описание:** Добавить в Deck Game Service публичный POST-эндпоинт `/deck/chest/open`, который принимает тип/качество сундука и количество, ищет подходящий `chest_opening`-рецепт, запускает `Production Service → /production/factory/start`, сразу выполняет `claim`, агрегирует полученные предметы и возвращает их клиенту. Бизнес-правила идентичны сценарию ежедневных сундуков (cooldown = 0, лимитов нет).
+- **Пошаговый план:**
+  1. Изучить спецификацию и пример бизнес-логики в [`docs/specs/deck-game-service.md`](docs/specs/deck-game-service.md) — раздел «3. Открыть сундуки».
+  2. Ознакомиться с OpenAPI-описанием маршрута в [`docs/specs/deck-game-service-openapi.yml`](docs/specs/deck-game-service-openapi.yml).
+  3. Посмотреть реализацию ежедневных сундуков:  
+     • Handler: `services/deck-game-service/internal/handlers/deck_game_handler.go`  
+     • Service: `services/deck-game-service/internal/service/deck_game_service.go`  
+     • Storage: `services/deck-game-service/internal/storage/daily_chest_storage.go`  
+     • Тесты: `internal/handlers/deck_game_handler_test.go`, `internal/service/deck_game_service_test.go`.
+  4. Создать аналогичный слой:
+     - **Handler** `OpenChest` (POST `/deck/chest/open`) — валидация JSON, извлечение JWT и UserID, вызов сервиса.
+     - **Service** `OpenChest` —
+        1. Провести взаимную валидацию: задано **ровно одно** из `quantity` (1–100) или `open_all=true`.
+        2. Если `open_all`, запросить текущее количество сундуков из Inventory Service; вернуть ошибку `insufficient_chests`, если 0.
+        3. Определить ID рецепта `chest_opening` по предмету+качеству (см. YAML-файлы рецептов в `docs/specs/recipes/` и миграции `migrations/dev-data/inventory-service/005_insert_resource_chest_open_recipes.sql`).  
+        4. Запуск `productionClient.StartProduction(ctx, jwt, userID, recipeID, executionCount)` где `executionCount = quantity` либо доступный остаток при `open_all`.
+        5. Claim: `productionClient.ClaimProduction`.
+        6. Обогатить данные через `inventoryClient.GetItemsDetails` (RU локаль).
+        7. Вернуть `items[]` и `quantity_opened`.
+   5. **Metrics:** добавить счётчики `dgs_chest_open_total`, `dgs_chest_open_duration_seconds` (аналогично daily chest).
+   6. **JWT/Rate limit:** использовать существующий middleware; лимит 30 запросов в минуту на IP.
+   7. **Unit-тесты**: покрыть happy-path, ошибки `invalid_input`, `recipe_not_found`, `insufficient_chests`, а также интеграционные моки Production/Inventory.
+  8. **Docs:** убедиться, что README-/Swagger-генерация отражает новый маршрут.
+- **Приоритет:** Высокий
+- **Оценка:** L
+- **Зависимости:**
+  - docs/specs/recipes/*_chest_open*.yaml (рецепты должны существовать)  
+  - migrations/dev-data/inventory-service/005_insert_resource_chest_open_recipes.sql  
+  - Production Service `/production/factory/*` эндпоинты
+- **Критерии готовности:**
+  - [ ] Эндпоинт `/deck/chest/open` доступен и возвращает корректный JSON по OpenAPI
+  - [ ] 100 % unit-тесты новых веток бизнеса, общ. покрытие сервиса ≥ 85 %
+  - [ ] Метрики Prometheus для chest open увеличиваются
+  - [ ] Линтинг и `go test ./...` проходят без ошибок
+  - [ ] Документация и OpenAPI актуальны
+
+
+

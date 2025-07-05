@@ -8,7 +8,7 @@ info:
     name: Shard Legends Team
 
 servers:
-  - url: http://localhost:8080
+  - url: http://localhost:9000/api/
     description: Local Dev (direct)
 
 security:
@@ -64,6 +64,41 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           description: Рецепт не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /deck/chest/open:
+    post:
+      tags: [Public]
+      summary: Открыть сундуки указанного типа и качества
+      operationId: openChest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenChestRequest'
+      responses:
+        '200':
+          description: Сундуки успешно открыты
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenChestResponse'
+        '400':
+          description: Ошибка бизнес-валидации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Рецепт или сундук не найден
           content:
             application/json:
               schema:
@@ -153,6 +188,44 @@ components:
         next_expected_combo:
           type: integer
         crafts_done:
+          type: integer
+
+    OpenChestRequest:
+      type: object
+      description: Ровно одно из полей `quantity` или `open_all` должно быть задано.
+      required: [chest_type, quality_level]
+      properties:
+        chest_type:
+          type: string
+          description: Тип сундука
+          enum: [resource_chest, reagent_chest, booster_chest, blueprint_chest]
+        quality_level:
+          type: string
+          enum: [small, medium, large]
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 100
+        open_all:
+          type: boolean
+          description: Если true, открыть все доступные сундуки указанного типа и качества
+      oneOf:
+        - required: [quantity]
+        - required: [open_all]
+      example:
+        chest_type: resource_chest
+        quality_level: medium
+        open_all: true
+
+    OpenChestResponse:
+      type: object
+      required: [items, quantity_opened]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ItemInfo'
+        quantity_opened:
           type: integer
 
     ErrorResponse:

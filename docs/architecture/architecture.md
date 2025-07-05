@@ -2,13 +2,12 @@
 
 ## Обзор
 
-Shard Legends: Clan Wars - это многопользовательская стратегическая match-3 игра, реализованная как Telegram Mini App. На текущем этапе система проектируется как монолитное приложение с возможностью будущего разделения на микросервисы.
+Shard Legends: Clan Wars - это многопользовательская стратегическая match-3 игра, реализованная как Telegram Mini App. На текущем этапе система проектируется по микросервисной архитектуре.
 
 ## Технологический стек
 
 ### Frontend
 - **Платформа**: Telegram Mini App
-- **Хостинг**: Firebase Hosting (планируется)
 - **Технологии**: HTML5, CSS3, JavaScript/TypeScript
 - **Фреймворк**: React/Vue.js (будет определен позже)
 - **Telegram Web App SDK**: для интеграции с Telegram
@@ -26,7 +25,12 @@ Shard Legends: Clan Wars - это многопользовательская с�
 ### Основные компоненты
 
 ```mermaid
-graph TB
+---
+config:
+  look: handDrawn
+  theme: dark
+---
+flowchart TD
     User[Пользователь Telegram] --> Bot[Telegram Bot]
     User --> TMA[Telegram Mini App]
     Bot --> Gateway[API Gateway<br/>nginx]
@@ -35,21 +39,33 @@ graph TB
     Gateway --> BotService[Telegram Bot Service<br/>Golang]
     Gateway --> InventoryService[Inventory Service<br/>Golang]
     Gateway --> ProductionService[Production Service<br/>Golang]
+    Gateway --> DeckGameService[Deck Game Service<br/>Golang]
     Gateway --> UserService[User Service<br/>Golang - temporary]
+    
     
     AuthService --> DB[(PostgreSQL 17)]
     AuthService --> Cache[(Redis 8.0.2)]
     BotService --> DB
     InventoryService --> DB
     InventoryService --> Cache
+%%    InventoryService --> AuthService
     ProductionService --> DB
     ProductionService --> Cache
+%%    ProductionService --> AuthService
+%%    ProductionService --> InventoryService
+%%    ProductionService --> UserService
+    DeckGameService --> DB
+    DeckGameService --> Cache
     UserService --> Cache
     
     BotService -.->|Public API JWT validation| Cache
     InventoryService -.->|Public API JWT validation| Cache
     ProductionService -.->|Public API JWT validation| Cache
     UserService -.->|Public API JWT validation| Cache
+    DeckGameService -.->|Public API JWT validation| Cache
+%%    DeckGameService --> ProductionService
+%%    DeckGameService --> InventoryService
+%%    DeckGameService --> AuthService
     
     subgraph "Docker Compose Environment"
         Gateway
@@ -57,6 +73,7 @@ graph TB
         BotService
         InventoryService
         ProductionService
+        DeckGameService
         UserService
         DB
         Cache
@@ -326,6 +343,11 @@ https://domain.com/api/* → nginx → API Gateway:9000/* → микросерв
 ## Диаграмма развертывания
 
 ```mermaid
+---
+config:
+  look: handDrawn
+  theme: neutral
+---
 graph TB
     subgraph "Пользователь"
         TG[Telegram App]

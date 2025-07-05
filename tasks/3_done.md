@@ -2,6 +2,77 @@
 
 > Завершенные задачи для отслеживания прогресса и ретроспектив. Сортировка по дате завершения (новые сверху).
 
+## Дайджест работ - 3 июля 2025
+
+### Deck Game Service - Конфигурация, аутентификация и ежедневный сундук (4 задачи)
+
+**D-Deck-002: Конфигурация и переменные окружения**
+**Дата завершения:** 2025-07-03
+**Роль:** Backend Developer
+**Статус:** [x] Выполнена
+
+**Описание:** Добавлен пакет `internal/config` с загрузкой ENV-переменных, описанных в спецификации Deck Game Service (DATABASE_URL, PRODUCTION_INTERNAL_URL, AUTH_PUBLIC_KEY_URL и др.).
+
+**Результат:**
+- ✅ Значения читаются через env переменные и валидируются
+- ✅ Сборка и линт проходят без ошибок
+- ✅ Unit-тесты покрывают happy/error path (coverage ≥ 80 %)
+- ✅ README обновлён разделом Configuration
+
+**D-Deck-003: JWT Middleware**
+**Дата завершения:** 2025-07-03
+**Роль:** Backend Developer
+**Статус:** [x] Выполнена
+
+**Описание:** Реализован middleware проверки JWT с поддержкой RS256 подписи, Redis-revocation и записью пользователя в контекст.
+
+**Результат:**
+- ✅ Middleware выдаёт 401 при невалидном токене
+- ✅ Unit-тесты используют сгенерированный RSA-ключ и мок Redis
+- ✅ Интегрирован в HTTP роуты, сборка зелёная
+
+**D-Deck-004: Endpoint GET /deck/daily-chest/status**
+**Дата завершения:** 2025-07-03
+**Роль:** Backend Developer
+**Статус:** [x] Выполнена
+
+**Описание:** Реализован handler, вычисляющий `expected_combo`, `finished`, `crafts_done`, `last_reward_at` на основе данных production.production_tasks.
+
+**Результат:**
+- ✅ Handler возвращает данные, соответствующие `StatusResponse`
+- ✅ Unit-тесты покрывают success/error/finished user
+- ✅ Интегрирован с JWT middleware и Postgres, OpenAPI актуален
+
+**D-Deck-005: Endpoint POST /deck/daily-chest/claim**
+**Дата завершения:** 2025-07-03
+**Роль:** Backend Developer
+**Статус:** [x] Выполнена
+
+**Описание:** Реализована бизнес-логика claim ежедневного сундука: валидация `combo`, `chest_indices`, вызов Production Service `/factory/start/claim` и обогащение данных через Inventory Service.
+
+**Результат:**
+- ✅ Поддержаны все happy/error path (400/404), unit-тесты покрывают 100 %
+- ✅ Реализована валидация combo и chest_indices
+- ✅ Интеграция с Production и Inventory Service; учёт cooldown и daily limits
+- ✅ Сборка и линт зелёные
+
+### API Gateway - Интеграция Deck Game Service (1 задача)
+
+**I-Gateway-001: Интеграция Deck Game Service в API Gateway**
+**Дата завершения:** 2025-07-03
+**Роль:** Infrastructure Developer
+**Статус:** [x] Выполнена
+
+**Описание:** Добавлен deck-game-service в Nginx API Gateway, обеспечен доступ к эндпоинтам через `/api/deck/*`.
+
+**Результат:**
+- ✅ Upstream `deck_game_service` добавлен в nginx.conf
+- ✅ Настроен location `/api/deck/` → `deck-game-service:8080`
+- ✅ Эндпоинт GET `/api/deck/daily-chest/status` доступен через Gateway
+- ✅ Документация endpoints в ответе "/" обновлена
+
+---
+
 ## Дайджест работ - 31 декабря 2024
 
 ### Deck Game Service - Каркас нового микросервиса (1 задача)
