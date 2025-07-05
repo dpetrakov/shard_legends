@@ -116,6 +116,7 @@ func main() {
 	{
 		deckAPI.GET("/daily-chest/status", deckGameHandler.GetDailyChestStatus)
 		deckAPI.POST("/daily-chest/claim", deckGameHandler.ClaimDailyChest)
+		deckAPI.POST("/chest/open", deckGameHandler.OpenChest)
 	}
 
 	// Create public HTTP server

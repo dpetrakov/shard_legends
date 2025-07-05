@@ -140,6 +140,11 @@ paths:
         3. Предрасчет результата с фиксацией
         4. Атомарное резервирование предметов через Inventory Service
         5. Постановку в очередь или немедленный запуск
+        
+        **Обработка нехватки предметов:**
+        При недостатке предметов в инвентаре Inventory Service возвращает ошибку 
+        "insufficient balance". Production Service транслирует это в HTTP 400 
+        с кодом `insufficient_items` и удаляет созданное DRAFT задание.
       operationId: startProduction
       requestBody:
         required: true
@@ -160,6 +165,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ValidationError'
+              examples:
+                insufficient_items:
+                  summary: Недостаточно предметов
+                  value:
+                    error: insufficient_items
+                    message: "Insufficient items for production"
+                    missing_items:
+                      - item_id: "9421cc9f-a56e-4c7d-b636-4c8fdfef7166"
+                        collection_code: null
+                        quality_level_code: "small"
+                        required: 5
+                        available: 0
+                validation_error:
+                  summary: Ошибка валидации
+                  value:
+                    error: validation_error
+                    message: "Validation failed"
+                    validation_errors:
+                      - field: "execution_count"
+                        error: "must be positive"
         '401':
           $ref: '#/components/responses/Unauthorized'
         '409':

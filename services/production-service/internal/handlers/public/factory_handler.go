@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"strings"
+
 	"github.com/google/uuid"
 	"github.com/shard-legends/production-service/internal/auth"
 	"github.com/shard-legends/production-service/internal/models"
@@ -46,19 +48,19 @@ func (h *FactoryHandler) GetQueue(w http.ResponseWriter, r *http.Request) {
 
 	// Конвертируем в публичный формат (без output_items)
 	publicTasks := h.convertToPublicTasks(tasks)
-	
+
 	// Логируем для отладки
-	h.logger.Error("DEBUG: Converting tasks to public format", 
+	h.logger.Error("DEBUG: Converting tasks to public format",
 		zap.Int("original_tasks_count", len(tasks)),
 		zap.Int("public_tasks_count", len(publicTasks)))
-	
+
 	// Проверим первый элемент если есть
 	if len(tasks) > 0 {
-		h.logger.Error("DEBUG: Original task has output_items", 
+		h.logger.Error("DEBUG: Original task has output_items",
 			zap.Int("output_items_count", len(tasks[0].OutputItems)))
 	}
 	if len(publicTasks) > 0 {
-		h.logger.Error("DEBUG: Public task type", 
+		h.logger.Error("DEBUG: Public task type",
 			zap.String("task_id", publicTasks[0].ID.String()))
 	}
 
@@ -137,7 +139,12 @@ func (h *FactoryHandler) StartProduction(w http.ResponseWriter, r *http.Request)
 		statusCode := http.StatusInternalServerError
 		errorCode := models.ErrorCodeInternalError
 
-		// TODO: Добавить более детальную обработку ошибок в зависимости от типа
+		// Детальная обработка бизнес-ошибок
+		errorMsg := err.Error()
+		if strings.Contains(errorMsg, "insufficient balance") || strings.Contains(errorMsg, "insufficient_items") {
+			statusCode = http.StatusBadRequest
+			errorCode = models.ErrorCodeInsufficientItems
+		}
 
 		h.writeError(w, statusCode, errorCode, err.Error())
 		return

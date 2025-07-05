@@ -186,3 +186,114 @@ func (h *DeckGameHandler) ClaimDailyChest(c *gin.Context) {
 	h.logger.Info("Daily chest claimed successfully", "user_id", userID, "items_count", len(response.Items))
 	c.JSON(http.StatusOK, response)
 }
+
+// OpenChest handles POST /deck/chest/open
+func (h *DeckGameHandler) OpenChest(c *gin.Context) {
+	h.logger.Info("OpenChest called")
+
+	// Extract user from JWT context
+	userValue, exists := c.Get("user")
+	if !exists {
+		h.logger.Error("User not found in context")
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse{
+			Error:   "missing_user_context",
+			Message: "User context not found",
+		})
+		return
+	}
+
+	user, ok := userValue.(*auth.UserContext)
+	if !ok {
+		h.logger.Error("Invalid user context type")
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse{
+			Error:   "invalid_user_context",
+			Message: "Invalid user context type",
+		})
+		return
+	}
+
+	// Parse user ID from UUID string
+	userID, err := uuid.Parse(user.UserID)
+	if err != nil {
+		h.logger.Error("Invalid user ID format", "user_id", user.UserID, "error", err)
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_user_id",
+			Message: "Invalid user ID format",
+		})
+		return
+	}
+
+	// Parse request body
+	var request models.OpenChestRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		h.logger.Error("Invalid request body", "user_id", userID, "error", err)
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: "Invalid request body: " + err.Error(),
+		})
+		return
+	}
+
+	// Extract JWT token from context
+	jwtToken, exists := c.Get("jwt_token")
+	if !exists {
+		h.logger.Error("JWT token not found in context")
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse{
+			Error:   "missing_jwt_token",
+			Message: "JWT token not found in context",
+		})
+		return
+	}
+
+	jwtTokenStr, ok := jwtToken.(string)
+	if !ok {
+		h.logger.Error("Invalid JWT token type in context")
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse{
+			Error:   "invalid_jwt_token",
+			Message: "Invalid JWT token type in context",
+		})
+		return
+	}
+
+	h.logger.Info("Processing chest opening request",
+		"user_id", userID,
+		"chest_type", request.ChestType,
+		"quality_level", request.QualityLevel,
+		"quantity", request.Quantity,
+		"open_all", request.OpenAll)
+
+	// Process chest opening
+	response, err := h.deckGameService.OpenChest(c.Request.Context(), jwtTokenStr, userID, &request)
+	if err != nil {
+		h.logger.Error("Failed to open chest", "user_id", userID, "error", err)
+
+		// Handle business errors
+		errorMessage := err.Error()
+		switch {
+		case strings.Contains(errorMessage, "invalid_input"):
+			c.JSON(http.StatusBadRequest, models.ErrorResponse{
+				Error:   "invalid_input",
+				Message: "Invalid request parameters",
+			})
+		case strings.Contains(errorMessage, "recipe_not_found"):
+			c.JSON(http.StatusNotFound, models.ErrorResponse{
+				Error:   "recipe_not_found",
+				Message: "Recipe for this chest type not found",
+			})
+		case strings.Contains(errorMessage, "insufficient_chests"), strings.Contains(errorMessage, "insufficient_items"):
+			c.JSON(http.StatusBadRequest, models.ErrorResponse{
+				Error:   "insufficient_chests",
+				Message: "Not enough chests in inventory",
+			})
+		default:
+			c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+				Error:   "internal_error",
+				Message: "Failed to open chest",
+			})
+		}
+		return
+	}
+
+	h.logger.Info("Chest opened successfully", "user_id", userID, "items_count", len(response.Items), "quantity_opened", response.QuantityOpened)
+	c.JSON(http.StatusOK, response)
+}

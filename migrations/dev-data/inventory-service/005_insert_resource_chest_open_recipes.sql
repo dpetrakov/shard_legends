@@ -45,14 +45,13 @@ BEGIN
     );
 
     -- -------------------------------------------------------------------------
-    -- Входные предметы: сундук + ключ малого размера
+    -- Входные предметы: только сундук малого размера (без ключа)
     -- -------------------------------------------------------------------------
     INSERT INTO production.recipe_input_items (
         recipe_id, item_id, quality_level_code, quantity
     ) VALUES 
-        -- 0: сам сундук (малый, качество small указано в самом предмете)
-        (v_recipe_id, '9421cc9f-a56e-4c7d-b636-4c8fdfef7166', NULL, 1); -- resource_chest_s
-        -- (v_recipe_id, '7e1d9e48-49cd-4ef2-b93e-1e32a0cb9a18', 'small', 1); -- key small
+        -- сундук малого размера с правильным quality_level_code
+        (v_recipe_id, '9421cc9f-a56e-4c7d-b636-4c8fdfef7166', 'small', 1); -- resource_chest_s
 
     -- -------------------------------------------------------------------------
     -- Выходные предметы (stone / wood / ore / diamond) – 100 ед., распределение 40/40/15/5
@@ -77,8 +76,8 @@ BEGIN
     VALUES
         ('recipe', v_recipe_id, 'name', 'en', 'Small Resource Chest Opening'),
         ('recipe', v_recipe_id, 'name', 'ru', 'Открытие малого ресурсного сундука'),
-        ('recipe', v_recipe_id, 'description', 'en', 'Open a small resource chest with a small key to obtain 100 resources (stone, wood, ore, diamond).'),
-        ('recipe', v_recipe_id, 'description', 'ru', 'Откройте малый ресурсный сундук с помощью ключа Key-S и получите 100 ресурсов (камень, дерево, руда, алмаз).');
+        ('recipe', v_recipe_id, 'description', 'en', 'Open a small resource chest to obtain 100 resources (stone, wood, ore, diamond).'),
+        ('recipe', v_recipe_id, 'description', 'ru', 'Откройте малый ресурсный сундук и получите 100 ресурсов (камень, дерево, руда, алмаз).');
 
 END $$;
 
@@ -101,10 +100,9 @@ BEGIN
     INSERT INTO production.recipes (id, code, operation_class_code, is_active, production_time_seconds)
     VALUES (v_recipe_id, v_recipe_code, 'chest_opening', TRUE, 0);
 
-    -- Inputs: medium chest + medium key
+    -- Inputs: только средний сундук (без ключа)
     INSERT INTO production.recipe_input_items (recipe_id, item_id, quality_level_code, quantity) VALUES
-        (v_recipe_id, '6c0f7fd6-4a6e-4d42-b596-a1a2b775cdbc', NULL, 1); -- resource_chest_m
-        -- (v_recipe_id, '7e1d9e48-49cd-4ef2-b93e-1e32a0cb9a18', 'medium', 1); -- key medium
+        (v_recipe_id, '6c0f7fd6-4a6e-4d42-b596-a1a2b775cdbc', 'medium', 1); -- resource_chest_m
 
     -- Outputs quantities 3 500
     INSERT INTO production.recipe_output_items (
@@ -119,8 +117,8 @@ BEGIN
     INSERT INTO i18n.translations (entity_type, entity_id, field_name, language_code, content) VALUES
         ('recipe', v_recipe_id, 'name', 'en', 'Medium Resource Chest Opening'),
         ('recipe', v_recipe_id, 'name', 'ru', 'Открытие среднего ресурсного сундука'),
-        ('recipe', v_recipe_id, 'description', 'en', 'Open a medium resource chest with a medium key to obtain 3,500 resources.'),
-        ('recipe', v_recipe_id, 'description', 'ru', 'Откройте средний ресурсный сундук с помощью ключа Key-M и получите 3 500 ресурсов.');
+        ('recipe', v_recipe_id, 'description', 'en', 'Open a medium resource chest to obtain 3,500 resources.'),
+        ('recipe', v_recipe_id, 'description', 'ru', 'Откройте средний ресурсный сундук и получите 3 500 ресурсов.');
 END $$;
 
 -- =============================================================================
@@ -140,10 +138,9 @@ BEGIN
     INSERT INTO production.recipes (id, code, operation_class_code, is_active, production_time_seconds)
     VALUES (v_recipe_id, v_recipe_code, 'chest_opening', TRUE, 0);
 
-    -- Inputs: large chest + large key
+    -- Inputs: только большой сундук (без ключа)
     INSERT INTO production.recipe_input_items (recipe_id, item_id, quality_level_code, quantity) VALUES
-        (v_recipe_id, '0f8aa2c1-25b8-4aed-9d6b-8c1e927bf71f', NULL, 1); -- resource_chest_l
-        -- (v_recipe_id, '7e1d9e48-49cd-4ef2-b93e-1e32a0cb9a18', 'large', 1); -- key large
+        (v_recipe_id, '0f8aa2c1-25b8-4aed-9d6b-8c1e927bf71f', 'large', 1); -- resource_chest_l
 
     INSERT INTO production.recipe_output_items (
         recipe_id, item_id, min_quantity, max_quantity, probability_percent, output_group, fixed_quality_level_code
@@ -156,8 +153,8 @@ BEGIN
     INSERT INTO i18n.translations (entity_type, entity_id, field_name, language_code, content) VALUES
         ('recipe', v_recipe_id, 'name', 'en', 'Large Resource Chest Opening'),
         ('recipe', v_recipe_id, 'name', 'ru', 'Открытие большого ресурсного сундука'),
-        ('recipe', v_recipe_id, 'description', 'en', 'Open a large resource chest with a large key to obtain 47,000 resources.'),
-        ('recipe', v_recipe_id, 'description', 'ru', 'Откройте большой ресурсный сундук с помощью ключа Key-L и получите 47 000 ресурсов.');
+        ('recipe', v_recipe_id, 'description', 'en', 'Open a large resource chest to obtain 47,000 resources.'),
+        ('recipe', v_recipe_id, 'description', 'ru', 'Откройте большой ресурсный сундук и получите 47 000 ресурсов.');
 END $$;
 
 COMMIT;

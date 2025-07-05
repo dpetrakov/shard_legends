@@ -40,6 +40,14 @@ func (m *MockDeckGameService) ClaimDailyChest(ctx context.Context, jwtToken stri
 	return args.Get(0).(*models.ClaimResponse), args.Error(1)
 }
 
+func (m *MockDeckGameService) OpenChest(ctx context.Context, jwtToken string, userID uuid.UUID, request *models.OpenChestRequest) (*models.OpenChestResponse, error) {
+	args := m.Called(ctx, jwtToken, userID, request)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.OpenChestResponse), args.Error(1)
+}
+
 func setupTestRouter() (*gin.Engine, *MockDeckGameService) {
 	gin.SetMode(gin.TestMode)
 
@@ -64,6 +72,7 @@ func setupTestRouter() (*gin.Engine, *MockDeckGameService) {
 	{
 		deckAPI.GET("/daily-chest/status", handler.GetDailyChestStatus)
 		deckAPI.POST("/daily-chest/claim", handler.ClaimDailyChest)
+		deckAPI.POST("/chest/open", handler.OpenChest)
 	}
 
 	return router, mockService
@@ -266,4 +275,207 @@ func TestClaimDailyChest_InvalidRequestBody(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	assert.NoError(t, err)
 	assert.Equal(t, "invalid_request", response.Error)
+}
+
+// Test cases for OpenChest handler
+
+func TestOpenChest_Success_WithQuantity(t *testing.T) {
+	router, mockService := setupTestRouter()
+
+	userID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
+	requestBody := models.OpenChestRequest{
+		ChestType:    "resource_chest",
+		QualityLevel: "medium",
+		Quantity:     intPtr(3),
+	}
+	expectedResponse := &models.OpenChestResponse{
+		Items: []models.ItemInfo{
+			{
+				ItemID:       "1ac8c2b0-0a7d-4e0e-a6d2-9a90b9094b60",
+				ItemClass:    "resources",
+				ItemType:     "stone",
+				Name:         "Камень",
+				Description:  "Базовый строительный ресурс",
+				ImageURL:     "/images/items/stone.png",
+				Collection:   nil,
+				QualityLevel: nil,
+				Quantity:     4200, // 3 chests * 1400 stone each
+			},
+		},
+		QuantityOpened: 3,
+	}
+
+	mockService.On("OpenChest", mock.Anything, mock.AnythingOfType("string"), userID, &requestBody).Return(expectedResponse, nil)
+
+	reqBody, _ := json.Marshal(requestBody)
+	req, _ := http.NewRequest("POST", "/deck/chest/open", bytes.NewBuffer(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response models.OpenChestResponse
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Equal(t, expectedResponse.QuantityOpened, response.QuantityOpened)
+	assert.Len(t, response.Items, 1)
+	assert.Equal(t, expectedResponse.Items[0].Quantity, response.Items[0].Quantity)
+
+	mockService.AssertExpectations(t)
+}
+
+func TestOpenChest_Success_WithOpenAll(t *testing.T) {
+	router, mockService := setupTestRouter()
+
+	userID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
+	requestBody := models.OpenChestRequest{
+		ChestType:    "resource_chest",
+		QualityLevel: "small",
+		OpenAll:      boolPtr(true),
+	}
+	expectedResponse := &models.OpenChestResponse{
+		Items: []models.ItemInfo{
+			{
+				ItemID:       "1ac8c2b0-0a7d-4e0e-a6d2-9a90b9094b60",
+				ItemClass:    "resources",
+				ItemType:     "stone",
+				Name:         "Камень",
+				Description:  "Базовый строительный ресурс",
+				ImageURL:     "/images/items/stone.png",
+				Collection:   nil,
+				QualityLevel: nil,
+				Quantity:     200, // 5 chests * 40 stone each
+			},
+		},
+		QuantityOpened: 5,
+	}
+
+	mockService.On("OpenChest", mock.Anything, mock.AnythingOfType("string"), userID, &requestBody).Return(expectedResponse, nil)
+
+	reqBody, _ := json.Marshal(requestBody)
+	req, _ := http.NewRequest("POST", "/deck/chest/open", bytes.NewBuffer(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response models.OpenChestResponse
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Equal(t, expectedResponse.QuantityOpened, response.QuantityOpened)
+	assert.Len(t, response.Items, 1)
+
+	mockService.AssertExpectations(t)
+}
+
+func TestOpenChest_InvalidInput(t *testing.T) {
+	router, mockService := setupTestRouter()
+
+	userID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
+	requestBody := models.OpenChestRequest{
+		ChestType:    "resource_chest",
+		QualityLevel: "medium",
+		// Both quantity and open_all missing - should trigger validation error
+	}
+
+	mockService.On("OpenChest", mock.Anything, mock.AnythingOfType("string"), userID, &requestBody).Return(nil, errors.New("invalid_input: exactly one of 'quantity' or 'open_all' must be specified"))
+
+	reqBody, _ := json.Marshal(requestBody)
+	req, _ := http.NewRequest("POST", "/deck/chest/open", bytes.NewBuffer(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response models.ErrorResponse
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Equal(t, "invalid_input", response.Error)
+
+	mockService.AssertExpectations(t)
+}
+
+func TestOpenChest_RecipeNotFound(t *testing.T) {
+	router, mockService := setupTestRouter()
+
+	userID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
+	requestBody := models.OpenChestRequest{
+		ChestType:    "reagent_chest", // Recipe not implemented yet
+		QualityLevel: "medium",
+		Quantity:     intPtr(1),
+	}
+
+	mockService.On("OpenChest", mock.Anything, mock.AnythingOfType("string"), userID, &requestBody).Return(nil, errors.New("recipe_not_found: unsupported chest type: reagent_chest"))
+
+	reqBody, _ := json.Marshal(requestBody)
+	req, _ := http.NewRequest("POST", "/deck/chest/open", bytes.NewBuffer(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+
+	var response models.ErrorResponse
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Equal(t, "recipe_not_found", response.Error)
+
+	mockService.AssertExpectations(t)
+}
+
+func TestOpenChest_InsufficientChests(t *testing.T) {
+	router, mockService := setupTestRouter()
+
+	userID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
+	requestBody := models.OpenChestRequest{
+		ChestType:    "resource_chest",
+		QualityLevel: "large",
+		OpenAll:      boolPtr(true),
+	}
+
+	mockService.On("OpenChest", mock.Anything, mock.AnythingOfType("string"), userID, &requestBody).Return(nil, errors.New("insufficient_chests"))
+
+	reqBody, _ := json.Marshal(requestBody)
+	req, _ := http.NewRequest("POST", "/deck/chest/open", bytes.NewBuffer(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response models.ErrorResponse
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Equal(t, "insufficient_chests", response.Error)
+
+	mockService.AssertExpectations(t)
+}
+
+func TestOpenChest_InvalidRequestBody(t *testing.T) {
+	router, _ := setupTestRouter()
+
+	invalidJSON := `{"chest_type": "invalid_type", "quality_level": "invalid_quality"}`
+	req, _ := http.NewRequest("POST", "/deck/chest/open", bytes.NewBufferString(invalidJSON))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response models.ErrorResponse
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Equal(t, "invalid_request", response.Error)
+}
+
+// Helper functions for test cases
+func intPtr(i int) *int {
+	return &i
+}
+
+func boolPtr(b bool) *bool {
+	return &b
 }

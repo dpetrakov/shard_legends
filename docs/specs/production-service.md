@@ -160,6 +160,18 @@ POST /production/factory/start
 - ID созданного задания
 - Статус задания и ожидаемое время завершения
 
+**Возможные ошибки:**
+- `400 validation_error` - некорректные входные параметры
+- `400 insufficient_items` - недостаточно предметов в инвентаре для выполнения рецепта
+- `409 limit_exceeded` - превышены лимиты рецепта
+- `500 internal_error` - внутренняя ошибка сервера
+
+**Договоренность об обработке нехватки предметов:**
+При попытке зарезервировать предметы через `POST /inventory/reserve`, если Inventory Service возвращает ошибку с текстом "insufficient balance" или "insufficient_items", Production Service должен:
+1. Удалить созданное DRAFT задание из БД
+2. Вернуть HTTP 400 с кодом ошибки `insufficient_items`
+3. Включить детали недостающих предметов в ответ
+
 #### Claim результатов
 ```
 POST /production/factory/claim

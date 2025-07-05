@@ -247,6 +247,147 @@ func (s *deckGameService) ClaimDailyChest(ctx context.Context, jwtToken string, 
 	return response, nil
 }
 
+// OpenChest opens specified chests and returns the aggregated items received
+func (s *deckGameService) OpenChest(ctx context.Context, jwtToken string, userID uuid.UUID, request *models.OpenChestRequest) (*models.OpenChestResponse, error) {
+	// Validate request
+	if err := request.Validate(); err != nil {
+		s.logger.Error("Invalid open chest request", "user_id", userID, "error", err)
+		return nil, fmt.Errorf("invalid_input: %w", err)
+	}
+
+	// Get recipe ID for this chest type and quality
+	recipeID, err := GetRecipeIDForChest(request.ChestType, request.QualityLevel)
+	if err != nil {
+		s.logger.Error("Recipe not found for chest",
+			"user_id", userID,
+			"chest_type", request.ChestType,
+			"quality_level", request.QualityLevel,
+			"error", err)
+		return nil, fmt.Errorf("recipe_not_found: %s", err.Error())
+	}
+
+	// Determine execution count
+	var executionCount int
+	if request.OpenAll != nil && *request.OpenAll {
+		// Get chest item ID to check inventory
+		chestItemID, err := GetItemIDForChest(request.ChestType, request.QualityLevel)
+		if err != nil {
+			s.logger.Error("Failed to get chest item ID", "user_id", userID, "error", err)
+			return nil, fmt.Errorf("invalid_input: %s", err.Error())
+		}
+
+		// Fetch full inventory and count available chests
+		inventoryItems, err := s.inventoryClient.GetInventory(ctx, jwtToken)
+		if err != nil {
+			s.logger.Error("Failed to fetch inventory for open_all", "user_id", userID, "error", err)
+			return nil, errors.Wrap(err, "failed to fetch inventory")
+		}
+
+		var quantity int
+		for _, item := range inventoryItems {
+			if item.ItemID == chestItemID {
+				quantity = item.Quantity
+				break
+			}
+		}
+
+		if quantity == 0 {
+			s.logger.Warn("No chests available for open_all", "user_id", userID, "chest_type", request.ChestType, "quality_level", request.QualityLevel)
+			return nil, fmt.Errorf("insufficient_chests")
+		}
+
+		executionCount = quantity
+	} else {
+		executionCount = *request.Quantity
+	}
+
+	s.logger.Info("Starting chest opening process",
+		"user_id", userID,
+		"chest_type", request.ChestType,
+		"quality_level", request.QualityLevel,
+		"execution_count", executionCount,
+		"recipe_id", recipeID)
+
+	// Start production task
+	startResp, err := s.productionClient.StartProduction(ctx, jwtToken, userID, recipeID, executionCount)
+	if err != nil {
+		// Check if it's insufficient items error
+		if err.Error() == "insufficient_items" {
+			s.logger.Warn("Insufficient chests for opening", "user_id", userID, "chest_type", request.ChestType, "quality_level", request.QualityLevel)
+			return nil, fmt.Errorf("insufficient_chests")
+		}
+
+		s.logger.Error("Failed to start chest opening production", "user_id", userID, "error", err)
+		return nil, errors.Wrap(err, "failed to start production")
+	}
+
+	// Claim production results immediately
+	claimResp, err := s.productionClient.ClaimProduction(ctx, jwtToken, userID, startResp.TaskID)
+	if err != nil {
+		s.logger.Error("Failed to claim chest opening production", "user_id", userID, "task_id", startResp.TaskID, "error", err)
+		return nil, errors.Wrap(err, "failed to claim production")
+	}
+
+	// Get detailed item information
+	itemDetailsRequests := make([]ItemDetailsRequest, len(claimResp.ItemsReceived))
+	for i, item := range claimResp.ItemsReceived {
+		itemDetailsRequests[i] = ItemDetailsRequest{
+			ItemID:       item.ItemID,
+			Collection:   item.Collection,
+			QualityLevel: item.QualityLevel,
+		}
+	}
+
+	itemDetails, err := s.inventoryClient.GetItemsDetails(ctx, jwtToken, itemDetailsRequests, "ru")
+	if err != nil {
+		s.logger.Error("Failed to get item details for chest opening", "user_id", userID, "error", err)
+		return nil, errors.Wrap(err, "failed to get item details")
+	}
+
+	// Build response items
+	responseItems := make([]models.ItemInfo, len(claimResp.ItemsReceived))
+	for i, receivedItem := range claimResp.ItemsReceived {
+		// Find corresponding item details
+		var details *ItemDetails
+		for _, detail := range itemDetails.Items {
+			if detail.ItemID == receivedItem.ItemID {
+				details = &detail
+				break
+			}
+		}
+
+		if details == nil {
+			s.logger.Error("Item details not found for chest opening", "item_id", receivedItem.ItemID)
+			return nil, fmt.Errorf("item details not found for item %s", receivedItem.ItemID)
+		}
+
+		responseItems[i] = models.ItemInfo{
+			ItemID:       details.ItemID.String(),
+			ItemClass:    details.ItemClass,
+			ItemType:     details.ItemType,
+			Name:         details.Name,
+			Description:  details.Description,
+			ImageURL:     details.ImageURL,
+			Collection:   filterBaseValue(details.Collection),
+			QualityLevel: filterBaseValue(details.QualityLevel),
+			Quantity:     receivedItem.Quantity,
+		}
+	}
+
+	response := &models.OpenChestResponse{
+		Items:          responseItems,
+		QuantityOpened: executionCount,
+	}
+
+	s.logger.Info("Chest opening completed successfully",
+		"user_id", userID,
+		"task_id", startResp.TaskID,
+		"items_count", len(responseItems),
+		"quantity_opened", executionCount)
+
+	return response, nil
+}
+
 // filterBaseValue returns nil if the value is nil or represents a base/default value
 // Otherwise returns the original pointer
 func filterBaseValue(s *string) *string {

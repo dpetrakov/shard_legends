@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -43,7 +44,8 @@ func (h *InventoryHandler) ReserveItems(c *gin.Context) {
 			"error", err)
 
 		// Check if it's insufficient balance error
-		if insufficientErr, ok := err.(*models.InsufficientItemsError); ok {
+		var insufficientErr *models.InsufficientItemsError
+		if errors.As(err, &insufficientErr) {
 			c.JSON(http.StatusBadRequest, insufficientErr)
 			return
 		}

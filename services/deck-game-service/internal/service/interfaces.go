@@ -15,6 +15,9 @@ type DeckGameService interface {
 
 	// ClaimDailyChest processes the daily chest claim request
 	ClaimDailyChest(ctx context.Context, jwtToken string, userID uuid.UUID, request *models.ClaimRequest) (*models.ClaimResponse, error)
+
+	// OpenChest opens specified chests and returns the aggregated items received
+	OpenChest(ctx context.Context, jwtToken string, userID uuid.UUID, request *models.OpenChestRequest) (*models.OpenChestResponse, error)
 }
 
 // DailyChestRepository defines the interface for daily chest data access
@@ -39,6 +42,20 @@ type ProductionClient interface {
 type InventoryClient interface {
 	// GetItemsDetails returns detailed information about items
 	GetItemsDetails(ctx context.Context, jwtToken string, items []ItemDetailsRequest, lang string) (*ItemDetailsResponse, error)
+
+	// GetItemQuantity returns the quantity of a specific item in the user's inventory
+	GetItemQuantity(ctx context.Context, jwtToken string, itemID uuid.UUID) (int, error)
+
+	// GetInventory returns the full inventory for the authenticated user
+	GetInventory(ctx context.Context, jwtToken string) ([]InventoryItem, error)
+}
+
+// InventoryItem represents a single item in the user's inventory
+type InventoryItem struct {
+	ItemID       uuid.UUID `json:"item_id"`
+	Collection   *string   `json:"collection,omitempty"`
+	QualityLevel *string   `json:"quality_level,omitempty"`
+	Quantity     int       `json:"quantity"`
 }
 
 // ProductionStartResponse represents the response from Production Service start endpoint

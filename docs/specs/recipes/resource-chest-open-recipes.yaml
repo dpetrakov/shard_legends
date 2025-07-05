@@ -5,11 +5,9 @@ recipes:
     is_active: true
     production_time_seconds: 0
 
-    # INPUTS — сундук + ключ малого размера
+    # INPUTS — только сундук малого размера (без ключа)
     input_items:
       - item_code: resource_chest_s
-        quantity: 1
-      - item_code: key             # универсальный ключ
         quantity: 1
         fixed_quality_level_code: small
 
@@ -53,10 +51,10 @@ recipes:
         content: "Открытие малого ресурсного сундука"
       - language_code: en
         field_name: description
-        content: "Open a small resource chest with a small key to obtain 100 resources (stone, wood, ore, diamond)."
+        content: "Open a small resource chest to obtain 100 resources (stone, wood, ore, diamond)."
       - language_code: ru
         field_name: description
-        content: "Откройте малый ресурсный сундук с помощью ключа Key-S и получите 100 ресурсов (камень, дерево, руда, алмаз)."
+        content: "Откройте малый ресурсный сундук и получите 100 ресурсов (камень, дерево, руда, алмаз)."
 
     # LIMITS — отсутствуют, открытие ограничивается наличием предметов 
   - id: 4a5026a1-b851-48e9-88d1-156d2e3aa8b9  # UUID medium chest recipe
@@ -65,11 +63,9 @@ recipes:
     is_active: true
     production_time_seconds: 0
 
-    # INPUTS — средний сундук + ключ среднего размера
+    # INPUTS — только средний сундук (без ключа)
     input_items:
       - item_code: resource_chest_m
-        quantity: 1
-      - item_code: key
         quantity: 1
         fixed_quality_level_code: medium
 
@@ -112,21 +108,19 @@ recipes:
         content: "Открытие среднего ресурсного сундука"
       - language_code: en
         field_name: description
-        content: "Open a medium resource chest with a medium key to obtain 3,500 resources."
+        content: "Open a medium resource chest to obtain 3,500 resources."
       - language_code: ru
         field_name: description
-        content: "Откройте средний ресурсный сундук с помощью ключа Key-M и получите 3 500 ресурсов." 
+        content: "Откройте средний ресурсный сундук и получите 3 500 ресурсов." 
   - id: 9f4c3d36-b4e1-4a61-b4f1-0ed2a8b16c77  # UUID large chest recipe
     code: resource_chest_l_open
     operation_class_code: chest_opening
     is_active: true
     production_time_seconds: 0
 
-    # INPUTS — большой сундук + ключ большого размера
+    # INPUTS — только большой сундук (без ключа)
     input_items:
       - item_code: resource_chest_l
-        quantity: 1
-      - item_code: key
         quantity: 1
         fixed_quality_level_code: large
 
@@ -169,7 +163,7 @@ recipes:
         content: "Открытие большого ресурсного сундука"
       - language_code: en
         field_name: description
-        content: "Open a large resource chest with a large key to obtain 47,000 resources."
+        content: "Open a large resource chest to obtain 47,000 resources."
       - language_code: ru
         field_name: description
-        content: "Откройте большой ресурсный сундук с помощью ключа Key-L и получите 47 000 ресурсов." 
+        content: "Откройте большой ресурсный сундук и получите 47 000 ресурсов." 

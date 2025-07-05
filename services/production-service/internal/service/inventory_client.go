@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -44,7 +45,7 @@ func NewHTTPInventoryClientWithTimeout(baseURL string, timeout time.Duration, lo
 	}
 }
 
-// ReserveItems резервирует предметы в инвентаре
+// ReserveItems резервирует предметы в инвентаре с retry логикой для конкурентных запросов
 func (c *HTTPInventoryClient) ReserveItems(ctx context.Context, userID uuid.UUID, operationID uuid.UUID, items []models.ReservationItem) error {
 	url := fmt.Sprintf("%s/api/inventory/reserve", c.baseURL)
 
@@ -83,26 +84,79 @@ func (c *HTTPInventoryClient) ReserveItems(ctx context.Context, userID uuid.UUID
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(body))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
+	// Retry логика для обработки конкурентных запросов
+	maxRetries := 3
+	baseDelay := 100 * time.Millisecond
 
-	req.Header.Set("Content-Type", "application/json")
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(body))
+		if err != nil {
+			return fmt.Errorf("failed to create request: %w", err)
+		}
 
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
+		req.Header.Set("Content-Type", "application/json")
 
-	if resp.StatusCode != http.StatusOK {
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			// Если это последняя попытка или ошибка не связана с сетью
+			if attempt == maxRetries {
+				return fmt.Errorf("failed to send request: %w", err)
+			}
+
+			// Ждем перед повтором
+			delay := baseDelay * time.Duration(1<<attempt) // Экспоненциальный backoff
+			c.logger.Warn("Retrying reservation request due to network error",
+				zap.Int("attempt", attempt+1),
+				zap.Duration("delay", delay),
+				zap.Error(err))
+
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(delay):
+				continue
+			}
+		}
+
+		defer resp.Body.Close()
+
+		if resp.StatusCode == http.StatusOK {
+			return nil
+		}
+
 		var errorResp map[string]interface{}
 		json.NewDecoder(resp.Body).Decode(&errorResp)
+
+		// Проверяем, стоит ли повторять запрос
+		if resp.StatusCode == http.StatusInternalServerError {
+			// Проверяем, если это ошибка блокировки ресурса
+			if errorMsg, ok := errorResp["message"].(string); ok &&
+				(strings.Contains(errorMsg, "Resource is currently locked") ||
+					strings.Contains(errorMsg, "context canceled") ||
+					strings.Contains(errorMsg, "context deadline exceeded")) {
+
+				if attempt < maxRetries {
+					delay := baseDelay * time.Duration(1<<attempt) // Экспоненциальный backoff
+					c.logger.Warn("Retrying reservation request due to resource lock",
+						zap.Int("attempt", attempt+1),
+						zap.Duration("delay", delay),
+						zap.String("error", errorMsg))
+
+					select {
+					case <-ctx.Done():
+						return ctx.Err()
+					case <-time.After(delay):
+						continue
+					}
+				}
+			}
+		}
+
+		// Для всех остальных ошибок (включая insufficient_items) не повторяем
 		return fmt.Errorf("reservation failed: %v", errorResp)
 	}
 
-	return nil
+	return fmt.Errorf("reservation failed after %d retries", maxRetries)
 }
 
 // ReturnReserve возвращает зарезервированные предметы

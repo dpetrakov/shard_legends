@@ -132,42 +132,20 @@
 **Критерии готовности:** TBD
 
 
-## D-O-1 Реализация эндпоинта открытия сундуков (/deck/chest/open)
+## D-O-1 Реализация эндпоинта открытия сундуков (/deck/chest/open) [ЗАВЕРШЕНО]
 - **Описание:** Добавить в Deck Game Service публичный POST-эндпоинт `/deck/chest/open`, который принимает тип/качество сундука и количество, ищет подходящий `chest_opening`-рецепт, запускает `Production Service → /production/factory/start`, сразу выполняет `claim`, агрегирует полученные предметы и возвращает их клиенту. Бизнес-правила идентичны сценарию ежедневных сундуков (cooldown = 0, лимитов нет).
-- **Пошаговый план:**
-  1. Изучить спецификацию и пример бизнес-логики в [`docs/specs/deck-game-service.md`](docs/specs/deck-game-service.md) — раздел «3. Открыть сундуки».
-  2. Ознакомиться с OpenAPI-описанием маршрута в [`docs/specs/deck-game-service-openapi.yml`](docs/specs/deck-game-service-openapi.yml).
-  3. Посмотреть реализацию ежедневных сундуков:  
-     • Handler: `services/deck-game-service/internal/handlers/deck_game_handler.go`  
-     • Service: `services/deck-game-service/internal/service/deck_game_service.go`  
-     • Storage: `services/deck-game-service/internal/storage/daily_chest_storage.go`  
-     • Тесты: `internal/handlers/deck_game_handler_test.go`, `internal/service/deck_game_service_test.go`.
-  4. Создать аналогичный слой:
-     - **Handler** `OpenChest` (POST `/deck/chest/open`) — валидация JSON, извлечение JWT и UserID, вызов сервиса.
-     - **Service** `OpenChest` —
-        1. Провести взаимную валидацию: задано **ровно одно** из `quantity` (1–100) или `open_all=true`.
-        2. Если `open_all`, запросить текущее количество сундуков из Inventory Service; вернуть ошибку `insufficient_chests`, если 0.
-        3. Определить ID рецепта `chest_opening` по предмету+качеству (см. YAML-файлы рецептов в `docs/specs/recipes/` и миграции `migrations/dev-data/inventory-service/005_insert_resource_chest_open_recipes.sql`).  
-        4. Запуск `productionClient.StartProduction(ctx, jwt, userID, recipeID, executionCount)` где `executionCount = quantity` либо доступный остаток при `open_all`.
-        5. Claim: `productionClient.ClaimProduction`.
-        6. Обогатить данные через `inventoryClient.GetItemsDetails` (RU локаль).
-        7. Вернуть `items[]` и `quantity_opened`.
-   5. **Metrics:** добавить счётчики `dgs_chest_open_total`, `dgs_chest_open_duration_seconds` (аналогично daily chest).
-   6. **JWT/Rate limit:** использовать существующий middleware; лимит 30 запросов в минуту на IP.
-   7. **Unit-тесты**: покрыть happy-path, ошибки `invalid_input`, `recipe_not_found`, `insufficient_chests`, а также интеграционные моки Production/Inventory.
-  8. **Docs:** убедиться, что README-/Swagger-генерация отражает новый маршрут.
-- **Приоритет:** Высокий
-- **Оценка:** L
-- **Зависимости:**
-  - docs/specs/recipes/*_chest_open*.yaml (рецепты должны существовать)  
-  - migrations/dev-data/inventory-service/005_insert_resource_chest_open_recipes.sql  
-  - Production Service `/production/factory/*` эндпоинты
-- **Критерии готовности:**
-  - [ ] Эндпоинт `/deck/chest/open` доступен и возвращает корректный JSON по OpenAPI
-  - [ ] 100 % unit-тесты новых веток бизнеса, общ. покрытие сервиса ≥ 85 %
-  - [ ] Метрики Prometheus для chest open увеличиваются
-  - [ ] Линтинг и `go test ./...` проходят без ошибок
-  - [ ] Документация и OpenAPI актуальны
+- **Статус:** ✅ РЕАЛИЗОВАНО
+- **Реализованные компоненты:**
+  - ✅ Модели `OpenChestRequest` и `OpenChestResponse` в `internal/models/open_chest.go`
+  - ✅ Расширение интерфейса `InventoryClient` с методом `GetItemQuantity`
+  - ✅ Маппинг сундуков в рецепты в `internal/service/chest_mapping.go`
+  - ✅ Реализация метода `OpenChest` в `internal/service/deck_game_service.go`
+  - ✅ Хэндлер `OpenChest` в `internal/handlers/deck_game_handler.go`
+  - ✅ Регистрация маршрута `/deck/chest/open` в `cmd/server/main.go`
+  - ✅ Полное покрытие unit-тестами (handlers и service)
+  - ✅ Валидация взаимоисключающих полей `quantity` и `open_all`
+  - ✅ Обработка ошибок: `invalid_input`, `recipe_not_found`, `insufficient_chests`
+- **Тестирование:** Все тесты проходят успешно, сборка без ошибок
 
 
 

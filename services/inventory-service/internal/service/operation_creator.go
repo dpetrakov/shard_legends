@@ -297,8 +297,23 @@ func (oc *operationCreator) CreateReservationOperations(ctx context.Context, req
 	}
 
 	if len(insufficientItems) > 0 {
-		return nil, errors.Errorf("insufficient balance for reservation: %s",
-			strings.Join(insufficientItems, "; "))
+		// Create structured insufficient items error
+		missingItems := make([]models.MissingItem, 0, len(lockResults))
+		for _, result := range lockResults {
+			if !result.Sufficient {
+				missingItems = append(missingItems, models.MissingItem{
+					ItemID:    result.ItemID,
+					Required:  result.RequiredQty,
+					Available: result.AvailableQty,
+				})
+			}
+		}
+
+		return nil, &models.InsufficientItemsError{
+			ErrorCode:    "insufficient_items",
+			Message:      fmt.Sprintf("Insufficient items for reservation: %s", strings.Join(insufficientItems, "; ")),
+			MissingItems: missingItems,
+		}
 	}
 
 	// Get operation type ID for reservation

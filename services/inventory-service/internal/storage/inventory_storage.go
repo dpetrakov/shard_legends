@@ -514,11 +514,39 @@ func (s *InventoryStorage) CheckAndLockBalances(ctx context.Context, tx interfac
 		return nil, fmt.Errorf("invalid transaction type")
 	}
 
+	// Group items by unique combination to avoid locking the same row multiple times
+	type itemKey struct {
+		UserID         uuid.UUID
+		SectionID      uuid.UUID
+		ItemID         uuid.UUID
+		CollectionID   uuid.UUID
+		QualityLevelID uuid.UUID
+	}
+
+	groupedItems := make(map[itemKey][]int) // map[itemKey][]originalIndex
+	for i, item := range items {
+		key := itemKey{
+			UserID:         item.UserID,
+			SectionID:      item.SectionID,
+			ItemID:         item.ItemID,
+			CollectionID:   item.CollectionID,
+			QualityLevelID: item.QualityLevelID,
+		}
+		groupedItems[key] = append(groupedItems[key], i)
+	}
+
+	s.logger.Info("Grouped items for balance checking",
+		"original_count", len(items),
+		"unique_groups", len(groupedItems))
+
 	results := make([]service.BalanceLockResult, len(items))
 
-	for i, item := range items {
-		result := service.BalanceLockResult{
-			BalanceLockRequest: item,
+	// Check and lock balance for each unique item group
+	for key, indices := range groupedItems {
+		// Calculate total required quantity for this group
+		totalRequired := int64(0)
+		for _, idx := range indices {
+			totalRequired += items[idx].RequiredQty
 		}
 
 		// Lock the daily balance row for this item (if exists)
@@ -539,21 +567,27 @@ func (s *InventoryStorage) CheckAndLockBalances(ctx context.Context, tx interfac
 
 		var dailyBalance int64 = 0
 		err := pgxTx.QueryRow(ctx, lockQuery,
-			item.UserID, item.SectionID, item.ItemID,
-			item.CollectionID, item.QualityLevelID).Scan(&dailyBalance)
+			key.UserID, key.SectionID, key.ItemID,
+			key.CollectionID, key.QualityLevelID).Scan(&dailyBalance)
 
 		if err != nil && err != pgx.ErrNoRows {
 			// Handle database errors appropriately
-			if dbErr := internalerrors.HandleDatabaseError(err, "lock_balance_row"); dbErr != nil {
-				result.Error = dbErr
-			} else {
-				result.Error = err
+			for _, idx := range indices {
+				result := service.BalanceLockResult{
+					BalanceLockRequest: items[idx],
+				}
+				if dbErr := internalerrors.HandleDatabaseError(err, "lock_balance_row"); dbErr != nil {
+					result.Error = dbErr
+				} else {
+					result.Error = err
+				}
+				results[idx] = result
 			}
-			results[i] = result
 			continue
 		}
 
-		// Calculate operations sum for today within the same transaction
+		// Calculate operations sum since the last daily_balance date
+		// This matches the logic used in GetUserInventoryOptimized
 		operationsQuery := `
 			SELECT COALESCE(SUM(quantity_change), 0)
 			FROM inventory.operations 
@@ -562,35 +596,64 @@ func (s *InventoryStorage) CheckAndLockBalances(ctx context.Context, tx interfac
 			  AND item_id = $3 
 			  AND collection_id = $4 
 			  AND quality_level_id = $5 
-			  AND DATE(created_at) = CURRENT_DATE
+			  AND created_at > (
+				SELECT COALESCE(MAX(db.balance_date) + INTERVAL '1 day', '1970-01-01'::timestamp)
+				FROM inventory.daily_balances db
+				WHERE db.user_id = $1 
+				  AND db.section_id = $2
+				  AND db.item_id = $3
+				  AND db.collection_id = $4
+				  AND db.quality_level_id = $5
+			  )
 		`
 
 		var operationsSum int64 = 0
+		s.logger.Info("Executing operations query with parameters",
+			"user_id", key.UserID,
+			"section_id", key.SectionID,
+			"item_id", key.ItemID,
+			"collection_id", key.CollectionID,
+			"quality_level_id", key.QualityLevelID,
+			"total_required", totalRequired)
+
 		err = pgxTx.QueryRow(ctx, operationsQuery,
-			item.UserID, item.SectionID, item.ItemID,
-			item.CollectionID, item.QualityLevelID).Scan(&operationsSum)
+			key.UserID, key.SectionID, key.ItemID,
+			key.CollectionID, key.QualityLevelID).Scan(&operationsSum)
 
 		if err != nil {
-			result.Error = err
-			results[i] = result
+			for _, idx := range indices {
+				result := service.BalanceLockResult{
+					BalanceLockRequest: items[idx],
+					Error:              err,
+				}
+				results[idx] = result
+			}
 			continue
 		}
 
 		// Calculate available balance
 		availableBalance := dailyBalance + operationsSum
-		result.AvailableQty = availableBalance
-		result.Sufficient = availableBalance >= item.RequiredQty
+		groupSufficient := availableBalance >= totalRequired
 
-		results[i] = result
-
-		s.logger.Debug("Balance locked and checked",
-			"user_id", item.UserID,
-			"item_id", item.ItemID,
+		s.logger.Info("Balance locked and checked for group",
+			"user_id", key.UserID,
+			"item_id", key.ItemID,
 			"daily_balance", dailyBalance,
 			"operations_sum", operationsSum,
 			"available", availableBalance,
-			"required", item.RequiredQty,
-			"sufficient", result.Sufficient)
+			"total_required", totalRequired,
+			"group_sufficient", groupSufficient,
+			"group_size", len(indices))
+
+		// Set results for all items in this group
+		for _, idx := range indices {
+			result := service.BalanceLockResult{
+				BalanceLockRequest: items[idx],
+				AvailableQty:       availableBalance,
+				Sufficient:         groupSufficient && availableBalance >= items[idx].RequiredQty,
+			}
+			results[idx] = result
+		}
 	}
 
 	return results, nil

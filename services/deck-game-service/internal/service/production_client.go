@@ -66,6 +66,19 @@ func (c *productionClient) StartProduction(ctx context.Context, jwtToken string,
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		// Try to parse error response for 400 status
+		if resp.StatusCode == http.StatusBadRequest {
+			var errorResponse map[string]interface{}
+			if err := json.NewDecoder(resp.Body).Decode(&errorResponse); err == nil {
+				if errorCode, ok := errorResponse["error"].(string); ok && errorCode == "insufficient_items" {
+					c.logger.Info("Production service returned insufficient_items error",
+						"user_id", userID,
+						"recipe_id", recipeID)
+					return nil, fmt.Errorf("insufficient_items")
+				}
+			}
+		}
+
 		c.logger.Error("Production service returned error",
 			"status_code", resp.StatusCode,
 			"user_id", userID,
