@@ -4,7 +4,7 @@
 ```bash
 nano /etc/nginx/conf.d/slcw.conf
 sudo nginx -t
-Ds
+systemctl restart nginx
 ```
 
 # ssh туннель 
@@ -95,7 +95,7 @@ docker compose -f deploy/dev/docker-compose.yml exec -T postgres \
 ```
 
 ``` bash
-    cat ../../migrations/dev-data/clean_orphan_items.sql | docker-compose exec -T postgres psql -U slcw_user -d shard_legends_dev
+    cat ../../migrations/dev-data/clean_orphan_items.sql | docker compose exec -T postgres psql -U slcw_user -d shard_legends_dev
 ```
 
   1. Откройте Grafana: http://localhost:15000
