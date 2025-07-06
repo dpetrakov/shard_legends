@@ -25,7 +25,8 @@ BEGIN
     DELETE FROM production.recipe_limits WHERE recipe_id = v_recipe_id;
     DELETE FROM production.recipe_output_items WHERE recipe_id = v_recipe_id;
     DELETE FROM production.recipe_input_items WHERE recipe_id = v_recipe_id;
-    DELETE FROM production.recipes WHERE id = v_recipe_id;
+    -- Не удаляем сам рецепт, чтобы не нарушать FK. При вставке используем UPSERT.
+    -- DELETE FROM production.recipes WHERE id = v_recipe_id;
 
     -- -------------------------------------------------------------------------
     -- Вставляем основную запись рецепта
@@ -42,7 +43,11 @@ BEGIN
         'chest_opening',
         TRUE,
         0
-    );
+    ) ON CONFLICT (id) DO UPDATE
+        SET code = EXCLUDED.code,
+            operation_class_code = EXCLUDED.operation_class_code,
+            is_active = EXCLUDED.is_active,
+            production_time_seconds = EXCLUDED.production_time_seconds;
 
     -- -------------------------------------------------------------------------
     -- Вставляем выходные предметы (используем UUID из docs/specs/items-initial.md)

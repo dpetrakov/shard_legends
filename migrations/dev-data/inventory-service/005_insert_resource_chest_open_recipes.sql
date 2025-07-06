@@ -25,7 +25,8 @@ BEGIN
     DELETE FROM production.recipe_limits WHERE recipe_id = v_recipe_id;
     DELETE FROM production.recipe_output_items WHERE recipe_id = v_recipe_id;
     DELETE FROM production.recipe_input_items WHERE recipe_id = v_recipe_id;
-    DELETE FROM production.recipes WHERE id = v_recipe_id;
+    -- Не удаляем основной рецепт, оставляем для UPSERT.
+    -- DELETE FROM production.recipes WHERE id = v_recipe_id;
 
     -- -------------------------------------------------------------------------
     -- Вставляем основную запись рецепта
@@ -42,7 +43,11 @@ BEGIN
         'chest_opening',
         TRUE,
         0
-    );
+    ) ON CONFLICT (id) DO UPDATE
+        SET code = EXCLUDED.code,
+            operation_class_code = EXCLUDED.operation_class_code,
+            is_active = EXCLUDED.is_active,
+            production_time_seconds = EXCLUDED.production_time_seconds;
 
     -- -------------------------------------------------------------------------
     -- Входные предметы: только сундук малого размера (без ключа)
@@ -94,11 +99,17 @@ BEGIN
     DELETE FROM production.recipe_limits WHERE recipe_id = v_recipe_id;
     DELETE FROM production.recipe_output_items WHERE recipe_id = v_recipe_id;
     DELETE FROM production.recipe_input_items WHERE recipe_id = v_recipe_id;
-    DELETE FROM production.recipes WHERE id = v_recipe_id;
+    -- Не удаляем основной рецепт, оставляем для UPSERT.
+    -- DELETE FROM production.recipes WHERE id = v_recipe_id;
 
     -- Insert recipe
     INSERT INTO production.recipes (id, code, operation_class_code, is_active, production_time_seconds)
-    VALUES (v_recipe_id, v_recipe_code, 'chest_opening', TRUE, 0);
+    VALUES (v_recipe_id, v_recipe_code, 'chest_opening', TRUE, 0)
+    ON CONFLICT (id) DO UPDATE
+        SET code = EXCLUDED.code,
+            operation_class_code = EXCLUDED.operation_class_code,
+            is_active = EXCLUDED.is_active,
+            production_time_seconds = EXCLUDED.production_time_seconds;
 
     -- Inputs: только средний сундук (без ключа)
     INSERT INTO production.recipe_input_items (recipe_id, item_id, quality_level_code, quantity) VALUES
@@ -133,10 +144,16 @@ BEGIN
     DELETE FROM production.recipe_limits WHERE recipe_id = v_recipe_id;
     DELETE FROM production.recipe_output_items WHERE recipe_id = v_recipe_id;
     DELETE FROM production.recipe_input_items WHERE recipe_id = v_recipe_id;
-    DELETE FROM production.recipes WHERE id = v_recipe_id;
+    -- Не удаляем основной рецепт, оставляем для UPSERT.
+    -- DELETE FROM production.recipes WHERE id = v_recipe_id;
 
     INSERT INTO production.recipes (id, code, operation_class_code, is_active, production_time_seconds)
-    VALUES (v_recipe_id, v_recipe_code, 'chest_opening', TRUE, 0);
+    VALUES (v_recipe_id, v_recipe_code, 'chest_opening', TRUE, 0)
+    ON CONFLICT (id) DO UPDATE
+        SET code = EXCLUDED.code,
+            operation_class_code = EXCLUDED.operation_class_code,
+            is_active = EXCLUDED.is_active,
+            production_time_seconds = EXCLUDED.production_time_seconds;
 
     -- Inputs: только большой сундук (без ключа)
     INSERT INTO production.recipe_input_items (recipe_id, item_id, quality_level_code, quantity) VALUES
