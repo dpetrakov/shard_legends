@@ -255,7 +255,8 @@ func setupAPIWithJWT(cfg *config.Config, publicRouter *gin.Engine, internalRoute
 	jwtMiddleware := middleware.NewJWTAuthMiddleware(publicKey, redis, logger)
 
 	// Setup public API routes
-	publicAPI := publicRouter.Group("") // БЫЛО: /api/inventory
+	// Основной публичный API без префикса
+	publicAPI := publicRouter.Group("") // исторически был /api/inventory
 
 	// Public endpoints (require JWT authentication)
 	public := publicAPI.Group("")
@@ -264,6 +265,19 @@ func setupAPIWithJWT(cfg *config.Config, publicRouter *gin.Engine, internalRoute
 		public.GET("/inventory", inventoryHandler.GetUserInventory)
 		public.GET("/inventory/items", inventoryHandler.GetUserInventory)         // alias for compatibility
 		public.POST("/inventory/items/details", inventoryHandler.GetItemsDetails) // localized item details
+	}
+
+	// Backwards-compatibility: старые сервисы (deck-game-service и др.) всё ещё
+	// обращаются к /api/inventory/...  Добавляем алиас с тем же набором хендлеров,
+	// чтобы не ломать интеграции.
+	// Этот блок можно удалить после обновления всех смежных сервисов.
+	compatAPI := publicRouter.Group("/api/inventory")
+	compat := compatAPI.Group("")
+	compat.Use(jwtMiddleware.AuthenticateJWT())
+	{
+		compat.GET("", inventoryHandler.GetUserInventory)
+		compat.GET("/items", inventoryHandler.GetUserInventory)
+		compat.POST("/items/details", inventoryHandler.GetItemsDetails)
 	}
 
 	// Setup internal API routes
