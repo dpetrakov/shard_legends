@@ -1,0 +1,75 @@
+classifiers:
+  - code: resource_type
+    description: Подтипы ресурсов для класса resources
+
+    items:
+      - code: stone
+        description: Камень
+      - code: wood
+        description: Дерево
+      - code: ore
+        description: Руда
+      - code: diamond
+        description: Алмаз
+
+  - code: reagent_type
+    description: Подтипы реагентов для класса reagents
+
+    items:
+      - code: abrasive
+        description: Абразив
+      - code: disc
+        description: Диск
+      - code: inductor
+        description: Индуктор
+      - code: paste
+        description: Паста
+
+  - code: booster_type
+    description: Подтипы ускорителей для класса boosters
+
+    items:
+      - code: repair_tool
+        description: Починка инструмента
+      - code: speed_processing
+        description: Ускорение переработки
+      - code: speed_crafting
+        description: Ускорение создания
+
+  - code: tool_type
+    description: Подтипы инструментов для класса tools
+
+    items:
+      - code: shovel
+        description: Лопата
+      - code: sickle
+        description: Серп
+      - code: axe
+        description: Топор
+      - code: pickaxe
+        description: Кирка
+
+  - code: key_type
+    description: Подтипы ключей для класса keys
+
+    items:
+      - code: key
+        description: Обычный ключ
+      - code: blueprint_key
+        description: Ключ для чертежей
+
+  - code: currency_type
+    description: Подтипы валют для класса currencies
+
+    items:
+      - code: diamonds
+        description: Диаманты
+
+  - code: blueprint_type
+    description: Подтипы чертежей для класса blueprints
+
+    items:
+      - code: tool_blueprint
+        description: Чертеж инструмента
+      - code: booster_blueprint
+        description: Чертеж ускорителя 

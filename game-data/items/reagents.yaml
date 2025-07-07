@@ -1,0 +1,72 @@
+items:
+  - id: 0eb6c9d4-38af-49ac-b6e9-9c78d7f7d11a
+    code: abrasive
+    class: reagents
+    type: abrasive
+
+    translations:
+      ru:
+        name: Абразив
+        description: Используется для шлифовки и обработки материалов.
+      en:
+        name: Abrasive
+        description: Used for grinding and processing materials.
+
+    images:
+      - collection: base
+        quality_level: base
+        url: /statics/images/items/ing-abraziv.png
+
+  - id: 321becd3-d06c-4523-ae16-41d6f56c7cc8
+    code: disc
+    class: reagents
+    type: disc
+
+    translations:
+      ru:
+        name: Диск
+        description: Режущий компонент для дерево- и камнеобработки.
+      en:
+        name: Disc
+        description: Cutting component for woodworking and stone processing.
+
+    images:
+      - collection: base
+        quality_level: base
+        url: /statics/images/items/ing-disk.png
+
+  - id: d0b2ed5d-6e3d-45e8-9f5f-07fd8dcbc2a5
+    code: inductor
+    class: reagents
+    type: inductor
+
+    translations:
+      ru:
+        name: Индуктор
+        description: Электромагнитный элемент для высокотемпературной переплавки.
+      en:
+        name: Inductor
+        description: Electromagnetic element for high-temperature smelting.
+
+    images:
+      - collection: base
+        quality_level: base
+        url: /statics/images/items/ing-ore.png
+
+  - id: 18669d60-2e69-4e3f-9ba8-0ce299f1a827
+    code: paste
+    class: reagents
+    type: paste
+
+    translations:
+      ru:
+        name: Паста
+        description: Связующий реагент для улучшения качества материалов.
+      en:
+        name: Paste
+        description: Binding reagent for improving material quality.
+
+    images:
+      - collection: base
+        quality_level: base
+        url: /statics/images/items/ing-pasta.png 

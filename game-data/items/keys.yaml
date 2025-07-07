@@ -1,0 +1,26 @@
+items:
+  - id: 7e1d9e48-49cd-4ef2-b93e-1e32a0cb9a18
+    code: key
+    class: keys
+    type: key
+
+    translations:
+      ru:
+        name: Ключ
+        description: Открывает сундуки размеров S/M/L; фактический размер определяется параметром size.
+      en:
+        name: Key
+        description: Opens chests of sizes S/M/L; actual size is determined by the size parameter.
+
+  - id: 4e25a5dc-a814-4102-b5cb-54c39fce969f
+    code: blueprint_key
+    class: keys
+    type: blueprint_key
+
+    translations:
+      ru:
+        name: Ключ чертежей
+        description: Используется для открытия сундука с чертежами (Blueprint Chest).
+      en:
+        name: Blueprint Key
+        description: Used to open a Blueprint Chest. 

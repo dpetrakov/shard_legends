@@ -1,0 +1,42 @@
+classifiers:
+  - code: quality_level
+    description: Уровни качества предметов
+    items:
+      - code: base
+        description: Базовый уровень (для ресурсов, реагентов, ускорителей)
+      - code: wooden
+        description: Деревянный уровень
+      - code: stone
+        description: Каменный уровень
+      - code: metal
+        description: Металлический уровень
+      - code: diamond
+        description: Бриллиантовый уровень
+      - code: small
+        description: Малый размер (для ключей)
+      - code: medium
+        description: Средний размер (для ключей)
+      - code: large
+        description: Большой размер (для ключей)
+
+  - code: tool_quality_levels
+    description: Доступные уровни качества для инструментов
+    items:
+      - code: wooden
+        description: Деревянный инструмент
+      - code: stone
+        description: Каменный инструмент
+      - code: metal
+        description: Металлический инструмент
+      - code: diamond
+        description: Бриллиантовый инструмент
+
+  - code: key_quality_levels
+    description: Доступные уровни качества для ключей
+    items:
+      - code: small
+        description: Малый ключ (Key-S)
+      - code: medium
+        description: Средний ключ (Key-M)
+      - code: large
+        description: Большой ключ (Key-L) 

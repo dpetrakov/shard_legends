@@ -1,0 +1,72 @@
+items:
+  - id: 1ac8c2b0-0a7d-4e0e-a6d2-9a90b9094b60
+    code: stone
+    class: resources
+    type: stone
+
+    translations:
+      ru:
+        name: Камень
+        description: Базовый строительный материал, используется в большинстве рецептов и заданий.
+      en:
+        name: Stone
+        description: Basic building material used in most recipes and quests.
+
+    images:
+      - collection: base
+        quality_level: base
+        url: /statics/images/items/stone.png
+
+  - id: 65ab1f83-e2c0-48b4-9173-1010a81d13ad
+    code: wood
+    class: resources
+    type: wood
+
+    translations:
+      ru:
+        name: Дерево
+        description: Универсальный ресурс для строительства и крафта базовых предметов.
+      en:
+        name: Wood
+        description: Universal resource for construction and crafting basic items.
+
+    images:
+      - collection: base
+        quality_level: base
+        url: /statics/images/items/wood.png
+
+  - id: df5231f1-6cb8-4a5d-9a70-fd3214966c89
+    code: ore
+    class: resources
+    type: ore
+
+    translations:
+      ru:
+        name: Руда
+        description: Сырьё для переплавки в металлические слитки.
+      en:
+        name: Ore
+        description: Raw material for smelting into metal ingots.
+
+    images:
+      - collection: base
+        quality_level: base
+        url: /statics/images/items/ore.png
+
+  - id: 3b6529fd-9083-4bc5-8d71-493eb6a30d46
+    code: diamond
+    class: resources
+    type: diamond
+
+    translations:
+      ru:
+        name: Алмаз
+        description: Редкий и ценный ресурс, применяется для создания бриллиантовых инструментов и особых предметов.
+      en:
+        name: Diamond
+        description: Rare and valuable resource used to create diamond tools and special items.
+
+    images:
+      - collection: base
+        quality_level: base
+        url: /statics/images/items/almaz.png 

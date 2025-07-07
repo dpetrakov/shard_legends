@@ -1,0 +1,6 @@
+classifiers:
+  - code: collection
+    description: Коллекции предметов (сезонные и базовые)
+    items:
+      - code: base
+        description: Базовая коллекция (базовая) 

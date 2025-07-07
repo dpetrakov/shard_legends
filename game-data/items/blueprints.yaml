@@ -1,0 +1,72 @@
+items:
+  - id: 4fe26d9e-a4ac-47e6-a7de-4925ae53c0b0
+    code: blueprint_shovel
+    class: blueprints
+    type: shovel
+
+    translations:
+      ru:
+        name: "Чертеж: Лопата"
+        description: Позволяет крафтить лопату выбранного качества.
+      en:
+        name: "Blueprint: Shovel"
+        description: Allows crafting shovels of selected quality.
+
+    images:
+      - collection: base
+        quality_level: base
+        url: /statics/images/items/blueprint-shovel.png
+
+  - id: bf0a5e59-c463-4a8a-a55f-e32401238ac2
+    code: blueprint_sickle
+    class: blueprints
+    type: sickle
+
+    translations:
+      ru:
+        name: "Чертеж: Серп"
+        description: Позволяет крафтить серп выбранного качества.
+      en:
+        name: "Blueprint: Sickle"
+        description: Allows crafting sickles of selected quality.
+
+    images:
+      - collection: base
+        quality_level: base
+        url: /statics/images/items/blueprint-sickle.png
+
+  - id: ed22053e-569b-4f67-9c65-3986fcfafafb
+    code: blueprint_axe
+    class: blueprints
+    type: axe
+
+    translations:
+      ru:
+        name: "Чертеж: Топор"
+        description: Позволяет крафтить топор выбранного качества.
+      en:
+        name: "Blueprint: Axe"
+        description: Allows crafting axes of selected quality.
+
+    images:
+      - collection: base
+        quality_level: base
+        url: /statics/images/items/blueprint-axie.png
+
+  - id: 8ca31e76-9969-4f69-9bba-df3f3beaa7d4
+    code: blueprint_pickaxe
+    class: blueprints
+    type: pickaxe
+
+    translations:
+      ru:
+        name: "Чертеж: Кирка"
+        description: Позволяет крафтить кирку выбранного качества.
+      en:
+        name: "Blueprint: Pickaxe"
+        description: Allows crafting pickaxes of selected quality.
+
+    images:
+      - collection: base
+        quality_level: base
+        url: /statics/images/items/blueprint-pickaxie.png 

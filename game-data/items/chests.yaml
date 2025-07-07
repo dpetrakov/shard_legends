@@ -1,0 +1,79 @@
+items:
+  - id: 9421cc9f-a56e-4c7d-b636-4c8fdfef7166
+    code: resource_chest
+    class: chests
+    type: resource_chest
+
+    translations:
+      ru:
+        name: Ресурсный сундук
+        description: Содержит случайные ресурсы. Размер и количество зависят от качества сундука.
+      en:
+        name: Resource Chest
+        description: Contains random resources. Size and quantity depend on chest quality.
+
+    images:
+      - collection: base
+        quality_level: small
+        url: /statics/images/items/small-chess-res.png
+      - collection: base
+        quality_level: medium
+        url: /statics/images/items/medium-chess-res.png
+      - collection: base
+        quality_level: large
+        url: /statics/images/items/big-chess-res.png
+
+  - id: a2e20668-380d-43eb-87db-cb19e4fed0ab
+    code: reagent_chest
+    class: chests
+    type: reagent_chest
+
+    translations:
+      ru:
+        name: Реагентный сундук
+        description: Содержит случайные реагенты для крафта. Размер зависит от качества.
+      en:
+        name: Reagent Chest
+        description: Contains random reagents for crafting. Size depends on quality.
+
+    images:
+      - collection: base
+        quality_level: small
+        url: /statics/images/items/small-chess-ing.png
+      - collection: base
+        quality_level: medium
+        url: /statics/images/items/medium-chess-ing.png
+      - collection: base
+        quality_level: large
+        url: /statics/images/items/big-chess-ing.png
+
+  - id: 3b5c8322-c00d-44e2-875e-d5bd9097d1c4
+    code: booster_chest
+    class: chests
+    type: booster_chest
+
+    translations:
+      ru:
+        name: Сундук ускорителей
+        description: Содержит случайные ускорители производства и крафта. Размер зависит от качества.
+      en:
+        name: Booster Chest
+        description: Contains random production and crafting boosters. Size depends on quality.
+
+  - id: 012d9076-a37d-4e9d-a49a-fbc7a07e5bd9
+    code: blueprint_chest
+    class: chests
+    type: blueprint_chest
+
+    translations:
+      ru:
+        name: Сундук чертежей
+        description: Содержит случайный сезонный чертеж инструмента.
+      en:
+        name: Blueprint Chest
+        description: Contains a random seasonal tool blueprint.
+
+    images:
+      - collection: base
+        quality_level: base
+        url: /statics/images/items/chess-blueprint.png 

@@ -49,7 +49,7 @@ services:
       # Внешний порт только для локальной отладки. В проде доступ через внешний nginx.
       - "127.0.0.1:22008:80"
     volumes:
-      - ../../static-assets:/usr/share/nginx/html:ro
+      - ../../game-data/static-assets:/usr/share/nginx/html:ro
     networks:
       - slcw-dev
       - slcw-monitoring
@@ -440,6 +440,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "127.0.0.1:22032:5432"  # Local debug/testing access
     networks:
       - slcw-dev
     restart: unless-stopped

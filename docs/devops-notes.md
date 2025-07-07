@@ -102,6 +102,26 @@ docker compose -f deploy/dev/docker-compose.yml exec -T postgres \
     cat ../../migrations/dev-data/clean_orphan_items.sql | docker compose exec -T postgres psql -U slcw_user -d shard_legends_dev
 ```
 
+Сбросить весь кеш Redis
+```bash
+# перейти в каталог deploy/dev
+cd deploy/dev
+
+# выполнить команду в запущенном контейнере Redis
+docker compose exec redis redis-cli FLUSHALL        # удалить данные из всех БД
+# или точечно, например очистить только DB 1 (Inventory Service)
+docker compose exec redis redis-cli -n 1 FLUSHDB
+```
+
+Пролить предметы
+```bash
+cd /scripts/item_loader
+go mod tidy  
+
+go run . --files ../../game-data/items/resources.yaml
+go run . --all ../../game-data/items/
+```
+
   1. Откройте Grafana: http://localhost:15000
   2. Войдите: admin / 
   3. Проверьте логи:

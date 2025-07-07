@@ -1,0 +1,39 @@
+items:
+  - id: e9a746e0-8a40-4ff5-b582-3a1b7e3db3d6
+    code: repair_tool
+    class: boosters
+    type: repair_tool
+
+    translations:
+      ru:
+        name: Набор ремонта
+        description: Полностью восстанавливает прочность выбранного инструмента.
+      en:
+        name: Repair Kit
+        description: Fully restores the durability of the selected tool.
+
+  - id: 6a8fa441-2de9-4044-9d04-8461aa1bea2d
+    code: speed_processing
+    class: boosters
+    type: speed_processing
+
+    translations:
+      ru:
+        name: Катализатор переплавки
+        description: Сокращает время переплавки сырья.
+      en:
+        name: Smelting Catalyst
+        description: Reduces smelting time for raw materials.
+
+  - id: 3cd406c4-8eaf-4ec7-9c45-0020211d2b8d
+    code: speed_crafting
+    class: boosters
+    type: speed_crafting
+
+    translations:
+      ru:
+        name: Смазка сборщика
+        description: Уменьшает время крафта инструментов.
+      en:
+        name: Assembly Lubricant
+        description: Reduces tool crafting time. 

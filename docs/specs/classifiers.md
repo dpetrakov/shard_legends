@@ -29,8 +29,6 @@ CREATE TABLE classifier_items (
     classifier_id UUID NOT NULL REFERENCES classifiers(id),
     code VARCHAR(100) NOT NULL,
     description TEXT NOT NULL,
-    sort_order INTEGER DEFAULT 0,
-    is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     
@@ -364,9 +362,9 @@ INSERT INTO classifiers (id, code, description) VALUES
 ('новый-uuid', 'новый_код', 'Описание классификатора');
 
 -- Добавление элементов классификатора
-INSERT INTO classifier_items (id, classifier_id, code, description, sort_order) VALUES 
-('элемент-uuid-1', 'новый-uuid', 'код_элемента_1', 'Описание элемента 1', 1),
-('элемент-uuid-2', 'новый-uuid', 'код_элемента_2', 'Описание элемента 2', 2);
+INSERT INTO classifier_items (id, classifier_id, code, description) VALUES 
+('элемент-uuid-1', 'новый-uuid', 'код_элемента_1', 'Описание элемента 1'),
+('элемент-uuid-2', 'новый-uuid', 'код_элемента_2', 'Описание элемента 2');
 ```
 
 ### Правила изменения классификаторов

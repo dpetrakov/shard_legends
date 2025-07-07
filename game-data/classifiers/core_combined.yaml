@@ -1,0 +1,81 @@
+classifiers:
+  - code: item_class
+    description: Классы предметов в игре
+
+    items:
+      - code: resources
+        description: Базовые ресурсы для строительства и производства
+
+      - code: reagents
+        description: Реагенты для производства инструментов
+
+      - code: boosters
+        description: Ускорители различных процессов
+
+      - code: blueprints
+        description: Чертежи для производства инструментов
+
+      - code: tools
+        description: Инструменты для добычи ресурсов
+
+      - code: keys
+        description: Ключи для открытия сундуков
+
+      - code: currencies
+        description: Игровые валюты
+
+  - code: inventory_section
+    description: Разделы инвентаря пользователя
+
+    items:
+      - code: main
+        description: Основной инвентарь пользователя
+
+      - code: factory
+        description: Фабричный инвентарь (зарезервированные материалы)
+
+      - code: trade
+        description: Торговый инвентарь (предметы на продаже)
+
+  - code: operation_type
+    description: Типы операций с инвентарем
+
+    items:
+      - code: chest_reward
+        description: Получение из сундука
+
+      - code: craft_result
+        description: Результат производства
+
+      - code: trade_sale
+        description: Продажа в торговле
+
+      - code: trade_purchase
+        description: Покупка в торговле
+
+      - code: admin_adjustment
+        description: Административная корректировка
+
+      - code: system_reward
+        description: Системная награда
+
+      - code: system_penalty
+        description: Системное списание
+
+      - code: daily_quest_reward
+        description: Награда за ежедневное задание
+
+      - code: factory_reservation
+        description: Резервирование материалов для производства
+
+      - code: factory_return
+        description: Возврат материалов при отмене
+
+      - code: factory_consumption
+        description: Уничтожение материалов при производстве
+
+      - code: trade_listing
+        description: Размещение предмета на продажу
+
+      - code: trade_delisting
+        description: Снятие предмета с продажи 

@@ -1,0 +1,124 @@
+classifiers:
+  - code: production_operation_class
+    description: Классы операций для производственных процессов
+    items:
+      - code: crafting
+        description: Крафт инструментов, создание предметов
+      - code: smelting
+        description: Переплавка, обработка сырья
+      - code: chest_opening
+        description: Открытие сундуков
+
+  - code: recipe_limit_type
+    description: Типы временных ограничений для производственных рецептов
+    items:
+      - code: total
+        description: Общий лимит на все время жизни профиля
+      - code: per_day
+        description: Лимит на календарные сутки (00:00-23:59 UTC)
+      - code: per_week
+        description: Лимит на календарную неделю (понедельник-воскресенье)
+      - code: per_month
+        description: Лимит на календарный месяц
+      - code: per_quarter
+        description: Лимит на квартал (3 месяца)
+      - code: per_year
+        description: Лимит на календарный год
+      - code: per_season
+        description: Лимит на сезон (4 недели для чертежей)
+      - code: per_event
+        description: Лимит на все время проведения события
+
+  - code: recipe_limit_object
+    description: Объекты ограничений для производственных рецептов
+    items:
+      - code: recipe_execution
+        description: Ограничение на количество запусков рецепта
+      - code: item_receipt
+        description: Ограничение на количество получений конкретного предмета
+
+  - code: production_task_status
+    description: Возможные статусы производственных заданий
+    items:
+      - code: pending
+        description: Ожидает свободного слота для запуска
+      - code: in_progress
+        description: Выполняется в производственном слоте
+      - code: completed
+        description: Завершено, результат готов к Claim
+      - code: claimed
+        description: Результат получен пользователем
+      - code: cancelled
+        description: Отменено до начала выполнения
+      - code: failed
+        description: Не удалось выполнить по техническим причинам
+
+  - code: production_slot_type
+    description: Типы производственных слотов пользователя
+    items:
+      - code: universal
+        description: Универсальный слот (поддерживает все операции)
+      - code: smithy
+        description: Кузнечный слот (crafting + smelting)
+      - code: crafting
+        description: Слот для операции крафта (crafting)
+      - code: smelting
+        description: Слот для операции переплавки (smelting)
+      - code: chest_opening
+        description: Слот для операции открытия сундуков (chest_opening)
+      - code: mining
+        description: Шахтерский слот (resource_gathering)
+      - code: special
+        description: Специальный слот (special)
+
+  - code: modifier_type
+    description: Типы модификаторов для производственных процессов
+    items:
+      - code: speed_bonus
+        description: Ускорение производства (сокращение времени)
+      - code: quantity_bonus
+        description: Увеличение количества (модификация диапазонов)
+      - code: probability_bonus
+        description: Повышение шансов (улучшение вероятностей)
+      - code: cost_reduction
+        description: Снижение затрат (уменьшение материалов)
+      - code: quality_bonus
+        description: Повышение качества результата
+
+  - code: modifier_source
+    description: Источники происхождения модификаторов
+    items:
+      - code: booster_item
+        description: Модификатор от предмета-ускорителя
+      - code: vip_status
+        description: Модификатор от VIP статуса
+      - code: character_level
+        description: Модификатор от уровня персонажа
+      - code: achievement
+        description: Модификатор от достижения
+      - code: clan_bonus
+        description: Модификатор от клановых бонусов
+      - code: seasonal_event
+        description: Модификатор от сезонного события
+      - code: lunar_cycle
+        description: Модификатор от лунного цикла
+      - code: server_buff
+        description: Модификатор от серверного бафа
+      - code: special_event
+        description: Модификатор от специального события
+
+  - code: user_status
+    description: Статусы активности пользователей
+    items:
+      - code: active
+        description: Активный пользователь
+      - code: inactive
+        description: Неактивный пользователь
+      - code: suspended
+        description: Заблокированный пользователь
+      - code: banned
+        description: Забаненный пользователь
+      - code: under_investigation
+        description: Подозрение в мошенничестве (ограниченные действия до расследования)
+      - code: shadow_restricted
+        description: Ограниченный статус для подтверждённых мошенников (игра без полноценной выгоды) 

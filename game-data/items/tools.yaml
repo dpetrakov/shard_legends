@@ -1,0 +1,112 @@
+items:
+  - id: 6bb18b46-8f3c-45e9-b483-7edaf512a74c
+    code: shovel
+    class: tools
+    type: shovel
+    quality_levels_classifier: tool_quality_levels
+
+    translations:
+      ru:
+        name: Лопата
+        description: Универсальный инструмент для земляных работ; качество и серия задаются отдельными атрибутами.
+      en:
+        name: Shovel
+        description: Universal tool for earthworks; quality and series are set by separate attributes.
+
+    images:
+      - collection: base
+        quality_level: wooden
+        url: /statics/images/items/shovel-wood.png
+      - collection: base
+        quality_level: stone
+        url: /statics/images/items/shovel-stone.png
+      - collection: base
+        quality_level: metal
+        url: /statics/images/items/shovel-metal.png
+      - collection: base
+        quality_level: diamond
+        url: /statics/images/items/shovel-almaz.png
+
+  - id: 3677ad6c-cd73-4a7b-8c62-6d1ad6bc26ab
+    code: sickle
+    class: tools
+    type: sickle
+    quality_levels_classifier: tool_quality_levels
+
+    translations:
+      ru:
+        name: Серп
+        description: Инструмент для сбора урожая и трав; модификации через атрибуты качества/серии.
+      en:
+        name: Sickle
+        description: Tool for harvesting crops and herbs; modifications through quality/series attributes.
+
+    images:
+      - collection: base
+        quality_level: wooden
+        url: /statics/images/items/sickle-wood.png
+      - collection: base
+        quality_level: stone
+        url: /statics/images/items/sickle-stone.png
+      - collection: base
+        quality_level: metal
+        url: /statics/images/items/sickle-metal.png
+      - collection: base
+        quality_level: diamond
+        url: /statics/images/items/sickle-almaz.png
+
+  - id: f347b613-70f2-4744-b2e8-1005c6614c29
+    code: axe
+    class: tools
+    type: axe
+    quality_levels_classifier: tool_quality_levels
+
+    translations:
+      ru:
+        name: Топор
+        description: Инструмент для рубки древесины; характеристики зависят от атрибута качества.
+      en:
+        name: Axe
+        description: Tool for chopping wood; characteristics depend on quality attribute.
+
+    images:
+      - collection: base
+        quality_level: wooden
+        url: /statics/images/items/axie-wood.png
+      - collection: base
+        quality_level: stone
+        url: /statics/images/items/axie-stone.png
+      - collection: base
+        quality_level: metal
+        url: /statics/images/items/axie-metal.png
+      - collection: base
+        quality_level: diamond
+        url: /statics/images/items/axie-almaz.png
+
+  - id: 9cdbee72-713d-4e0e-9719-c9bc8bcb0533
+    code: pickaxe
+    class: tools
+    type: pickaxe
+    quality_levels_classifier: tool_quality_levels
+
+    translations:
+      ru:
+        name: Кирка
+        description: Инструмент для добычи камня и руды; модификации задаются качеством и серией.
+      en:
+        name: Pickaxe
+        description: Tool for mining stone and ore; modifications are set by quality and series.
+
+    images:
+      - collection: base
+        quality_level: wooden
+        url: /statics/images/items/pickaxie-wood.png
+      - collection: base
+        quality_level: stone
+        url: /statics/images/items/pickaxie-stone.png
+      - collection: base
+        quality_level: metal
+        url: /statics/images/items/pickaxie-metal.png
+      - collection: base
+        quality_level: diamond
+        url: /statics/images/items/pickaxie-almaz.png 
