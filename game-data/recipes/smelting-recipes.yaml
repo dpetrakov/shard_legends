@@ -104,7 +104,7 @@ recipes:
         quantity: 4
 
     output_items:
-      - item_code: diamond
+      - item_code: cut_diamond
         min_quantity: 1
         max_quantity: 1
         probability_percent: 100
@@ -112,13 +112,13 @@ recipes:
     translations:
       - language_code: en
         field_name: name
-        content: "Diamond Refining"
+        content: "Diamond Cutting"
       - language_code: ru
         field_name: name
-        content: "Переплавка: Бриллиант"
+        content: "Переплавка: Огранённый алмаз"
       - language_code: en
         field_name: description
-        content: "Refine 100 diamonds and 4 pastes into 1 pure diamond"
+        content: "Refine 100 diamonds and 4 pastes into 1 cut diamond"
       - language_code: ru
         field_name: description
-        content: "Переплавить 100 алмазов и 4 пасты в 1 бриллиант" 
+        content: "Переплавить 100 алмазов и 4 пасты в 1 огранённый алмаз" 

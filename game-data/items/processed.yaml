@@ -1,0 +1,72 @@
+items:
+  - id: 7f8e9d1a-2b3c-4d5e-6f7a-8b9c0d1e2f3a
+    code: wooden_plank
+    class: processed
+    type: wooden_plank
+
+    translations:
+      ru:
+        name: Деревянный брусок
+        description: Обработанная древесина, готовая для крафта инструментов и строительства.
+      en:
+        name: Wooden Plank
+        description: Processed wood ready for tool crafting and construction.
+
+    images:
+      - collection: base
+        quality_level: base
+        url: /statics/images/items/block-wood.png
+
+  - id: 8a9b0c1d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
+    code: stone_block
+    class: processed
+    type: stone_block
+
+    translations:
+      ru:
+        name: Каменный блок
+        description: Обработанный камень, используется для создания прочных инструментов.
+      en:
+        name: Stone Block
+        description: Processed stone used for creating durable tools.
+
+    images:
+      - collection: base
+        quality_level: base
+        url: /statics/images/items/block-stone.png
+
+  - id: 9b0c1d2e-4f5a-6b7c-8d9e-0f1a2b3c4d5e
+    code: metal_ingot
+    class: processed
+    type: metal_ingot
+
+    translations:
+      ru:
+        name: Металлический слиток
+        description: Переплавленная руда, готовая для создания металлических инструментов.
+      en:
+        name: Metal Ingot
+        description: Smelted ore ready for creating metal tools.
+
+    images:
+      - collection: base
+        quality_level: base
+        url: /statics/images/items/block-ore.png
+
+  - id: 0c1d2e3f-5a6b-7c8d-9e0f-1a2b3c4d5e6f
+    code: cut_diamond
+    class: processed
+    type: cut_diamond
+
+    translations:
+      ru:
+        name: Огранённый алмаз
+        description: Обработанный алмаз высшего качества для создания бриллиантовых инструментов.
+      en:
+        name: Cut Diamond
+        description: High-quality processed diamond for creating diamond tools.
+
+    images:
+      - collection: base
+        quality_level: base
+        url: /statics/images/items/block-almaz.png 

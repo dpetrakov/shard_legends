@@ -1,4 +1,6 @@
 
+import type { ChestType } from './profile';
+
 export type ResourceType = 'stone' | 'wood' | 'ore' | 'diamond';
 export type ReagentType = 'abrasive' | 'disc' | 'inductor' | 'paste';
 export type BlueprintType = 'shovel' | 'sickle' | 'axe' | 'pickaxe';
@@ -14,6 +16,15 @@ export type CraftedToolType = `${Quality}_${Tool}`;
 
 export type InventoryItemType = ResourceType | ReagentType | BlueprintType | BoosterType | ProcessedItemType | CraftedToolType;
 
+// NEW: Details for an item, fetched from the server.
+export interface ItemDetails {
+    id: string; // This is the UUID from the server
+    slug: InventoryItemType | ChestType;
+    name: string;
+    description?: string;
+    imageUrl?: string;
+}
+
 export const AllResourceTypes: ResourceType[] = ['stone', 'wood', 'ore', 'diamond'];
 export const AllReagentTypes: ReagentType[] = ['abrasive', 'disc', 'inductor', 'paste'];
 export const AllBlueprintTypes: BlueprintType[] = ['shovel', 'sickle', 'axe', 'pickaxe'];
@@ -21,11 +32,14 @@ export const AllProcessedItemTypes: ProcessedItemType[] = ['wood_plank', 'stone_
 export const AllCraftedToolTypes: CraftedToolType[] = qualities.flatMap(q => tools.map(t => `${q}_${t}` as CraftedToolType));
 
 
-export type LootResult = { [key in InventoryItemType]?: number };
+export type LootResult = { [key in InventoryItemType | ChestType]?: number };
 
 export interface InventoryContextType {
   inventory: LootResult;
+  itemDetails: Record<string, ItemDetails>;
   addItems: (itemsToAdd: LootResult) => void;
   spendItems: (itemsToSpend: LootResult) => boolean;
-  getItemName: (item: InventoryItemType) => string;
+  getItemName: (item: InventoryItemType | ChestType) => string;
+  getItemImage: (item: InventoryItemType | ChestType) => string | undefined;
+  syncWithServer: () => Promise<void>;
 }

@@ -1,7 +1,8 @@
+
 "use client";
 
-import { useState } from 'react';
-import { Card, CardContent } from "@/components/ui/card";
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from '@/components/ui/button';
@@ -23,29 +24,127 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Archive, Gem, FlaskConical, Wrench } from 'lucide-react';
+import { Archive, Gem, FlaskConical, Wrench, Loader2, Code } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-import { useChests } from "@/contexts/ChestContext";
 import { useInventory } from "@/contexts/InventoryContext";
+import { useAuth } from '@/contexts/AuthContext';
 import Image from 'next/image';
-import { allChestTypes, chestDetails } from "@/lib/chest-definitions";
-import { openChest } from '@/lib/loot-tables';
+import { allChestTypes } from "@/lib/chest-definitions";
 import type { ChestType } from '@/types/profile';
-import type { LootResult, InventoryItemType, BlueprintType, ResourceType, ProcessedItemType, ReagentType, CraftedToolType } from '@/types/inventory';
+import type { InventoryItemType, BlueprintType, ResourceType, ProcessedItemType, ReagentType, CraftedToolType } from '@/types/inventory';
 import { AllResourceTypes, AllReagentTypes, AllBlueprintTypes, AllProcessedItemTypes, AllCraftedToolTypes } from '@/types/inventory';
+import { useToast } from '@/hooks/use-toast';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Separator } from "@/components/ui/separator";
 
 const TABS = [
   { value: 'chests', label: 'Сундуки', icon: <Archive className="w-6 h-6" /> },
   { value: 'resources', label: 'Ресурсы', icon: <Gem className="w-6 h-6" /> },
   { value: 'reagents', label: 'Реагенты', icon: <FlaskConical className="w-6 h-6" /> },
   { value: 'tools', label: 'Инструменты', icon: <Wrench className="w-6 h-6" /> },
+  { value: 'debug', label: 'Отладка', icon: <Code className="w-6 h-6" /> },
 ] as const;
 
 
+// Light rays animation component
+const LightRays = () => {
+    return (
+        <motion.div
+            className="absolute z-0 w-64 h-64" // z-0 so it's behind the chest
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ 
+                opacity: 1, 
+                scale: 1.2, 
+                transition: { delay: 0.5, duration: 0.5 } // Appear after chest lands
+            }}
+            exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.3 } }}
+        >
+            {/* Spinning rays */}
+            <div className="absolute inset-0 animate-rays-spin-slow">
+                {[...Array(8)].map((_, i) => (
+                    <div 
+                        key={i}
+                        className="absolute top-1/2 left-0 w-full h-px bg-gradient-to-r from-yellow-200/0 via-yellow-200 to-yellow-200/0"
+                        style={{ transform: `rotate(${i * 22.5}deg)` }}
+                    />
+                ))}
+            </div>
+            {/* Pulsating glow */}
+            <div className="absolute inset-0 bg-yellow-300/20 rounded-full blur-2xl animate-pulse" />
+        </motion.div>
+    );
+};
+
+// Animation component for chest opening
+const ChestOpeningAnimation = ({ chestImageUrl, state }: { chestImageUrl: string | undefined, state: 'idle' | 'shaking' | 'flashing' }) => {
+    if (!chestImageUrl || state === 'idle') return null;
+
+    const containerVariants = {
+        hidden: { opacity: 0, scale: 0.7 },
+        visible: { 
+            opacity: 1, 
+            scale: 1,
+            transition: { duration: 0.5, ease: 'easeOut' } 
+        },
+    };
+
+    const shakeVariants = {
+        shaking: {
+            rotate: [0, -3, 3, -3, 3, 0],
+            transition: { duration: 1.5, repeat: Infinity, delay: 0.5 }
+        }
+    };
+
+    const flashVariants = {
+        hidden: { opacity: 0 },
+        visible: { opacity: [0, 1, 0], transition: { duration: 0.7, times: [0, 0.5, 1] } }
+    };
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none">
+            <AnimatePresence>
+                {state === 'shaking' && (
+                    <motion.div
+                        key="chest-container"
+                        className="relative flex items-center justify-center"
+                        variants={containerVariants}
+                        initial="hidden"
+                        animate="visible"
+                        exit={{ opacity: 0, scale: 2, transition: {duration: 0.4} }}
+                    >
+                        <LightRays />
+                        <motion.div
+                            key="chest"
+                            className="z-10"
+                            variants={shakeVariants}
+                            animate='shaking'
+                        >
+                            <Image src={chestImageUrl} alt="Открытие сундука" width={128} height={128} />
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+            <AnimatePresence>
+                {state === 'flashing' && (
+                    <motion.div
+                        key="flash"
+                        className="absolute inset-0 bg-white"
+                        variants={flashVariants}
+                        initial="hidden"
+                        animate="visible"
+                    />
+                )}
+            </AnimatePresence>
+        </div>
+    );
+};
+
+
 export default function InventoryPage() {
-  const { chestCounts, getChestName, spendChests } = useChests();
-  const { inventory, addItems, getItemName } = useInventory();
+  const { inventory, itemDetails, getItemName, getItemImage, syncWithServer } = useInventory();
+  const { token } = useAuth();
+  const { toast } = useToast();
+  const apiUrl = 'https://dev-forly.slcw.dimlight.online';
 
   const [activeTab, setActiveTab] = useState<(typeof TABS)[number]['value']>('chests');
   const [selectedChest, setSelectedChest] = useState<ChestType | null>(null);
@@ -53,64 +152,22 @@ export default function InventoryPage() {
   const [isAlertOpen, setIsAlertOpen] = useState(false);
   const [openAmount, setOpenAmount] = useState(0);
 
-  const ownedChests = allChestTypes.filter(chestType => (chestCounts[chestType] || 0) > 0);
+  // States for server logic
+  const [isLoading, setIsLoading] = useState(false);
+  const [lastLoot, setLastLoot] = useState<any[] | null>(null);
+  const [isLootModalOpen, setIsLootModalOpen] = useState(false);
+  
+  // Animation states
+  const [animationState, setAnimationState] = useState<'idle' | 'shaking' | 'flashing'>('idle');
+  const [animatingChest, setAnimatingChest] = useState<ChestType | null>(null);
+  
+  // States for debug tab
+  const [debugResponse, setDebugResponse] = useState<string>('');
+  const [isDebugLoading, setIsDebugLoading] = useState<boolean>(false);
+  const [debugDefinitionsResponse, setDebugDefinitionsResponse] = useState<string>('');
+  const [isDebugDefinitionsLoading, setIsDebugDefinitionsLoading] = useState<boolean>(false);
 
-  const resourceImageMap: Record<ResourceType, string> = {
-    stone: '/images/stone.png',
-    wood: '/images/wood.png',
-    ore: '/images/ore.png',
-    diamond: '/images/almaz.png',
-  };
-
-  const reagentImageMap: Record<ReagentType, string> = {
-    abrasive: '/images/ing-abraziv.png',
-    disc: '/images/ing-disk.png',
-    inductor: '/images/ing-ore.png',
-    paste: '/images/ing-pasta.png',
-  };
-
-  const processedItemImageMap: Record<ProcessedItemType, string> = {
-    wood_plank: '/images/block-wood.png',
-    stone_block: '/images/block-stone.png',
-    metal_ingot: '/images/block-ore.png',
-    cut_diamond: '/images/block-almaz.png',
-  };
-
-  const blueprintImageMap: Record<BlueprintType, string> = {
-    axe: '/images/blueprint-axie.png',
-    pickaxe: '/images/blueprint-pickaxie.png',
-    shovel: '/images/blueprint-shovel.png',
-    sickle: '/images/blueprint-sickle.png',
-  };
-
-  const chestImageMap: Partial<Record<ChestType, string>> = {
-    'resource_small': '/images/small-chess-res.png',
-    'resource_medium': '/images/medium-chess-res.png',
-    'resource_large': '/images/big-chess-res.png',
-    'reagent_small': '/images/small-chess-ing.png',
-    'reagent_medium': '/images/medium-chess-ing.png',
-    'reagent_large': '/images/big-chess-ing.png',
-    'blueprint': '/images/chess-blueprint.png',
-  };
-
-  const craftedToolImageMap: Record<CraftedToolType, string> = {
-    wooden_axe: '/images/axie-wood.png',
-    stone_axe: '/images/axie-stone.png',
-    metal_axe: '/images/axie-metal.png',
-    diamond_axe: '/images/axie-almaz.png',
-    wooden_pickaxe: '/images/pickaxie-wood.png',
-    stone_pickaxe: '/images/pickaxie-stone.png',
-    metal_pickaxe: '/images/pickaxie-metal.png',
-    diamond_pickaxe: '/images/pickaxie-almaz.png',
-    wooden_shovel: '/images/shovel-wood.png',
-    stone_shovel: '/images/shovel-stone.png',
-    metal_shovel: '/images/shovel-metal.png',
-    diamond_shovel: '/images/shovel-almaz.png',
-    wooden_sickle: '/images/sickle-wood.png',
-    stone_sickle: '/images/sickle-stone.png',
-    metal_sickle: '/images/sickle-metal.png',
-    diamond_sickle: '/images/sickle-almaz.png',
-  };
+  const ownedChests = allChestTypes.filter(chestType => (inventory[chestType] || 0) > 0);
 
   const formatNumber = (num: number): string => {
     if (num >= 1000000) {
@@ -129,51 +186,190 @@ export default function InventoryPage() {
 
   const handleOpenClick = (amount: number) => {
     if (!selectedChest) return;
-    const available = chestCounts[selectedChest] || 0;
-    let amountToOpen = amount;
-    if (amount === -1) { // -1 signifies "Open All"
-      amountToOpen = available;
+    const available = inventory[selectedChest] || 0;
+    let amountToOpen;
+
+    if (amount === -1) {
+      amountToOpen = -1; // Use -1 as a special value for open_all
     } else {
       amountToOpen = Math.min(amount, available);
     }
     
-    if (amountToOpen > 0) {
+    if (amountToOpen !== 0) { // Allow -1 and positive numbers
         setOpenAmount(amountToOpen);
-        setIsAlertOpen(true);
+        setIsModalOpen(false); // Close options modal
+        setIsAlertOpen(true); // Open confirmation modal
     }
   };
 
-  const handleConfirmOpen = () => {
-    if (!selectedChest || openAmount <= 0) return;
+  const handleConfirmOpen = async () => {
+    if (!selectedChest || openAmount === 0 || !token || isLoading) return;
 
-    const totalLoot: LootResult = {};
-    for (let i = 0; i < openAmount; i++) {
-        const singleLoot = openChest(selectedChest);
-        for (const key in singleLoot) {
-            const itemKey = key as InventoryItemType;
-            const amount = singleLoot[itemKey] || 0;
-            totalLoot[itemKey] = (totalLoot[itemKey] || 0) + amount;
-        }
-    }
-
-    spendChests(selectedChest, openAmount);
-    addItems(totalLoot);
-
-    const lootLines = Object.keys(totalLoot).map(key => {
-        const itemKey = key as InventoryItemType;
-        const amount = totalLoot[itemKey];
-        return `${getItemName(itemKey)}: ${amount?.toLocaleString() ?? 0} шт.`;
-    });
-    const lootMessage = lootLines.length > 0 ? lootLines.join('\n') : "Сундук оказался пуст.";
-    alert(`Вы получили:\n\n${lootMessage}`);
-
+    setIsLoading(true);
     setIsAlertOpen(false);
-    setIsModalOpen(false);
-    setSelectedChest(null);
+    setAnimatingChest(selectedChest);
+    
+    try {
+      // 1. Start shaking animation and call API
+      setAnimationState('shaking');
+      
+      const [type, quality] = selectedChest.split('_');
+      let requestBody: any;
+      if (type === 'blueprint') {
+          requestBody = { chest_type: 'blueprint_chest' };
+      } else {
+           requestBody = { chest_type: `${type}_chest`, quality_level: quality };
+      }
+      if (openAmount === -1) {
+        requestBody.open_all = true;
+      } else if (openAmount > 0) {
+        requestBody.quantity = openAmount;
+      }
+
+      const response = await fetch(`${apiUrl}/api/deck/chest/open`, {
+          method: 'POST',
+          mode: 'cors',
+          headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+          },
+          body: JSON.stringify(requestBody)
+      });
+
+      const responseData = await response.json();
+      if (!response.ok) { throw new Error(responseData.message || 'Не удалось открыть сундук.'); }
+      
+      setLastLoot(responseData.items || []);
+      await syncWithServer();
+
+      // Wait for shaking animation to play out (2.5 seconds)
+      await new Promise(res => setTimeout(res, 2500));
+
+      // 2. Flash
+      setAnimationState('flashing');
+      await new Promise(res => setTimeout(res, 700));
+
+      // 3. Reset state and show loot
+      setAnimationState('idle');
+      setAnimatingChest(null);
+      if (responseData.items && responseData.items.length > 0) {
+        setIsLootModalOpen(true);
+      } else {
+        toast({ title: "Сундук оказался пуст", description: "В этот раз вам не повезло." });
+      }
+
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Ошибка", description: error.message });
+      setAnimationState('idle');
+      setAnimatingChest(null);
+      setLastLoot(null);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const currentChestDetails = selectedChest ? chestDetails[selectedChest] : null;
-  const currentChestCount = selectedChest ? chestCounts[selectedChest] || 0 : 0;
+
+  const getLootItemSlug = (item: any): InventoryItemType | ChestType | null => {
+    const { item_class, item_type, quality_level } = item;
+    if (!item_class || !item_type) return null;
+    
+    switch (item_class) {
+      case 'chests':
+        if (item_type === 'blueprint' || item_type === 'blueprint_chest') {
+          return 'blueprint';
+        }
+        if (quality_level) {
+          const baseType = item_type.replace('_chest', '');
+          return `${baseType}_${quality_level}` as ChestType;
+        }
+        break;
+      case 'resources':
+      case 'reagents':
+      case 'processed_items':
+      case 'blueprints':
+        return item_type as InventoryItemType;
+      case 'tools':
+        if (quality_level) {
+          return `${quality_level}_${item_type}` as CraftedToolType;
+        }
+        break;
+    }
+    return null;
+  };
+
+  const handleDebugSync = async () => {
+    if (!token) {
+        setDebugResponse('Ошибка: Пользователь не авторизован.');
+        return;
+    }
+    setIsDebugLoading(true);
+    setDebugResponse('Загрузка...');
+    try {
+        const requestUrl = `${apiUrl}/api/inventory/items`;
+        const response = await fetch(requestUrl, {
+            method: 'GET',
+            mode: 'cors',
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/json'
+            },
+        });
+        
+        const responseBodyText = await response.text();
+        
+        try {
+            const json = JSON.parse(responseBodyText);
+            setDebugResponse(JSON.stringify(json, null, 2));
+        } catch {
+            setDebugResponse(responseBodyText);
+        }
+
+        await syncWithServer();
+
+    } catch (error: any) {
+        setDebugResponse(`Сетевая ошибка: ${error.message}`);
+    } finally {
+        setIsDebugLoading(false);
+    }
+  };
+  
+  const handleDebugDefinitions = async () => {
+    if (!token) {
+        setDebugDefinitionsResponse('Ошибка: Пользователь не авторизован.');
+        return;
+    }
+    setIsDebugDefinitionsLoading(true);
+    setDebugDefinitionsResponse('Загрузка...');
+    try {
+        const requestUrl = `${apiUrl}/api/definitions`;
+        const response = await fetch(requestUrl, {
+            method: 'GET',
+            mode: 'cors',
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/json'
+            },
+        });
+        
+        const responseBodyText = await response.text();
+        
+        try {
+            const json = JSON.parse(responseBodyText);
+            setDebugDefinitionsResponse(JSON.stringify(json, null, 2));
+        } catch {
+            setDebugDefinitionsResponse(responseBodyText);
+        }
+
+    } catch (error: any) {
+        setDebugDefinitionsResponse(`Сетевая ошибка: ${error.message}`);
+    } finally {
+        setIsDebugDefinitionsLoading(false);
+    }
+  };
+
+  const currentChestDetails = selectedChest ? itemDetails[selectedChest] : null;
+  const currentChestCount = selectedChest ? inventory[selectedChest] || 0 : 0;
 
   const ownedResources = AllResourceTypes.filter(item => (inventory[item] || 0) > 0);
   const ownedReagents = AllReagentTypes.filter(item => (inventory[item] || 0) > 0);
@@ -181,7 +377,7 @@ export default function InventoryPage() {
   const ownedProcessedItems = AllProcessedItemTypes.filter(item => (inventory[item] || 0) > 0);
   const ownedCraftedTools = AllCraftedToolTypes.filter(item => (inventory[item] || 0) > 0);
 
-  const ItemGrid = ({ items, imageMap, title }: { items: InventoryItemType[], imageMap: Record<string, string>, title?: string }) => (
+  const ItemGrid = ({ items, title }: { items: (InventoryItemType | ChestType)[], title?: string }) => (
     items.length > 0 ? (
       <div>
         {title && <h4 className="text-lg font-semibold text-primary mb-4">{title}</h4>}
@@ -189,7 +385,7 @@ export default function InventoryPage() {
           {items.map(item => (
             <div key={item} className="relative aspect-square flex items-center justify-center">
               <Image
-                src={imageMap[item as keyof typeof imageMap]}
+                src={getItemImage(item) || `https://placehold.co/64x64.png`}
                 alt={getItemName(item)}
                 width={64}
                 height={64}
@@ -207,7 +403,15 @@ export default function InventoryPage() {
 
   return (
     <>
-      <div className="flex flex-col items-center justify-start min-h-full p-4 text-foreground">
+      <ChestOpeningAnimation 
+        chestImageUrl={animatingChest ? getItemImage(animatingChest) : undefined} 
+        state={animationState} 
+      />
+      
+      <div className={cn(
+        "flex flex-col items-center justify-start min-h-full p-4 text-foreground transition-opacity duration-300",
+        animationState !== 'idle' && 'opacity-0 pointer-events-none'
+      )}>
         <Card className="w-full max-w-md bg-card/80 backdrop-blur-md shadow-xl">
           <CardContent className="p-2 sm:p-4">
             <Tabs defaultValue="chests" onValueChange={(value) => setActiveTab(value as any)} className="w-full">
@@ -232,7 +436,6 @@ export default function InventoryPage() {
                   )
                 })}
               </TabsList>
-
               <TabsContent value="chests">
                 <ScrollArea className="h-96 w-full rounded-md border p-4 bg-background/50 shadow-inner">
                   <div className="grid grid-cols-4 sm:grid-cols-5 gap-4">
@@ -243,18 +446,17 @@ export default function InventoryPage() {
                         onClick={() => handleChestClick(chestType)}
                         role="button"
                         tabIndex={0}
-                        aria-label={`Открыть сундук: ${getChestName(chestType)}`}
+                        aria-label={`Открыть сундук: ${getItemName(chestType)}`}
                       >
                         <Image
-                          src={chestImageMap[chestType] ?? `https://placehold.co/64x64.png`}
-                          alt={getChestName(chestType)}
+                          src={getItemImage(chestType) ?? `https://placehold.co/64x64.png`}
+                          alt={getItemName(chestType)}
                           width={64}
                           height={64}
                           className="w-full h-full object-contain"
-                          data-ai-hint={chestImageMap[chestType] ? undefined : chestDetails[chestType]?.hint || 'treasure chest'}
                         />
                         <span className="absolute bottom-0 right-0 bg-background/80 backdrop-blur-sm text-foreground text-xs font-bold px-1.5 py-0.5 rounded-full shadow-md">
-                          {formatNumber(chestCounts[chestType] || 0)}
+                          {formatNumber(inventory[chestType] || 0)}
                         </span>
                       </div>
                     ))}
@@ -264,36 +466,70 @@ export default function InventoryPage() {
                   </div>
                 </ScrollArea>
               </TabsContent>
-              
               <TabsContent value="resources">
                 <ScrollArea className="h-96 w-full rounded-md border p-4 bg-background/50 shadow-inner">
                   <div className="space-y-6">
-                    <ItemGrid items={ownedResources} imageMap={resourceImageMap} title="Сырые ресурсы" />
-                    <ItemGrid items={ownedProcessedItems} imageMap={processedItemImageMap} title="Изделия" />
-                    <ItemGrid items={ownedBlueprints} imageMap={blueprintImageMap} title="Чертежи" />
+                    <ItemGrid items={ownedResources} title="Сырые ресурсы" />
+                    <ItemGrid items={ownedProcessedItems} title="Изделия" />
+                    <ItemGrid items={ownedBlueprints} title="Чертежи" />
                     {ownedResources.length === 0 && ownedProcessedItems.length === 0 && ownedBlueprints.length === 0 && (
                       <p className="col-span-full text-center text-muted-foreground py-10">У вас пока нет ресурсов, изделий или чертежей.</p>
                     )}
                   </div>
                 </ScrollArea>
               </TabsContent>
-
               <TabsContent value="reagents">
                  <ScrollArea className="h-96 w-full rounded-md border p-4 bg-background/50 shadow-inner">
-                  <ItemGrid items={ownedReagents} imageMap={reagentImageMap} />
+                  <ItemGrid items={ownedReagents} />
                   {ownedReagents.length === 0 && (
                     <p className="col-span-full text-center text-muted-foreground py-10">У вас пока нет реагентов.</p>
                   )}
                 </ScrollArea>
               </TabsContent>
-              
               <TabsContent value="tools">
                 <ScrollArea className="h-96 w-full rounded-md border p-4 bg-background/50 shadow-inner">
-                  <ItemGrid items={ownedCraftedTools} imageMap={craftedToolImageMap as any} />
+                  <ItemGrid items={ownedCraftedTools} />
                   {ownedCraftedTools.length === 0 && (
                     <p className="col-span-full text-center text-muted-foreground py-10">У вас пока нет готовых инструментов.</p>
                   )}
                 </ScrollArea>
+              </TabsContent>
+              <TabsContent value="debug">
+                <div className="space-y-6 p-2">
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-semibold text-primary">Инвентарь игрока</h3>
+                    <p className="text-sm text-muted-foreground">Запрашивает предметы, которые есть у текущего пользователя.</p>
+                    <Button onClick={handleDebugSync} disabled={isDebugLoading}>
+                      {isDebugLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Запросить инвентарь
+                    </Button>
+                    <ScrollArea className="h-48 w-full rounded-md border p-4 bg-background/50 shadow-inner">
+                      <pre className="text-xs whitespace-pre-wrap break-all">
+                        <code>
+                          {debugResponse || 'Ответ от сервера на запрос инвентаря будет здесь...'}
+                        </code>
+                      </pre>
+                    </ScrollArea>
+                  </div>
+                  
+                  <Separator />
+
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-semibold text-primary">Справочник предметов</h3>
+                    <p className="text-sm text-muted-foreground">Запрашивает полный список всех возможных предметов и их деталей с сервера.</p>
+                    <Button onClick={handleDebugDefinitions} disabled={isDebugDefinitionsLoading}>
+                      {isDebugDefinitionsLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Запросить детали всех предметов
+                    </Button>
+                    <ScrollArea className="h-48 w-full rounded-md border p-4 bg-background/50 shadow-inner">
+                      <pre className="text-xs whitespace-pre-wrap break-all">
+                        <code>
+                          {debugDefinitionsResponse || 'Ответ от сервера на запрос деталей всех предметов будет здесь...'}
+                        </code>
+                      </pre>
+                    </ScrollArea>
+                  </div>
+                </div>
               </TabsContent>
             </Tabs>
           </CardContent>
@@ -301,10 +537,7 @@ export default function InventoryPage() {
       </div>
 
       {/* Main Chest Info Dialog */}
-      <Dialog open={isModalOpen} onOpenChange={(open) => {
-        setIsModalOpen(open);
-        if (!open) setSelectedChest(null);
-      }}>
+      <Dialog open={isModalOpen} onOpenChange={(open) => { if (!open) setSelectedChest(null); setIsModalOpen(open); }}>
         <DialogContent className="sm:max-w-[425px]">
           {currentChestDetails && (
             <>
@@ -313,13 +546,13 @@ export default function InventoryPage() {
                 <DialogDescription>
                   {currentChestDetails.description}
                   <br />
-                  <span className="font-bold text-foreground">У вас: {currentChestCount} шт.</span>
+                  <span className="font-bold text-foreground">У вас: {currentChestCount.toLocaleString()} шт.</span>
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter className="flex-col sm:flex-col sm:space-x-0 gap-2 mt-4">
-                <Button onClick={() => handleOpenClick(1)} disabled={currentChestCount < 1}>Открыть</Button>
-                <Button onClick={() => handleOpenClick(10)} disabled={currentChestCount < 10}>Открыть (10)</Button>
-                <Button onClick={() => handleOpenClick(-1)} disabled={currentChestCount < 1}>Открыть все</Button>
+                <Button onClick={() => handleOpenClick(1)} disabled={currentChestCount < 1 || isLoading}>Открыть</Button>
+                <Button onClick={() => handleOpenClick(10)} disabled={currentChestCount < 10 || isLoading}>Открыть (10)</Button>
+                <Button onClick={() => handleOpenClick(-1)} disabled={currentChestCount < 1 || isLoading}>Открыть все</Button>
               </DialogFooter>
             </>
           )}
@@ -332,15 +565,64 @@ export default function InventoryPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Подтверждение</AlertDialogTitle>
             <AlertDialogDescription>
-              Вы уверены, что хотите открыть "{currentChestDetails?.name}" в количестве {openAmount} шт.?
+              Вы уверены, что хотите открыть "{currentChestDetails?.name}" в количестве {openAmount === -1 ? 'все' : `${openAmount} шт.`}?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Отменить</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmOpen}>Подтвердить</AlertDialogAction>
+            <AlertDialogCancel disabled={isLoading}>Отменить</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmOpen} disabled={isLoading}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Подтвердить
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Loot Display Dialog */}
+      <Dialog open={isLootModalOpen} onOpenChange={(open) => { if (!open) setLastLoot(null); setIsLootModalOpen(open); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-2xl text-primary text-center">Ваша добыча!</DialogTitle>
+          </DialogHeader>
+          <div className="py-4 max-h-96 overflow-y-auto">
+            {lastLoot && lastLoot.length > 0 ? (
+                <div className="grid grid-cols-3 gap-4">
+                  {lastLoot.map((item, index) => {
+                    const itemSlug = getLootItemSlug(item);
+                    const imageUrl = itemSlug ? getItemImage(itemSlug) : undefined;
+
+                    if (!itemSlug) return null;
+
+                    return (
+                      <div key={index} className="flex flex-col items-center text-center gap-2">
+                          <div className="relative w-20 h-20 bg-card/50 rounded-lg p-2">
+                              <Image
+                                  src={imageUrl ?? `https://placehold.co/64x64.png`}
+                                  alt={item.name}
+                                  width={64}
+                                  height={64}
+                                  className="w-full h-full object-contain"
+                              />
+                              <span className="absolute -bottom-2 -right-2 bg-primary text-primary-foreground text-sm font-bold px-2 py-0.5 rounded-full shadow-md border-2 border-background">
+                                  x{item.quantity}
+                              </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground">{item.name}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+            ) : (
+                <p className="text-center text-muted-foreground">Сундук оказался пуст.</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setIsLootModalOpen(false)}>Отлично!</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
+
+    

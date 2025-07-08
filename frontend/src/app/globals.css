@@ -165,7 +165,7 @@
     @apply text-foreground;
   }
 
-  .theme-fantasy-casual body, .theme-fantasy-casual {
+  body.theme-fantasy-casual {
     background-color: hsl(var(--background));
     background-image:
       radial-gradient(ellipse at center 60px, hsla(220, 25%, 95%, 0.03) 0%, transparent 50%),
@@ -176,7 +176,7 @@
     color: hsl(var(--foreground));
   }
 
-  .theme-neon body, .theme-neon {
+  body.theme-neon {
     background-color: hsl(var(--background)); /* Uses the very dark Neon background */
     background-image:
       radial-gradient(ellipse at center 60px, hsla(220, 25%, 95%, 0.03) 0%, transparent 50%),

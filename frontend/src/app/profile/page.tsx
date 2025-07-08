@@ -1,13 +1,15 @@
 
 "use client";
 
-import React from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { User, Plus, Axe, Pickaxe, Shovel, Wheat, Users, Dices, Anvil, Banknote, FlaskConical } from "lucide-react";
+import { User, Plus, Axe, Pickaxe, Shovel, Wheat, Users, Dices, Anvil, Banknote, FlaskConical, LogOut } from "lucide-react";
 import Image from 'next/image';
 import { Separator } from "@/components/ui/separator";
+import { useAuth } from '@/contexts/AuthContext';
+import type { User as UserType } from '@/types/auth';
 
 const ParameterItem = ({ icon, title, description, level }: { icon: React.ReactNode, title: string, description: string, level: number }) => (
     <div className="flex items-center gap-4 py-3">
@@ -29,87 +31,85 @@ const ParameterItem = ({ icon, title, description, level }: { icon: React.ReactN
 
 
 export default function ProfilePage() {
+  const { user, isAuthenticated, token, updateUser } = useAuth();
+  const apiUrl = 'https://dev-forly.slcw.dimlight.online';
 
-  const handleTelegramAuth = async () => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-    if (!apiUrl || apiUrl === "YOUR_BACKEND_URL_HERE") {
-      alert("Критическая ошибка: URL бэкенда не настроен в .env файле.");
-      console.error("Error: NEXT_PUBLIC_API_URL is not defined in .env file.");
-      return;
-    }
-
-    const tg = (window as any).Telegram;
-    if (!tg || !tg.WebApp) {
-        alert("Ошибка: Не удалось найти API Telegram. Убедитесь, что приложение запущено внутри Telegram.");
-        return;
-    }
-    
-    const initData = tg.WebApp.initData;
-    const initDataUnsafe = tg.WebApp.initDataUnsafe || {};
-    const userInfo = initDataUnsafe.user || { id: 'неизвестно', username: 'неизвестно' };
-
-    if (!initData) {
-      alert(`Ошибка: Данные Telegram (initData) не найдены для пользователя ${userInfo.username} (ID: ${userInfo.id}).\n\nУбедитесь, что приложение открыто через кнопку в боте, а не по прямой ссылке.`);
-      console.error("Error: Telegram initData is not available.");
+  const fetchProfile = useCallback(async () => {
+    if (!token) {
       return;
     }
     
     try {
-      const response = await fetch(`${apiUrl}/api/auth`, {
-        method: 'POST',
+      const requestUrl = `${apiUrl}/api/user/profile`;
+      const response = await fetch(requestUrl, {
+        method: 'GET',
+        mode: 'cors',
         headers: {
-          'Content-Type': 'application/json',
-          'X-Telegram-Init-Data': initData
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
         }
       });
-
+      
       const responseBodyText = await response.text();
+      if (!response.ok) {
+          console.error("Failed to fetch profile, error response:", { status: response.status, body: responseBodyText });
+          return;
+      }
+      
+      if (!responseBodyText) {
+          console.log("Profile fetch response was empty.");
+          return;
+      }
       
       let data;
       try {
         data = JSON.parse(responseBodyText);
       } catch (jsonError) {
-        alert(`Ошибка ответа сервера: Не удалось разобрать JSON.\nСтатус: ${response.status} ${response.statusText}\nОтвет: ${responseBodyText.substring(0, 200)}...`);
-        console.error("Failed to parse JSON response:", { status: response.status, body: responseBodyText });
+        console.error("Failed to parse profile JSON response:", { status: response.status, body: responseBodyText });
         return;
       }
 
-      if (response.ok && data.success) {
-        alert(`Авторизация успешна! Привет, ${data.user.firstName} (ID: ${data.user.id})!`);
-        console.log(`Пользователь: ${data.user.firstName} ${data.user.lastName}`);
-        console.log(`JWT токен: ${data.token}`);
-        console.log(`Новый пользователь: ${data.isNewUser}`);
+      if (data.user) {
+        const serverUser = data.user;
+        const partialClientUser: Partial<UserType> = {
+          id: serverUser.id,
+          telegramId: serverUser.telegram_id,
+          firstName: serverUser.first_name,
+          lastName: serverUser.last_name,
+          username: serverUser.username,
+          languageCode: serverUser.language_code,
+          isPremium: serverUser.is_premium,
+          photoUrl: serverUser.photo_url,
+          isNewUser: serverUser.is_new_user,
+          parameters: serverUser.parameters || {},
+        };
+        updateUser(partialClientUser);
+        console.log("User profile updated successfully:", partialClientUser);
       } else {
-        const errorMessage = data.message || "Неизвестная ошибка сервера";
-        let alertMessage = `Ошибка авторизации для пользователя ${userInfo.username} (ID: ${userInfo.id}).\n\nСообщение от сервера: "${errorMessage}"\nСтатус: ${response.status} ${response.statusText}`;
-
-        if (response.status === 401) {
-            alertMessage += `\n\n(Ошибка 401 Unauthorized обычно означает, что токен бота на сервере не совпадает с токеном бота, в котором запущено приложение. Проверьте это с бэкенд-разработчиком.)`;
-        }
-
-        alert(alertMessage);
-        console.error("Authentication failed. Server responded with:", {
-          status: response.status,
-          statusText: response.statusText,
-          responseBody: data,
-        });
+        console.error("Failed to fetch user profile:", data.message || "Unknown error");
       }
-    } catch (error: any) {
-      alert(`Сетевая ошибка: Не удалось отправить запрос на сервер для пользователя ${userInfo.username} (ID: ${userInfo.id}).\n\nПроверьте URL и ваше интернет-соединение.\nДетали: ${error.message}`);
-      console.error("Fetch error:", error);
+    } catch (error) {
+      console.error("Network error fetching user profile:", error);
     }
-  };
+  }, [token, updateUser, apiUrl]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchProfile();
+    }
+  }, [isAuthenticated, fetchProfile]);
+
 
   const parameters = [
-    { id: 'builder', icon: <Shovel className="w-6 h-6 text-primary" />, title: 'Строитель', description: 'Увеличивает эффективность и прочность лопат.', level: 0 },
-    { id: 'reaper', icon: <Wheat className="w-6 h-6 text-primary" />, title: 'Жнец', description: 'Повышает скорость и удачу при использовании серпа.', level: 0 },
-    { id: 'leader', icon: <Users className="w-6 h-6 text-primary" />, title: 'Лидер', description: 'Позволяет приглашать больше друзей и увеличивает бонусы.', level: 0 },
-    { id: 'lumberjack', icon: <Axe className="w-6 h-6 text-primary" />, title: 'Лесоруб', description: 'Улучшает навыки владения топором для добычи дерева.', level: 0 },
-    { id: 'miner', icon: <Pickaxe className="w-6 h-6 text-primary" />, title: 'Шахтёр', description: 'Увеличивает силу и скорость добычи киркой.', level: 0 },
-    { id: 'player', icon: <Dices className="w-6 h-6 text-primary" />, title: 'Игрок', description: 'Повышает шанс найти редкие предметы и сокровища.', level: 0 },
-    { id: 'blacksmith', icon: <Anvil className="w-6 h-6 text-primary" />, title: 'Кузнец', description: 'Ускоряет процессы переплавки, ковки и починки.', level: 0 },
-    { id: 'trader', icon: <Banknote className="w-6 h-6 text-primary" />, title: 'Торговец', description: 'Снижает комиссии на рынке и улучшает условия обмена.', level: 0 },
-    { id: 'researcher', icon: <FlaskConical className="w-6 h-6 text-primary" />, title: 'Исследователь', description: 'Открывает новые рецепты и технологии быстрее.', level: 0 },
+    { id: 'builder', icon: <Shovel className="w-6 h-6 text-primary" />, title: 'Строитель', description: 'Увеличивает эффективность и прочность лопат.' },
+    { id: 'reaper', icon: <Wheat className="w-6 h-6 text-primary" />, title: 'Жнец', description: 'Повышает скорость и удачу при использовании серпа.' },
+    { id: 'leader', icon: <Users className="w-6 h-6 text-primary" />, title: 'Лидер', description: 'Позволяет приглашать больше друзей и увеличивает бонусы.' },
+    { id: 'lumberjack', icon: <Axe className="w-6 h-6 text-primary" />, title: 'Лесоруб', description: 'Улучшает навыки владения топором для добычи дерева.' },
+    { id: 'miner', icon: <Pickaxe className="w-6 h-6 text-primary" />, title: 'Шахтёр', description: 'Увеличивает силу и скорость добычи киркой.' },
+    { id: 'player', icon: <Dices className="w-6 h-6 text-primary" />, title: 'Игрок', description: 'Повышает шанс найти редкие предметы и сокровища.' },
+    { id: 'blacksmith', icon: <Anvil className="w-6 h-6 text-primary" />, title: 'Кузнец', description: 'Ускоряет процессы переплавки, ковки и починки.' },
+    { id: 'trader', icon: <Banknote className="w-6 h-6 text-primary" />, title: 'Торговец', description: 'Снижает комиссии на рынке и улучшает условия обмена.' },
+    { id: 'researcher', icon: <FlaskConical className="w-6 h-6 text-primary" />, title: 'Исследователь', description: 'Открывает новые рецепты и технологии быстрее.' },
   ];
 
   return (
@@ -118,18 +118,17 @@ export default function ProfilePage() {
       <Card className="w-full max-w-md backdrop-blur-md shadow-xl">
         <CardContent className="pt-6 flex flex-col items-center space-y-4">
           <Avatar className="w-24 h-24 border-2 border-primary">
-            <AvatarImage src="https://placehold.co/100x100.png" alt="User Avatar" data-ai-hint="cyborg avatar" />
+            <AvatarImage src={user?.photoUrl || undefined} alt={user?.username || "User Avatar"} />
             <AvatarFallback>
               <User className="w-12 h-12" />
             </AvatarFallback>
           </Avatar>
-          <span className="text-2xl font-headline">Имя пользователя</span>
+          <span className="text-2xl font-headline">
+            {isAuthenticated && user ? user.username || user.firstName : 'Загрузка...'}
+          </span>
           <div className="flex flex-col sm:flex-row gap-2">
             <Button variant="outline" className="border-primary text-primary hover:bg-primary/10 hover:text-primary-foreground">
               Подключить кошелек
-            </Button>
-            <Button onClick={handleTelegramAuth} variant="default">
-              Авторизация
             </Button>
           </div>
         </CardContent>
@@ -161,7 +160,7 @@ export default function ProfilePage() {
                             icon={param.icon}
                             title={param.title}
                             description={param.description}
-                            level={param.level}
+                            level={user?.parameters?.[param.id] || 0}
                         />
                         {index < parameters.length - 1 && <Separator className="bg-border/30" />}
                     </React.Fragment>

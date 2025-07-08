@@ -26,23 +26,6 @@ const GameBoardComponent: React.FC<GameBoardProps> = ({
   const [selectedCrystal, setSelectedCrystal] = useState<Position | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  useEffect(() => {
-    // This effect re-initializes the board when the game key or icon set changes.
-    const activeIcons = getActiveIconList();
-    if (activeIcons && activeIcons.length > 0) {
-      const newBoard = generateInitialBoard(activeIcons);
-      if (checkForPossibleMoves(newBoard)) {
-        setBoard(newBoard);
-      } else {
-        // Retry generation if no moves are possible, to avoid a stuck board
-        setBoard(generateInitialBoard(activeIcons));
-      }
-    }
-    setSelectedCrystal(null);
-    setIsProcessing(false);
-  }, [getActiveIconList, gameKeyProp]);
-
-
   const checkForPossibleMoves = useCallback((currentBoard: GameBoard): boolean => {
     if (!currentBoard || currentBoard.length !== BOARD_ROWS) return false;
     for (let r = 0; r < BOARD_ROWS; r++) {
@@ -51,17 +34,19 @@ const GameBoardComponent: React.FC<GameBoardProps> = ({
         const crystal = currentBoard[r][c];
         if (!crystal) continue;
 
+        // Check swap with right neighbor
         if (c < BOARD_COLS - 1) {
-          const crystalToSwap = currentBoard[r][c+1];
+          const crystalToSwap = currentBoard[r][c + 1];
           if (crystalToSwap) {
-            const testBoard = logicalSwap(currentBoard, {r,c}, {r, c: c+1});
+            const testBoard = logicalSwap(currentBoard, { r, c }, { r, c: c + 1 });
             if (findMatchGroups(testBoard).length > 0) return true;
           }
         }
+        // Check swap with bottom neighbor
         if (r < BOARD_ROWS - 1) {
-           const crystalToSwap = currentBoard[r+1]?.[c];
-           if (crystalToSwap) {
-            const testBoard = logicalSwap(currentBoard, {r,c}, {r: r+1, c});
+          const crystalToSwap = currentBoard[r + 1]?.[c];
+          if (crystalToSwap) {
+            const testBoard = logicalSwap(currentBoard, { r, c }, { r: r + 1, c });
             if (findMatchGroups(testBoard).length > 0) return true;
           }
         }
@@ -69,6 +54,36 @@ const GameBoardComponent: React.FC<GameBoardProps> = ({
     }
     return false;
   }, []);
+
+  useEffect(() => {
+    const activeIcons = getActiveIconList();
+    if (!activeIcons || activeIcons.length === 0) {
+      return; // Not ready to initialize
+    }
+
+    let boardCandidate: GameBoard;
+    let hasPossibleMoves = false;
+    let attempts = 0;
+    const maxAttempts = 100; // Safety break to prevent infinite loops
+
+    // This loop ensures the generated board is playable.
+    // It can be slow and block the main thread, but it's a critical step.
+    // The maxAttempts limit prevents a total freeze if a playable board is hard to find.
+    do {
+      boardCandidate = generateInitialBoard(activeIcons);
+      hasPossibleMoves = checkForPossibleMoves(boardCandidate);
+      attempts++;
+    } while (!hasPossibleMoves && attempts < maxAttempts);
+    
+    if (attempts >= maxAttempts) {
+        console.warn(`Could not generate a board with possible moves after ${maxAttempts} attempts.`);
+    }
+
+    setBoard(boardCandidate);
+    setSelectedCrystal(null);
+    setIsProcessing(false);
+  }, [getActiveIconList, gameKeyProp, checkForPossibleMoves]);
+
 
   const processMatchesAndRefill = useCallback((boardAfterSwap: GameBoard, isInitialPlayerMatch: boolean) => {
     let currentBoard = boardAfterSwap;

@@ -1,8 +1,11 @@
 
+"use client";
+
 import { Compass, Settings } from 'lucide-react';
 import Link from 'next/link';
 import React from 'react';
 import Image from 'next/image';
+import { useAuth } from '@/contexts/AuthContext';
 
 const ResourceIcon = ({ children, value }: { children: React.ReactNode, value: string }) => (
   <div className="flex items-center gap-1.5 bg-black/20 backdrop-blur-sm px-2 py-1 rounded-full border border-white/10 shadow-inner">
@@ -21,6 +24,8 @@ const NavIcon = ({ href, children }: { href: string, children: React.ReactNode }
 
 
 const Header: React.FC = () => {
+  const { user } = useAuth();
+
   return (
     <header 
         className="fixed top-0 left-0 right-0 z-40 bg-transparent backdrop-blur-sm"
@@ -30,10 +35,17 @@ const Header: React.FC = () => {
             style={{ paddingLeft: 'env(safe-area-inset-left)', paddingRight: 'env(safe-area-inset-right)' }} 
             className="flex items-center justify-between h-16 max-w-md mx-auto px-4"
         >
-            {/* Left Side: Profile Icon */}
-            <NavIcon href="/profile">
+            {/* Left Side: Profile Icon & Name */}
+            <div className="flex flex-col items-center">
+              <Link href="/profile" className="flex items-center justify-center p-0 rounded-full bg-transparent hover:bg-black/40 transition-colors">
                 <Image src="/images/menu-heroes.png" alt="Профиль" width={48} height={48} />
-            </NavIcon>
+              </Link>
+              {user && (
+                <span className="text-xs font-bold text-white text-shadow -mt-1 truncate max-w-[80px]">
+                  {user.username || user.firstName}
+                </span>
+              )}
+            </div>
 
             {/* Center: Balances */}
             <div className="flex items-center justify-center gap-2">

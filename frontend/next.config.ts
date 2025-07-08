@@ -17,6 +17,18 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 't.me',
+        port: '',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'dev-forly.slcw.dimlight.online',
+        port: '',
+        pathname: '/**',
+      }
     ],
   },
 };

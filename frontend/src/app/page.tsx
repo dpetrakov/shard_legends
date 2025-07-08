@@ -1,115 +1,123 @@
 
-"use client"; // Make it a client component for useEffect
+"use client";
 
-import Image from "next/image";
 import Link from "next/link";
-import React, { useState, useEffect } from 'react'; // Import React hooks
+import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
+import { useAuth } from "@/contexts/AuthContext";
+import { Award, Calendar, Gift } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-const SideNavLink = ({
-  href,
-  icon,
-  label,
-  hint,
-}: {
-  href: string;
-  icon: string;
-  label: string;
-  hint: string;
-}) => (
-  <Link href={href}>
-    <div className="flex flex-col items-center text-center cursor-pointer hover:scale-105 transition-transform">
-      <div>
-        <Image
-          src={icon}
-          alt={label}
-          width={64}
-          height={64}
-          data-ai-hint={hint}
-        />
-      </div>
-    </div>
-  </Link>
-);
+const FireflyAnimation = () => {
+    const [count, setCount] = useState(0);
 
-const Fireflies = () => {
-  const [fireflies, setFireflies] = useState<JSX.Element[]>([]);
+    useEffect(() => {
+        // Random number between 7 and 15.
+        // This runs only on the client, after hydration, to avoid mismatch.
+        setCount(Math.floor(Math.random() * 9) + 7);
+    }, []); // Empty dependency array ensures this runs once on mount.
 
-  useEffect(() => {
-    // Generate a random number of fireflies between 5 and 15
-    const fireflyCount = Math.floor(Math.random() * 11) + 5;
+    // Don't render anything on the server or before the count is set.
+    if (count === 0) {
+        return null;
+    }
     
-    const generatedFireflies = Array.from({ length: fireflyCount }).map((_, i) => {
-      // Randomize size, animation duration, and starting point
-      const size = 2 + Math.random() * 2; // Random size between 2px and 4px
-      const animationDuration = 20 + Math.random() * 20; // Slower, random duration from 20s to 40s
-
-      const style: React.CSSProperties = {
-        top: `${Math.random() * 100}%`,
-        left: `${Math.random() * 100}%`,
-        width: `${size}px`,
-        height: `${size}px`,
-        animationDuration: `${animationDuration}s`,
-        animationDelay: `-${Math.random() * animationDuration}s`, // Start at a random point in the cycle
-      };
-      return <div key={i} className="firefly" style={style}></div>;
-    });
-    setFireflies(generatedFireflies);
-  }, []); // Empty dependency array ensures this runs once on the client, avoiding hydration errors
-
-  return (
-    <div className="firefly-wrapper">
-      {fireflies}
-    </div>
-  );
+    return (
+        <div className="firefly-wrapper fixed inset-0 z-0" aria-hidden="true">
+            {Array.from({ length: count }).map((_, i) => (
+                <div
+                    key={i}
+                    className="firefly"
+                    style={{
+                        width: `${Math.random() * 3 + 2}px`,
+                        height: `${Math.random() * 3 + 2}px`,
+                        top: `${Math.random() * 100}%`,
+                        left: `${Math.random() * 100}%`,
+                        // Slower animation: Tripled the duration from 5-15s to 15-45s
+                        animationDuration: `${(Math.random() * 10 + 5) * 3}s`,
+                        // Increased delay range for more staggered appearance
+                        animationDelay: `${Math.random() * 15}s`,
+                    }}
+                />
+            ))}
+        </div>
+    );
 };
+
+const LobbyMenuItem = ({ href, label, imageSrc, icon, side }: { href: string; label:string; imageSrc?: string; icon?: React.ReactNode; side: 'left' | 'right' }) => (
+    <Tooltip>
+        <TooltipTrigger asChild>
+            <Link href={href} className={cn(
+                "group flex items-center justify-center w-16 h-16 rounded-2xl transition-all duration-300",
+                "bg-black/20 backdrop-blur-sm border border-white/10 shadow-lg hover:bg-primary/30 hover:border-primary/50 hover:scale-110"
+            )}>
+                {imageSrc ? <Image src={imageSrc} alt={label} width={40} height={40} /> : icon}
+            </Link>
+        </TooltipTrigger>
+        <TooltipContent side={side === 'left' ? 'right' : 'left'}>
+            <p>{label}</p>
+        </TooltipContent>
+    </Tooltip>
+);
 
 
 export default function LobbyPage() {
+  const { user } = useAuth(); // Auth is working, keep this hook for context.
+
+  const leftMenuItems = [
+    { href: '/quests', label: 'Задания', icon: <Calendar className="w-8 h-8 text-primary" /> },
+    { href: '/battlepass', label: 'Пропуск', imageSrc: '/images/battlepass.png' },
+    { href: '/friends', label: 'Друзья', imageSrc: '/images/menu-friend.png' },
+  ];
+
+  const rightMenuItems = [
+    { href: '/achievements', label: 'Достижения', icon: <Award className="w-8 h-8 text-primary" /> },
+    { href: '/gifts', label: 'Подарки', icon: <Gift className="w-8 h-8 text-primary" /> },
+    { href: '/profile', label: 'Профиль', imageSrc: '/images/menu-heroes.png' },
+  ];
+
   return (
-    <div className="fixed inset-0 z-0 text-white">
-      <div className="relative h-full w-full bg-lobby bg-cover bg-center bg-no-repeat">
-        {/* Gradient overlay for text readability */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-black/20" />
+    <TooltipProvider>
+        <div className="fixed inset-0 bg-cover bg-center bg-no-repeat bg-lobby">
+            <FireflyAnimation />
+            <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
 
-        {/* Fireflies animation */}
-        <Fireflies />
+            <div className="relative z-10 h-full w-full flex justify-between items-center p-4">
+                {/* Left Menu */}
+                <div className="flex flex-col gap-4">
+                    {leftMenuItems.map(item => (
+                        <LobbyMenuItem key={item.href} {...item} side="left" />
+                    ))}
+                </div>
 
-        {/* Main content container */}
-        <div className="relative z-10 h-full w-full">
+                {/* Center Play Button */}
+                <div className="flex flex-col items-center">
+                    <Link href="/game" className="flex flex-col items-center text-center cursor-pointer hover:scale-105 transition-transform group">
+                        <div className="bg-gradient-to-t from-primary/80 to-primary/40 rounded-full shadow-xl shadow-primary/50 flex items-center justify-center p-4">
+                            <Image 
+                                src="/images/play.png" 
+                                alt="Играть" 
+                                width={180} 
+                                height={180} 
+                                data-ai-hint="play game button"
+                                priority
+                            />
+                        </div>
+                        <span className="text-3xl font-headline text-white text-shadow-lg mt-4 group-hover:text-primary transition-colors">
+                            ИГРАТЬ
+                        </span>
+                    </Link>
+                </div>
 
-          {/* Container for Side Navs (Vertically Centered) */}
-          <div className="absolute top-1/2 left-0 right-0 w-full -translate-y-1/2 px-4 sm:px-6">
-            <div className="flex justify-between items-center">
-              {/* Left Nav */}
-              <div className="flex flex-col items-center gap-4">
-                <SideNavLink href="/achievements" icon="/images/menu-achiv.png" label="Достижения" hint="achievements trophy" />
-                <SideNavLink href="/quests" icon="/images/menu-quest.png" label="Квесты" hint="quest scroll" />
-              </div>
-
-              {/* Right Nav */}
-              <div className="flex flex-col items-center gap-4">
-                <SideNavLink href="/friends" icon="/images/menu-friend.png" label="Друзья" hint="friends handshake" />
-                <SideNavLink href="/battlepass" icon="/images/battlepass.png" label="Боевой Пропуск" hint="battle pass" />
-                <SideNavLink href="/shop" icon="/images/menu-key.png" label="Ключи" hint="shop keys" />
-              </div>
+                {/* Right Menu */}
+                <div className="flex flex-col gap-4">
+                    {rightMenuItems.map(item => (
+                        <LobbyMenuItem key={item.href} {...item} side="right" />
+                    ))}
+                </div>
             </div>
-          </div>
-
-          {/* Container for Play Button (Bottom Aligned) */}
-          <div className="absolute bottom-32 left-1/2 -translate-x-1/2">
-            <Link href="/game" className="flex flex-col items-center text-center cursor-pointer hover:scale-105 transition-transform group">
-              <div className="bg-gradient-to-t from-primary/80 to-primary/40 rounded-full shadow-xl shadow-primary/50 flex items-center justify-center p-4">
-                <Image src="/images/play.png" width={180} height={180} alt="Забрать награду" data-ai-hint="play button reward" />
-              </div>
-              <span className="text-2xl font-headline text-white text-shadow-lg mt-2 group-hover:text-primary transition-colors">
-                Забрать награду
-              </span>
-            </Link>
-          </div>
-          
         </div>
-      </div>
-    </div>
+    </TooltipProvider>
   );
 }

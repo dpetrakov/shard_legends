@@ -4,14 +4,15 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import GameBoardComponent from './GameBoard';
 import { Card, CardContent } from '@/components/ui/card';
-import type { ChestType } from '@/types/profile';
 import { motion, AnimatePresence } from "framer-motion";
 import { useIconSet } from '@/contexts/IconSetContext';
-import { useChests } from '@/contexts/ChestContext';
 import { BOARD_COLS, BOARD_ROWS } from '@/components/crystal-cascade/crystal-definitions';
+import { useAuth } from '@/contexts/AuthContext';
+import { useInventory } from '@/contexts/InventoryContext';
+import { Skeleton } from '@/components/ui/skeleton';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, RefreshCcw } from 'lucide-react';
-import { chestDetails as chestVisualData, allChestTypes } from '@/lib/chest-definitions';
+import { PlusCircle } from 'lucide-react';
 
 interface ComboStyle {
   background: string;
@@ -36,68 +37,127 @@ const comboStyles: ComboStyle[] = [
   { background: 'rgb(205, 0, 0)', text: 'rgb(245, 245, 245)' }    
 ];
 
-const REWARD_REQUIREMENT_STORAGE_KEY = 'crystalCascadeRewardRequirement';
-const MAX_REWARD_COMBO_THRESHOLD = 15; // Max combo requirement for reward
+interface RevealedCardData {
+  imageUrl: string;
+  altText: string;
+}
 
-const determineChestReward = (): ChestType => {
-  const categoryRand = Math.random();
-  let category: 'resource' | 'reagent' | 'booster' | 'blueprint';
-
-  if (categoryRand < 0.5) { // 50%
-    category = 'resource';
-  } else if (categoryRand < 0.8) { // 30% (0.5 + 0.3)
-    category = 'reagent';
-  } else if (categoryRand < 0.9) { // 10% (0.8 + 0.1)
-    category = 'booster';
-  } else { // 10%
-    category = 'blueprint';
-  }
-
-  if (category === 'blueprint') {
-    return 'blueprint';
-  }
-
-  const sizeRand = Math.random();
-  let size: 'small' | 'medium' | 'large';
-
-  if (sizeRand < 0.6) { // 60%
-    size = 'small';
-  } else if (sizeRand < 0.9) { // 30% (0.6 + 0.3)
-    size = 'medium';
-  } else { // 10%
-    size = 'large';
-  }
-
-  return `${category}_${size}` as ChestType;
-};
+// Light rays animation component, adapted for the card reveal
+const LightRays = () => (
+    <motion.div
+        className="absolute inset-0 z-0"
+        initial={{ opacity: 0, scale: 0.5 }}
+        animate={{ 
+            opacity: 1, 
+            scale: 1.5,
+            transition: { duration: 0.5, ease: 'easeOut' }
+        }}
+        exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.3 } }}
+    >
+        <div className="absolute inset-0 animate-rays-spin-slow">
+            {[...Array(8)].map((_, i) => (
+                <div 
+                    key={i}
+                    className="absolute top-1/2 left-0 w-full h-px bg-gradient-to-r from-yellow-200/0 via-yellow-200 to-yellow-200/0"
+                    style={{ transform: `rotate(${i * 22.5}deg)` }}
+                />
+            ))}
+        </div>
+        <div className="absolute inset-0 bg-yellow-300/20 rounded-full blur-2xl animate-pulse" />
+    </motion.div>
+);
 
 
 const CrystalCascadeGame: React.FC = () => {
+  const { token, isAuthenticated } = useAuth();
+  const { syncWithServer: syncInventory } = useInventory();
+  const apiUrl = 'https://dev-forly.slcw.dimlight.online';
+
   const [gameKey, setGameKey] = useState(() => Date.now());
   const [comboCount, setComboCount] = useState(0);
   const [showComboText, setShowComboText] = useState(false);
   const [comboDisplayKey, setComboDisplayKey] = useState(0);
   const comboTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { iconSet } = useIconSet();
-  const { awardChest } = useChests();
+  
+  const [dailyChestStatus, setDailyChestStatus] = useState<{ expected_combo: number | null; finished: boolean }>({
+    expected_combo: null,
+    finished: false,
+  });
+  const [isLoadingStatus, setIsLoadingStatus] = useState(true);
   
   const [viewState, setViewState] = useState<'board' | 'reward'>('board');
   const [revealedGameCardIndex, setRevealedGameCardIndex] = useState<number | null>(null);
   const [isRevealingFlippedCard, setIsRevealingFlippedCard] = useState<boolean>(false);
-  const [revealedFlippedCardImageUrl, setRevealedFlippedCardImageUrl] = useState<string | null>(null);
-  const [revealedChestType, setRevealedChestType] = useState<ChestType | null>(null);
+  const [showChestImage, setShowChestImage] = useState<boolean>(false);
+  const [revealedCardData, setRevealedCardData] = useState<RevealedCardData | null>(null);
   const [awaitingCardPick, setAwaitingCardPick] = useState(false);
-  const [currentRewardComboRequirement, setCurrentRewardComboRequirement] = useState(5);
+  
   const comboCountRef = useRef(comboCount);
 
   useEffect(() => {
     comboCountRef.current = comboCount;
   }, [comboCount]);
 
+  const fetchStatus = useCallback(async () => {
+    if (!isAuthenticated || !token) {
+      return;
+    }
+    setIsLoadingStatus(true);
+      
+    try {
+      const requestUrl = `${apiUrl}/api/deck/daily-chest/status`;
+      const headers = { 
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json',
+      };
+      
+      const response = await fetch(requestUrl, { 
+        method: 'GET',
+        mode: 'cors',
+        headers 
+      });
+      
+      const responseBodyText = await response.text();
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch daily chest status: ${responseBodyText}`);
+      }
+      
+      if (!responseBodyText) {
+          setDailyChestStatus({ expected_combo: null, finished: true });
+          return;
+      }
+      
+      let data;
+      try {
+          data = JSON.parse(responseBodyText);
+      } catch (e) {
+          console.error("Failed to parse daily chest status JSON:", e);
+          setDailyChestStatus({ expected_combo: null, finished: true });
+          return;
+      }
+
+      const expectedCombo = data.expected_combo ?? null;
+      setDailyChestStatus({
+        expected_combo: expectedCombo,
+        finished: data.finished || expectedCombo === null,
+      });
+
+    } catch (error: any) {
+      console.error("Fetch error:", error);
+    } finally {
+      setIsLoadingStatus(false);
+    }
+  }, [isAuthenticated, token, apiUrl]);
+
   useEffect(() => {
-    const loadedRewardRequirement = parseInt(localStorage.getItem(REWARD_REQUIREMENT_STORAGE_KEY) || '5', 10);
-    setCurrentRewardComboRequirement(loadedRewardRequirement);
-    
+    if (isAuthenticated) {
+        fetchStatus();
+    }
+  }, [isAuthenticated, gameKey, fetchStatus]);
+
+  useEffect(() => {
     setComboCount(0);
     setShowComboText(false);
     if (comboTimeoutRef.current) clearTimeout(comboTimeoutRef.current);
@@ -105,17 +165,14 @@ const CrystalCascadeGame: React.FC = () => {
     setAwaitingCardPick(false);
     setRevealedGameCardIndex(null);
     setIsRevealingFlippedCard(false);
-    console.log(`[DEBUG] Game initialized/reset (gameKey: ${gameKey}). RewardReq: ${loadedRewardRequirement}`);
+    setShowChestImage(false);
+    setRevealedCardData(null);
   }, [gameKey]);
 
 
   useEffect(() => {
     setGameKey(Date.now()); 
   }, [iconSet]);
-
-  useEffect(() => {
-    localStorage.setItem(REWARD_REQUIREMENT_STORAGE_KEY, currentRewardComboRequirement.toString());
-  }, [currentRewardComboRequirement]);
 
   const handleMatchProcessed = useCallback((numberOfDistinctGroupsInStep: number, isFirstStepInChain: boolean) => {
     if (comboTimeoutRef.current) clearTimeout(comboTimeoutRef.current);
@@ -134,22 +191,23 @@ const CrystalCascadeGame: React.FC = () => {
     }, 1800); 
   }, []);
 
+  const { expected_combo, finished } = dailyChestStatus;
   const handleNoMatchOrComboEnd = useCallback(() => {
     if (comboTimeoutRef.current) clearTimeout(comboTimeoutRef.current);
     setShowComboText(false);
     
-    // Use the ref here to get the latest value of comboCount
-    if (comboCountRef.current >= currentRewardComboRequirement && currentRewardComboRequirement <= MAX_REWARD_COMBO_THRESHOLD) {
+    if (expected_combo && comboCountRef.current >= expected_combo && !finished) {
       setTimeout(() => { 
         setViewState('reward');
         setTimeout(() => { 
           setAwaitingCardPick(true);
-        }, 500); // Wait for slide animation to start before enabling pick
+        }, 500);
       }, 500); 
+    } else {
+        setComboCount(0);
     }
     
-    setComboCount(0); 
-  }, [currentRewardComboRequirement]);
+  }, [expected_combo, finished]);
   
 
   const currentComboTextDisplay = comboCount > 1 ? `КОМБО ${comboCount}x` : (comboCount === 1 ? "ЕСТЬ!" : "");
@@ -157,123 +215,161 @@ const CrystalCascadeGame: React.FC = () => {
     ? comboStyles[Math.min(comboCount, comboStyles.length - 1)] 
     : comboStyles[0];
 
-  const handleGameCardClick = (cardIndex: number) => {
-    if (isRevealingFlippedCard || viewState !== 'reward' || !awaitingCardPick) {
+  const handleGameCardClick = useCallback(async (cardIndex: number) => {
+    if (isRevealingFlippedCard || viewState !== 'reward' || !awaitingCardPick || !expected_combo || !token) {
       return;
     }
     setAwaitingCardPick(false); 
     setIsRevealingFlippedCard(true);
+    setShowChestImage(false);
     setRevealedGameCardIndex(cardIndex);
     
-    const chestWon = determineChestReward();
-    awardChest(chestWon);
-    setRevealedChestType(chestWon);
-    
-    let imageUrl = '';
-    const chestData = chestVisualData[chestWon];
-    
-    switch (chestWon) {
-        case 'resource_small':
-            imageUrl = '/images/card/card-small-res.jpg';
-            break;
-        case 'resource_medium':
-            imageUrl = '/images/card/card-medium-res.jpg';
-            break;
-        case 'resource_large':
-            imageUrl = '/images/card/card-big-res.jpg';
-            break;
-        case 'reagent_small':
-            imageUrl = '/images/card/card-small-ing.jpg';
-            break;
-        case 'reagent_medium':
-            imageUrl = '/images/card/card-medium-ing.jpg';
-            break;
-        case 'reagent_large':
-            imageUrl = '/images/card/card-big-ing.jpg';
-            break;
-        case 'blueprint':
-            imageUrl = '/images/card/card-blueprint.jpg';
-            break;
-        default:
-            const placeholderText = chestData ? chestData.name.replace(/ /g, '+') : 'reward';
-            imageUrl = `https://placehold.co/150x200/663399/FFFFFF.png?text=${placeholderText}`;
-    }
-    setRevealedFlippedCardImageUrl(imageUrl);
+    try {
+      const requestUrl = `${apiUrl}/api/deck/daily-chest/claim`;
+      const requestBody = {
+          combo: comboCountRef.current,
+          chest_indices: [cardIndex],
+        };
+      const headers = {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        };
 
-    const showDuration = 2500; 
+      const response = await fetch(requestUrl, {
+        method: 'POST',
+        mode: 'cors',
+        headers,
+        body: JSON.stringify(requestBody),
+      });
+
+      const responseBodyText = await response.text();
+      
+      if (!response.ok) {
+        console.error("Failed to claim reward.", { body: responseBodyText });
+        throw new Error(`Failed to claim reward.`);
+      }
+
+      if (!responseBodyText) {
+          throw new Error('Claim reward response was empty');
+      }
+
+      let data;
+      try {
+          data = JSON.parse(responseBodyText);
+      } catch (e) {
+          console.error("Failed to parse claim reward JSON:", e);
+          throw new Error('Invalid JSON in claim reward response');
+      }
+      
+      const rewardItem = data.items?.[0];
+      if (rewardItem) {
+        const imageUrl = rewardItem.image_url
+          ? `${apiUrl.replace('/api', '')}${rewardItem.image_url}`
+          : ``;
+
+        setRevealedCardData({
+          imageUrl: imageUrl,
+          altText: rewardItem.name || 'Награда'
+        });
+      } else {
+        setRevealedCardData({
+          imageUrl: '',
+          altText: 'Пусто'
+        });
+      }
+      
+      setTimeout(() => {
+        setShowChestImage(true);
+      }, 3000);
+
+      await syncInventory();
+
+      const nextExpectedCombo = data.next_expected_combo ?? null;
+      setDailyChestStatus({
+        expected_combo: nextExpectedCombo,
+        finished: nextExpectedCombo === null,
+      });
+
+    } catch (error: any) {
+      console.error("Fetch error:", error);
+      setTimeout(() => {
+        setViewState('board');
+        setComboCount(0);
+      }, 1000);
+    }
+
+    const showDuration = 7000;
     const animationDuration = 500; 
 
     setTimeout(() => {
       setViewState('board'); 
+      setComboCount(0);
       
       setTimeout(() => {
         setIsRevealingFlippedCard(false); 
         setRevealedGameCardIndex(null); 
-        setRevealedFlippedCardImageUrl(null);
-        setRevealedChestType(null);
-        if (currentRewardComboRequirement <= MAX_REWARD_COMBO_THRESHOLD) {
-            setCurrentRewardComboRequirement(prev => prev + 1);
-        }
+        setRevealedCardData(null);
+        setShowChestImage(false);
       }, animationDuration);
 
     }, showDuration); 
+  }, [isRevealingFlippedCard, viewState, awaitingCardPick, expected_combo, token, apiUrl, syncInventory]);
+  
+  const handleDebugTriggerReward = () => {
+    if (!dailyChestStatus.expected_combo || dailyChestStatus.finished) {
+        console.log("Debug: No reward to trigger.");
+        return;
+    }
+    console.log(`Debug: Triggering reward for combo ${dailyChestStatus.expected_combo}`);
+    setComboCount(dailyChestStatus.expected_combo);
+    setViewState('reward');
+    setTimeout(() => {
+        setAwaitingCardPick(true);
+    }, 500);
   };
-
-  const handleResetRewardRequirement = () => {
-    setCurrentRewardComboRequirement(5);
-    console.log("[DEBUG] Reward requirement reset to 5 by test button.");
+  
+  const renderRewardStatus = () => {
+    if (isLoadingStatus) {
+      return <Skeleton className="h-6 w-48" />;
+    }
+    if (dailyChestStatus.finished) {
+      return (
+        <div className="flex items-center gap-2">
+          <span className="text-muted-foreground text-sm uppercase tracking-wider font-semibold">
+            Наград:
+          </span>
+          <span className="font-headline text-lg text-primary">
+            сегодня нет
+          </span>
+        </div>
+      );
+    }
+    return (
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-primary" onClick={handleDebugTriggerReward}>
+          <PlusCircle className="h-5 w-5" />
+        </Button>
+        <span className="text-muted-foreground text-sm uppercase tracking-wider font-semibold">
+          Приз за:
+        </span>
+        <span className="font-headline text-lg text-primary">
+          Комбо {dailyChestStatus.expected_combo}+
+        </span>
+      </div>
+    );
   };
-
-  const handleAddTestChests = useCallback(() => {
-    allChestTypes.forEach(chestType => {
-      for (let i = 0; i < 10; i++) {
-        awardChest(chestType);
-      }
-    });
-    console.log("[DEBUG] Added 10 of each chest type for testing.");
-  }, [awardChest]);
 
 
   return (
     <div className="flex flex-col items-center justify-center px-2 h-full w-full relative">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-md space-y-2">
         <Card className="shadow-2xl bg-card/80 backdrop-blur-md">
-          <CardContent className="flex flex-col items-center text-center p-2 gap-1">
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground text-sm uppercase tracking-wider font-semibold">
-                {currentRewardComboRequirement <= MAX_REWARD_COMBO_THRESHOLD 
-                  ? "Приз за:" 
-                  : "Наград:"}
-              </span>
-              <span className="font-headline text-lg text-primary">
-                {currentRewardComboRequirement <= MAX_REWARD_COMBO_THRESHOLD
-                  ? `Комбо ${currentRewardComboRequirement}+`
-                  : "сегодня нет"}
-              </span>
-              {currentRewardComboRequirement <= MAX_REWARD_COMBO_THRESHOLD && (
-                <Button 
-                  onClick={handleResetRewardRequirement} 
-                  variant="ghost" 
-                  size="icon" 
-                  className="h-6 w-6 text-muted-foreground hover:text-primary"
-                  aria-label="Сбросить требование комбо"
-                >
-                  <RefreshCcw className="h-4 w-4" />
-                </Button>
-              )}
-              <Button
-                onClick={handleAddTestChests}
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 text-muted-foreground hover:text-accent"
-                aria-label="Добавить 10 сундуков каждого типа"
-              >
-                <PlusCircle className="h-4 w-4" />
-              </Button>
-            </div>
+          <CardContent className="flex flex-col items-center text-center p-2 gap-1 h-10 justify-center">
+            {renderRewardStatus()}
           </CardContent>
         </Card>
-
+        
         <div
           className="relative h-5 w-full flex items-center justify-center"
         >
@@ -331,20 +427,37 @@ const CrystalCascadeGame: React.FC = () => {
                     aria-label={`Card ${index + 1}`}
                   >
                     <AnimatePresence mode="wait">
-                      {isRevealingFlippedCard && revealedGameCardIndex === index && revealedFlippedCardImageUrl ? (
+                      {isRevealingFlippedCard && revealedGameCardIndex === index ? (
                          <motion.div
-                          key={`game-card-front-${index}`}
-                          className="relative w-full h-full"
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0 }}
-                          transition={{ duration: 0.3 }}
+                            key={`revealed-card-container-${index}`}
+                            className="w-full h-full flex items-center justify-center"
+                            initial={{opacity: 0}}
+                            animate={{opacity: 1}}
+                            exit={{opacity: 0}}
                          >
-                          <img
-                            src={revealedFlippedCardImageUrl} 
-                            alt={`Открытая карта ${index + 1}`}
-                            className="rounded-lg object-cover w-full h-full"
-                          />
+                            <LightRays />
+                            {showChestImage && revealedCardData && (
+                                <motion.div
+                                    key={`revealed-chest-${index}`}
+                                    className="relative z-10 w-2/3 h-2/3"
+                                    initial={{ opacity: 0, scale: 0.5 }}
+                                    animate={{ opacity: 1, scale: 1, transition: { duration: 0.5, ease: 'backOut' } }}
+                                >
+                                    {revealedCardData.imageUrl ? (
+                                        <Image
+                                            src={revealedCardData.imageUrl}
+                                            alt={revealedCardData.altText}
+                                            layout="fill"
+                                            objectFit="contain"
+                                            className="drop-shadow-2xl"
+                                        />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-white font-bold text-lg">
+                                            {revealedCardData.altText}
+                                        </div>
+                                    )}
+                                </motion.div>
+                            )}
                         </motion.div>
                       ) : (
                         <motion.div
@@ -355,10 +468,12 @@ const CrystalCascadeGame: React.FC = () => {
                            exit={{ opacity: 0 }}
                            transition={{ duration: 0.3 }}
                         >
-                           <img
+                           <Image
                             src="/images/card/card-back.jpg"
                             alt={`Карта ${index + 1}`}
-                            className="rounded-lg object-cover w-full h-full"
+                            layout="fill"
+                            objectFit="cover"
+                            className="rounded-lg"
                           />
                           {awaitingCardPick && !isRevealingFlippedCard && (
                              <span className="absolute bottom-2 text-xs text-center text-primary-foreground bg-black/60 px-2 py-0.5 rounded">
@@ -379,3 +494,4 @@ const CrystalCascadeGame: React.FC = () => {
 };
 
 export default CrystalCascadeGame;
+

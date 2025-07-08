@@ -120,35 +120,6 @@ go mod tidy
 
 go run . --files ../../game-data/items/resources.yaml
 go run . --all ../../game-data/items/
+go run . --all ../../game-data/classifiers/
 ```
 
-  1. Откройте Grafana: http://localhost:15000
-  2. Войдите: admin / 
-  3. Проверьте логи:
-    - Перейдите в Explore (компас слева)
-    - Выберите datasource "Loki"
-    - Используйте запрос: {job="dockerlogs"}
-    - Нажмите "Run query"
-  4. Проверьте метрики:
-    - Выберите datasource "Prometheus"
-    - Используйте запрос: up
-    - Должны увидеть метрики от prometheus и cadvisor
-
-
-
-  1. Prometheus: http://localhost:15090
-    - Проверьте статус таргетов: Status → Targets
-    - Найдите ping-service в списке (должен быть UP)
-    - Выполните запросы метрик:
-        - ping_requests_total - общее количество ping запросов
-      - http_requests_total - все HTTP запросы
-      - service_uptime_seconds - время работы сервиса
-  2. Grafana: http://localhost:15000
-    - Логин: admin / 
-    - Datasources → Prometheus → должен быть зеленый статус
-    - Explore → выберите Prometheus → введите метрику ping_requests_total
-
-  Метрики ping-service успешно добавлены и работают! Вы можете видеть:
-  - ping_requests_total = 3 (количество выполненных ping запросов)
-  - http_requests_total с разбивкой по endpoint, method, status
-  - service_uptime_seconds - время работы сервиса

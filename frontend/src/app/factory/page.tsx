@@ -1,79 +1,22 @@
 
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { FlaskConical, Anvil, Sparkles, Wrench, ArrowRight, Plus } from 'lucide-react';
-
-import { REFINING_RECIPES } from '@/lib/refining-definitions';
-import { TOOL_TYPES, TOOL_QUALITIES, CRAFTING_COST_PER_ITEM, CRAFTING_DURATION_SECONDS_PER_ITEM, getCraftedToolId } from '@/lib/crafting-definitions';
-import type { RefiningRecipe } from '@/types/refining';
-import type { BlueprintType, CraftedToolType, InventoryItemType, ResourceType, ReagentType, ProcessedItemType } from '@/types/inventory';
 import { useInventory } from '@/contexts/InventoryContext';
-import { useRefining } from '@/contexts/RefiningContext';
-import { useCrafting } from '@/contexts/CraftingContext';
 import { useMining } from '@/contexts/MiningContext';
-
-const resourceImageMap: Record<ResourceType, string> = {
-    stone: '/images/stone.png',
-    wood: '/images/wood.png',
-    ore: '/images/ore.png',
-    diamond: '/images/almaz.png',
-};
-
-const reagentImageMap: Record<ReagentType, string> = {
-    abrasive: '/images/ing-abraziv.png',
-    disc: '/images/ing-disk.png',
-    inductor: '/images/ing-ore.png',
-    paste: '/images/ing-pasta.png',
-};
-
-const processedItemImageMap: Record<ProcessedItemType, string> = {
-    wood_plank: '/images/block-wood.png',
-    stone_block: '/images/block-stone.png',
-    metal_ingot: '/images/block-ore.png',
-    cut_diamond: '/images/block-almaz.png',
-};
-
-const blueprintImageMap: Record<BlueprintType, string> = {
-    axe: '/images/blueprint-axie.png',
-    pickaxe: '/images/blueprint-pickaxie.png',
-    shovel: '/images/blueprint-shovel.png',
-    sickle: '/images/blueprint-sickle.png',
-};
-
-const itemImageMap: Record<string, string> = {
-    ...resourceImageMap,
-    ...reagentImageMap,
-    ...processedItemImageMap,
-    ...blueprintImageMap,
-};
-
-const craftedToolImageMap: Record<CraftedToolType, string> = {
-    wooden_axe: '/images/axie-wood.png',
-    stone_axe: '/images/axie-stone.png',
-    metal_axe: '/images/axie-metal.png',
-    diamond_axe: '/images/axie-almaz.png',
-    wooden_pickaxe: '/images/pickaxie-wood.png',
-    stone_pickaxe: '/images/pickaxie-stone.png',
-    metal_pickaxe: '/images/pickaxie-metal.png',
-    diamond_pickaxe: '/images/pickaxie-almaz.png',
-    wooden_shovel: '/images/shovel-wood.png',
-    stone_shovel: '/images/shovel-stone.png',
-    metal_shovel: '/images/shovel-metal.png',
-    diamond_shovel: '/images/shovel-almaz.png',
-    wooden_sickle: '/images/sickle-wood.png',
-    stone_sickle: '/images/sickle-stone.png',
-    metal_sickle: '/images/sickle-metal.png',
-    diamond_sickle: '/images/sickle-almaz.png',
-};
+import type { BlueprintType, CraftedToolType, InventoryItemType, ResourceType, ReagentType, ProcessedItemType } from '@/types/inventory';
+import { AllProcessedItemTypes, AllCraftedToolTypes, AllBlueprintTypes } from '@/types/inventory';
+import { useProduction } from '@/contexts/ProductionContext';
+import type { ProductionRecipe, ProductionTask } from '@/types/production';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 
 const CountdownTimer = ({ endTime }: { endTime: number }) => {
@@ -108,29 +51,12 @@ const CountdownTimer = ({ endTime }: { endTime: number }) => {
 };
 
 function ActiveProcessesDisplay() {
-    const { activeProcesses: refiningProcs, claimProcess: claimRefining } = useRefining();
-    const { activeProcesses: craftingProcs, claimProcess: claimCrafting } = useCrafting();
-    const { getItemName } = useInventory();
-
-    const allProcs = [
-        ...refiningProcs.map(p => ({
-            ...p,
-            type: 'refining' as const,
-            name: getItemName(p.recipe.output.item),
-            image: itemImageMap[p.recipe.output.item] as string,
-            claimFn: () => claimRefining(p.id)
-        })),
-        ...craftingProcs.map(p => ({
-            ...p,
-            type: 'crafting' as const,
-            name: p.outputItemName,
-            image: craftedToolImageMap[p.outputItem as CraftedToolType],
-            claimFn: () => claimCrafting(p.id)
-        }))
-    ];
+    const { tasks, getRecipeById, claimCompleted } = useProduction();
+    const { getItemImage } = useInventory();
     
-    const MAX_FACTORY_SLOTS = 2;
-    const totalSlotsUsed = allProcs.length;
+    const MAX_FACTORY_SLOTS = 2; // This should probably come from context/API in the future
+    const totalSlotsUsed = tasks.length;
+    const completedTasksCount = tasks.filter(t => t.status === 'completed').length;
 
     if (totalSlotsUsed === 0) {
         return <div className="text-center text-muted-foreground py-2">Нет активных процессов</div>;
@@ -144,46 +70,56 @@ function ActiveProcessesDisplay() {
                     Слотов занято: {totalSlotsUsed} / {MAX_FACTORY_SLOTS}
                 </div>
             </div>
-            {allProcs.map(proc => {
-                const isFinished = Date.now() >= proc.endTime;
-                let totalDuration: number;
-                if (proc.type === 'refining') {
-                    totalDuration = proc.recipe.durationSeconds * proc.quantity * 1000;
-                } else { // crafting
-                    totalDuration = CRAFTING_DURATION_SECONDS_PER_ITEM * proc.quantity * 1000;
+            {completedTasksCount > 0 && (
+                 <Button onClick={claimCompleted} className="w-full">
+                    Забрать все готовые ({completedTasksCount})
+                </Button>
+            )}
+            {tasks.map(task => {
+                const recipe = getRecipeById(task.recipe_id);
+                if (!recipe) return null; // Should not happen if data is consistent
+
+                const isFinished = task.status === 'completed';
+                const endTimeMs = new Date(task.ends_at).getTime();
+                const totalDuration = recipe.duration_seconds * task.quantity * 1000;
+                const startTimeMs = endTimeMs - totalDuration;
+                
+                let progress = 0;
+                if(isFinished) {
+                    progress = 100;
+                } else if (task.status === 'in_progress' && totalDuration > 0) {
+                    const timeElapsed = Date.now() - startTimeMs;
+                    progress = Math.min(100, (timeElapsed / totalDuration) * 100);
                 }
-                const timeElapsed = Date.now() - (proc.endTime - totalDuration);
-                const progress = isFinished ? 100 : Math.min(100, (timeElapsed / totalDuration) * 100);
+                
+                const outputItem = recipe.output_items?.[0];
+                if (!outputItem) return null;
+
+                const outputImage = getItemImage(outputItem.item_slug) ?? `https://placehold.co/64x64.png`;
 
                 return (
-                    <Card key={proc.id} className="bg-card/70 p-3">
+                    <Card key={task.id} className="bg-card/70 p-3">
                         <div className="flex items-center gap-3">
                             <div className="relative flex-shrink-0">
                                 <Image 
-                                    src={proc.image} 
-                                    alt={proc.name} 
+                                    src={outputImage} 
+                                    alt={recipe.name} 
                                     width={48} 
                                     height={48} 
                                     className="bg-background/50 rounded-md p-1"
                                 />
                                 <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center border-2 border-card">
-                                    {proc.quantity}
+                                    {task.quantity}
                                 </span>
                             </div>
 
                             <div className="flex-grow space-y-1">
-                                <p className="font-semibold text-sm leading-tight">{proc.name}</p>
+                                <p className="font-semibold text-sm leading-tight">{recipe.name}</p>
                                 <Progress value={progress} className="h-2" />
                                 <div className="flex justify-between items-center text-xs text-muted-foreground">
-                                    <CountdownTimer endTime={proc.endTime} />
+                                    {isFinished || task.status === 'queued' ? <span>{task.status === 'queued' ? 'В очереди' : 'Готово!'}</span> : <CountdownTimer endTime={endTimeMs} />}
                                     <span>{isFinished ? '100%' : `${Math.floor(progress)}%`}</span>
                                 </div>
-                            </div>
-                            
-                            <div className="flex-shrink-0">
-                                <Button onClick={proc.claimFn} disabled={!isFinished} size="sm" className="px-4">
-                                    Забрать
-                                </Button>
                             </div>
                         </div>
                     </Card>
@@ -193,29 +129,51 @@ function ActiveProcessesDisplay() {
     );
 }
 
-function RefiningTab() {
-    const { inventory, getItemName } = useInventory();
-    const { startProcess, processSlots } = useRefining();
-    const { processSlots: craftingSlots } = useCrafting();
-    const [selectedRecipe, setSelectedRecipe] = useState<RefiningRecipe | null>(REFINING_RECIPES[0] || null);
-    const [quantity, setQuantity] = useState<number>(1);
-    
-    const totalSlotsUsed = processSlots.current + craftingSlots.current;
-    const MAX_FACTORY_SLOTS = 2;
 
-    const handleRecipeSelect = (recipe: RefiningRecipe) => {
+const ProductionTab = ({ category }: { category: 'refining' | 'crafting' }) => {
+    const { inventory, getItemName, getItemImage } = useInventory();
+    const { recipes, tasks, startProduction } = useProduction();
+    
+    const [selectedRecipe, setSelectedRecipe] = useState<ProductionRecipe | null>(null);
+    const [quantity, setQuantity] = useState(1);
+    
+    const MAX_FACTORY_SLOTS = 2; // Should come from API/context
+    const totalSlotsUsed = tasks.length;
+    
+    const getRecipeCategory = (recipe: ProductionRecipe): 'refining' | 'crafting' => {
+        const outputItemSlug = recipe.output_items?.[0]?.item_slug;
+        if (outputItemSlug && AllProcessedItemTypes.includes(outputItemSlug as any)) {
+            return 'refining';
+        }
+        return 'crafting';
+    };
+
+    const relevantRecipes = recipes.filter(r => getRecipeCategory(r) === category);
+
+    useEffect(() => {
+        // Auto-select first recipe when tab is switched
+        if (relevantRecipes.length > 0) {
+            setSelectedRecipe(relevantRecipes[0]);
+            setQuantity(1);
+        } else {
+            setSelectedRecipe(null);
+        }
+    }, [category, recipes]);
+
+
+    const handleRecipeSelect = (recipe: ProductionRecipe) => {
         setSelectedRecipe(recipe);
         setQuantity(1);
     };
-    
+
     const handleStartProcess = () => {
         if (!selectedRecipe) return;
-        startProcess(selectedRecipe, quantity);
+        startProduction(selectedRecipe.id, quantity);
         setQuantity(1);
     };
-
-    const canAfford = selectedRecipe && selectedRecipe.input.every(
-        (ing) => (inventory[ing.item] || 0) >= ing.quantity * quantity
+    
+    const canAfford = selectedRecipe && (selectedRecipe.input_items || []).every(
+        (ing) => (inventory[ing.item_slug] || 0) >= ing.quantity * quantity
     );
 
     return (
@@ -224,24 +182,26 @@ function RefiningTab() {
                  {selectedRecipe ? (
                     <Card className="bg-card/70 p-4">
                         <div className="flex items-center justify-center gap-1 sm:gap-2 mb-4 text-primary font-bold">
-                            {selectedRecipe.input.map((ing, index) => (
-                                <React.Fragment key={ing.item}>
+                            {(selectedRecipe.input_items || []).map((ing, index) => (
+                                <React.Fragment key={ing.item_slug}>
                                     {index > 0 && <Plus className="h-5 w-5 text-muted-foreground" />}
                                     <div className="flex flex-col items-center w-16 text-center">
-                                        <Image src={itemImageMap[ing.item] as string} alt={getItemName(ing.item)} width={40} height={40} />
-                                        <span className={cn("text-xs mt-1", (inventory[ing.item] || 0) < ing.quantity * quantity ? 'text-destructive' : 'text-muted-foreground')}>
-                                            {ing.quantity * quantity}/{inventory[ing.item] || 0}
+                                        <Image src={getItemImage(ing.item_slug) ?? `https://placehold.co/40x40.png`} alt={getItemName(ing.item_slug)} width={40} height={40} />
+                                        <span className={cn("text-xs mt-1", (inventory[ing.item_slug] || 0) < ing.quantity * quantity ? 'text-destructive' : 'text-muted-foreground')}>
+                                            {ing.quantity * quantity}/{inventory[ing.item_slug] || 0}
                                         </span>
                                     </div>
                                 </React.Fragment>
                             ))}
                             <ArrowRight className="h-6 w-6 mx-1 sm:mx-2 text-primary" />
-                            <div className="flex flex-col items-center w-16 text-center">
-                                <Image src={itemImageMap[selectedRecipe.output.item] as string} alt={getItemName(selectedRecipe.output.item)} width={40} height={40} />
-                                <span className="text-xs mt-1 text-muted-foreground">
-                                    {selectedRecipe.output.quantity * quantity}
-                                </span>
-                            </div>
+                             {(selectedRecipe.output_items || []).map((out) => (
+                                <div key={out.item_slug} className="flex flex-col items-center w-16 text-center">
+                                    <Image src={getItemImage(out.item_slug) ?? `https://placehold.co/40x40.png`} alt={getItemName(out.item_slug)} width={40} height={40} />
+                                    <span className="text-xs mt-1 text-muted-foreground">
+                                        {out.quantity * quantity}
+                                    </span>
+                                </div>
+                             ))}
                         </div>
                         <div className="flex gap-2">
                             <Input
@@ -256,173 +216,64 @@ function RefiningTab() {
                                 disabled={!canAfford || totalSlotsUsed >= MAX_FACTORY_SLOTS}
                                 className="flex-grow"
                             >
-                                Переплавить
+                                {category === 'refining' ? 'Переплавить' : 'Создать'}
                             </Button>
                         </div>
-                        <p className="text-xs text-muted-foreground text-center mt-2">Время: {selectedRecipe.durationSeconds * quantity} сек.</p>
+                        <p className="text-xs text-muted-foreground text-center mt-2">Время: {selectedRecipe.duration_seconds * quantity} сек.</p>
                     </Card>
-                ) : <p className="text-center text-muted-foreground">Выберите предмет для переработки</p>}
+                ) : <p className="text-center text-muted-foreground">Выберите предмет для производства</p>}
 
                 <div>
-                    <h4 className="font-headline text-lg text-primary mb-2 text-center">Выберите, что переработать</h4>
+                    <h4 className="font-headline text-lg text-primary mb-2 text-center">Выберите, что произвести</h4>
                     <div className="grid grid-cols-4 gap-3">
-                        {REFINING_RECIPES.map(recipe => (
-                            <button
-                                key={recipe.output.item}
-                                onClick={() => handleRecipeSelect(recipe)}
-                                className={cn(
-                                    "aspect-square flex items-center justify-center bg-card/50 rounded-lg p-2 transition-all border-2",
-                                    selectedRecipe?.output.item === recipe.output.item ? "border-primary ring-2 ring-primary/50 scale-105" : "border-transparent hover:border-primary/50"
-                                )}
-                            >
-                                <Image src={itemImageMap[recipe.output.item] as string} alt={getItemName(recipe.output.item)} width={48} height={48} />
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            </CardContent>
-        </Card>
-    );
-}
-
-function CraftingTab() {
-    const { inventory, getItemName } = useInventory();
-    const { startProcess, processSlots } = useCrafting();
-    const { processSlots: refiningSlots } = useRefining();
-
-    const [selectedCraft, setSelectedCraft] = useState<{ tool: BlueprintType; quality: string; } | null>(null);
-    const [quantity, setQuantity] = useState<number>(1);
-    
-    const totalSlotsUsed = processSlots.current + refiningSlots.current;
-    const MAX_FACTORY_SLOTS = 2;
-
-    const allCraftableItems: { tool: BlueprintType; quality: string; }[] = TOOL_TYPES.flatMap(tool => 
-        TOOL_QUALITIES.map(quality => ({ tool, quality: quality.id }))
-    );
-
-    // Auto-select first available if none selected and the user has the blueprint for it
-    useEffect(() => {
-        if (!selectedCraft) {
-            const firstOwnedCraftable = allCraftableItems.find(item => (inventory[item.tool] || 0) > 0);
-            if (firstOwnedCraftable) {
-                setSelectedCraft(firstOwnedCraftable);
-            }
-        }
-    }, [inventory, selectedCraft, allCraftableItems]);
-
-    const handleSelectCraft = (item: { tool: BlueprintType; quality: string; }) => {
-        setSelectedCraft(item);
-        setQuantity(1);
-    }
-
-    const selectedTool = selectedCraft?.tool;
-    const selectedQuality = selectedCraft?.quality;
-    const qualityInfo = TOOL_QUALITIES.find(q => q.id === selectedQuality);
-    const materialNeeded = qualityInfo ? qualityInfo.material : null;
-    const materialCost = materialNeeded ? CRAFTING_COST_PER_ITEM * quantity : 0;
-    const blueprintCost = quantity;
-
-    const hasBlueprintForSelected = selectedTool ? (inventory[selectedTool] || 0) > 0 : false;
-    
-    const canAfford = hasBlueprintForSelected && selectedTool && qualityInfo && materialNeeded &&
-                      (inventory[selectedTool] || 0) >= blueprintCost &&
-                      (inventory[materialNeeded] || 0) >= materialCost;
-
-    const handleStartCrafting = () => {
-        if (!selectedTool || !selectedQuality) return;
-        startProcess({ tool: selectedTool, quality: selectedQuality }, quantity);
-        setQuantity(1); // Reset quantity after starting
-    };
-
-    return (
-        <Card className="bg-background/50 shadow-inner">
-            <CardContent className="pt-6 space-y-6">
-                <Card className="bg-card/70 p-4">
-                    {selectedTool && selectedQuality && qualityInfo && materialNeeded ? (
-                        <div className="space-y-4">
-                            <div className="flex justify-center items-center gap-2">
-                                <div className="flex flex-col items-center w-16 text-center">
-                                    <Image src={blueprintImageMap[selectedTool]} alt={getItemName(selectedTool)} width={40} height={40} />
-                                    <span className={cn("text-xs mt-1", (inventory[selectedTool] || 0) < blueprintCost ? 'text-destructive' : 'text-muted-foreground')}>
-                                        {blueprintCost}/{inventory[selectedTool] || 0}
-                                    </span>
-                                </div>
-                                <Plus className="h-5 w-5 text-muted-foreground" />
-                                <div className="flex flex-col items-center w-16 text-center">
-                                    <Image src={processedItemImageMap[materialNeeded]} alt={getItemName(materialNeeded)} width={40} height={40} />
-                                     <span className={cn("text-xs mt-1", (inventory[materialNeeded] || 0) < materialCost ? 'text-destructive' : 'text-muted-foreground')}>
-                                        {materialCost}/{inventory[materialNeeded] || 0}
-                                    </span>
-                                </div>
-                                <ArrowRight className="h-6 w-6 mx-1 sm:mx-2 text-primary" />
-                                <div className="flex flex-col items-center w-16 text-center">
-                                    <Image src={craftedToolImageMap[getCraftedToolId(selectedTool, selectedQuality)]} alt={getItemName(getCraftedToolId(selectedTool, selectedQuality))} width={40} height={40} />
-                                    <span className="text-xs mt-1 text-muted-foreground">
-                                        {quantity}
-                                    </span>
-                                </div>
-                            </div>
-
-                            <div className="flex gap-2">
-                                <Input
-                                    type="number"
-                                    min="1"
-                                    value={quantity}
-                                    onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                                    className="w-24"
-                                />
-                                <Button
-                                    onClick={handleStartCrafting}
-                                    disabled={!canAfford || totalSlotsUsed >= MAX_FACTORY_SLOTS}
-                                    className="flex-grow"
-                                >
-                                    Создать
-                                </Button>
-                            </div>
-                            <p className="text-xs text-muted-foreground text-center mt-2">Время: {CRAFTING_DURATION_SECONDS_PER_ITEM * quantity} сек.</p>
-                        </div>
-                    ) : (
-                        <p className="text-center text-muted-foreground">Выберите предмет для создания.</p>
-                    )}
-                </Card>
-
-                <div>
-                    <h4 className="font-headline text-lg text-primary mb-2 text-center">Выберите, что создать</h4>
-                    <div className="grid grid-cols-4 gap-3">
-                        {allCraftableItems.map(item => {
-                            const toolId = getCraftedToolId(item.tool, item.quality);
-                            const isSelected = selectedCraft?.tool === item.tool && selectedCraft?.quality === item.quality;
-                            const hasBlueprint = (inventory[item.tool] || 0) > 0;
+                        {relevantRecipes.map(recipe => {
+                            const outputItem = recipe.output_items?.[0];
+                            if (!outputItem) return null;
+                            
+                            const hasBlueprint = (() => {
+                                if (category !== 'crafting') {
+                                    return true; // Refining recipes don't need blueprints
+                                }
+                                // Check if any input is a blueprint
+                                const requiredBlueprint = (recipe.input_items || []).find(ing => AllBlueprintTypes.includes(ing.item_slug as any));
+                                if (requiredBlueprint) {
+                                    // If a blueprint is required, check if player has it
+                                    return (inventory[requiredBlueprint.item_slug] || 0) > 0;
+                                }
+                                // If no blueprint is required for this crafting recipe, it's always available to be selected
+                                return true;
+                            })();
+                            
                             return (
                                 <button
-                                    key={toolId}
-                                    onClick={() => hasBlueprint && handleSelectCraft(item)}
-                                    disabled={!hasBlueprint}
+                                    key={recipe.id}
+                                    onClick={() => handleRecipeSelect(recipe)}
                                     className={cn(
-                                        "aspect-square flex items-center justify-center bg-card/50 rounded-lg p-2 transition-all border-2",
-                                        isSelected ? "border-primary ring-2 ring-primary/50 scale-105" : "border-transparent",
-                                        hasBlueprint ? "hover:border-primary/50 cursor-pointer" : "opacity-50 grayscale cursor-not-allowed"
+                                        "relative aspect-square flex items-center justify-center bg-card/50 rounded-lg p-2 transition-all border-2",
+                                        selectedRecipe?.id === recipe.id ? "border-primary ring-2 ring-primary/50 scale-105" : "border-transparent hover:border-primary/50",
+                                        hasBlueprint ? "" : "opacity-50 grayscale cursor-not-allowed"
                                     )}
+                                    disabled={!hasBlueprint}
                                 >
-                                    <Image src={craftedToolImageMap[toolId]} alt={getItemName(toolId)} width={48} height={48} />
-                                    {!hasBlueprint && (
+                                    <Image src={getItemImage(outputItem.item_slug) ?? `https://placehold.co/48x48.png`} alt={getItemName(outputItem.item_slug)} width={48} height={48} />
+                                     {!hasBlueprint && (
                                         <div className="absolute inset-0 bg-black/60 flex items-center justify-center rounded-lg">
                                             <p className="text-white text-xs font-bold text-center">Нет чертежа</p>
                                         </div>
                                     )}
                                 </button>
-                            );
+                            )
                         })}
                     </div>
                 </div>
             </CardContent>
         </Card>
-    );
+    )
 }
 
 function RepairingTab() {
     const { equippedTools } = useMining();
-    const { getItemName } = useInventory();
+    const { getItemName, getItemImage } = useInventory();
 
     const equippedToolsArray = Object.values(equippedTools).filter(Boolean);
 
@@ -438,7 +289,7 @@ function RepairingTab() {
                         <Card key={tool.item} className="bg-card/70 p-4">
                             <div className="flex items-center gap-4">
                                 <Image
-                                    src={craftedToolImageMap[tool.item]}
+                                    src={getItemImage(tool.item) ?? `https://placehold.co/48x48.png`}
                                     alt={getItemName(tool.item)}
                                     width={48}
                                     height={48}
@@ -460,7 +311,7 @@ function RepairingTab() {
                                         <span>1,000</span>
                                     </div>
                                     <div className="flex items-center gap-1.5">
-                                        <Image src="/images/block-ore.png" alt={getItemName('metal_ingot')} width={16} height={16} />
+                                        <Image src={getItemImage('metal_ingot') ?? `https://placehold.co/16x16.png`} alt={getItemName('metal_ingot')} width={16} height={16} />
                                         <span>5</span>
                                     </div>
                                 </div>
@@ -481,7 +332,7 @@ function RepairingTab() {
 }
 
 function SharpeningTab() {
-    const { getItemName, inventory } = useInventory();
+    const { getItemName, inventory, getItemImage } = useInventory();
     const [toolType, setToolType] = useState<BlueprintType>('pickaxe');
     const [quality, setQuality] = useState<string>('wooden');
     const [selectedLevel, setSelectedLevel] = useState<number | null>(null);
@@ -509,6 +360,10 @@ function SharpeningTab() {
         9: 'bg-yellow-300/20 border-yellow-400/50 text-yellow-200',
         10: 'bg-yellow-500/30 border-yellow-500/70 text-yellow-300 font-bold',
     };
+    
+    const getCraftedToolId = (tool: BlueprintType, qualityId: string): CraftedToolType => {
+        return `${qualityId}_${tool}` as CraftedToolType;
+    };
 
     const getSharpenedItemName = (level: number): string => {
         const baseToolId = getCraftedToolId(toolType, quality);
@@ -519,7 +374,8 @@ function SharpeningTab() {
         return baseToolName;
     };
     
-    const selectedToolBaseImage = craftedToolImageMap[getCraftedToolId(toolType, quality)];
+    const selectedToolBaseId = getCraftedToolId(toolType, quality);
+    const selectedToolBaseImage = getItemImage(selectedToolBaseId) ?? `https://placehold.co/48x48.png`;
     const requiredItemName = selectedLevel ? getSharpenedItemName(selectedLevel - 1) : '';
     // Simplified inventory check: only checks for base (level 0) items.
     const requiredItemCountInInv = selectedLevel === 1 ? (inventory[getCraftedToolId(toolType, quality)] || 0) : 0;
@@ -592,7 +448,7 @@ function SharpeningTab() {
                             <Select value={toolType} onValueChange={(val: BlueprintType) => {setSelectedLevel(null); setToolType(val)}}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                    {TOOL_TYPES.map(t => <SelectItem key={t} value={t}>{toolTypeDisplayNames[t]}</SelectItem>)}
+                                    {['axe', 'pickaxe', 'shovel', 'sickle'].map(t => <SelectItem key={t} value={t}>{toolTypeDisplayNames[t as BlueprintType]}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                         </div>
@@ -601,7 +457,7 @@ function SharpeningTab() {
                             <Select value={quality} onValueChange={(val) => {setSelectedLevel(null); setQuality(val)}}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                    {TOOL_QUALITIES.map(q => <SelectItem key={q.id} value={q.id}>{q.name}</SelectItem>)}
+                                    {[{id: 'wooden', name: 'Деревянный'},{id: 'stone', name: 'Каменный'},{id: 'metal', name: 'Металлический'},{id: 'diamond', name: 'Бриллиантовый'}].map(q => <SelectItem key={q.id} value={q.id}>{q.name}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                         </div>
@@ -631,6 +487,7 @@ function SharpeningTab() {
     );
 }
 
+
 const TABS = [
   { value: 'refining', label: 'Переработка', icon: <FlaskConical className="w-6 h-6" /> },
   { value: 'crafting', label: 'Крафт', icon: <Anvil className="w-6 h-6" /> },
@@ -640,6 +497,12 @@ const TABS = [
 
 export default function FactoryPage() {
   const [activeTab, setActiveTab] = useState<(typeof TABS)[number]['value']>('refining');
+  const { fetchData } = useProduction();
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
 
   return (
     <div className="flex flex-col items-center justify-start min-h-full p-4 space-y-6 text-foreground">
@@ -671,10 +534,10 @@ export default function FactoryPage() {
             <ActiveProcessesDisplay />
 
             <TabsContent value="refining">
-                <RefiningTab />
+                <ProductionTab category="refining" />
             </TabsContent>
             <TabsContent value="crafting">
-                <CraftingTab />
+                <ProductionTab category="crafting" />
             </TabsContent>
             <TabsContent value="sharpening">
                 <SharpeningTab />

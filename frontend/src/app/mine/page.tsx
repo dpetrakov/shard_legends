@@ -3,10 +3,11 @@
 
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
-import { Wrench, Plus, BarChart, ArrowRight, ShieldCheck, Zap, Clover, ChevronLeft, Mountain, Trees, Hourglass } from 'lucide-react';
+import { Wrench, Plus, BarChart, ArrowRight, ShieldCheck, Zap, Clover, ChevronLeft, Mountain, Trees, Hourglass, Gift } from 'lucide-react';
 import { useMining } from '@/contexts/MiningContext';
 import { useInventory } from '@/contexts/InventoryContext';
 import { ALL_TOOL_TYPES, type ToolType, type MiningLocation } from '@/types/mining';
@@ -15,28 +16,9 @@ import { AllCraftedToolTypes } from '@/types/inventory';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 
-const craftedToolImageMap: Record<CraftedToolType, string> = {
-    wooden_axe: '/images/axie-wood.png',
-    stone_axe: '/images/axie-stone.png',
-    metal_axe: '/images/axie-metal.png',
-    diamond_axe: '/images/axie-almaz.png',
-    wooden_pickaxe: '/images/pickaxie-wood.png',
-    stone_pickaxe: '/images/pickaxie-stone.png',
-    metal_pickaxe: '/images/pickaxie-metal.png',
-    diamond_pickaxe: '/images/pickaxie-almaz.png',
-    wooden_shovel: '/images/shovel-wood.png',
-    stone_shovel: '/images/shovel-stone.png',
-    metal_shovel: '/images/shovel-metal.png',
-    diamond_shovel: '/images/shovel-almaz.png',
-    wooden_sickle: '/images/sickle-wood.png',
-    stone_sickle: '/images/sickle-stone.png',
-    metal_sickle: '/images/sickle-metal.png',
-    diamond_sickle: '/images/sickle-almaz.png',
-};
-
 // Component for selecting a tool from inventory
 const ToolSelectorView = ({ toolType, onBack }: { toolType: ToolType; onBack: () => void }) => {
-    const { inventory, getItemName } = useInventory();
+    const { inventory, getItemName, getItemImage } = useInventory();
     const { equipTool, getToolName } = useMining();
 
     const availableTools = AllCraftedToolTypes.filter(item =>
@@ -73,7 +55,7 @@ const ToolSelectorView = ({ toolType, onBack }: { toolType: ToolType; onBack: ()
                                 className="flex items-center justify-between w-full p-2 rounded-md hover:bg-muted transition-colors text-left"
                             >
                                 <div className="flex items-center gap-3">
-                                    <Image src={craftedToolImageMap[item]} alt={getItemName(item)} width={40} height={40} />
+                                    <Image src={getItemImage(item) ?? `https://placehold.co/40x40.png`} alt={getItemName(item)} width={40} height={40} />
                                     <div>
                                         <p className="font-semibold">{getItemName(item)}</p>
                                         <p className="text-xs text-muted-foreground">В наличии: {inventory[item]}</p>
@@ -95,7 +77,7 @@ const ToolSelectorView = ({ toolType, onBack }: { toolType: ToolType; onBack: ()
 // Component for the main tool management view
 const ToolManagerView = ({ onSelectClick }: { onSelectClick: (toolType: ToolType) => void }) => {
     const { equippedTools, getToolName, getToolIcon, unequipTool } = useMining();
-    const { getItemName } = useInventory();
+    const { getItemName, getItemImage } = useInventory();
 
     return (
         <div>
@@ -127,7 +109,7 @@ const ToolManagerView = ({ onSelectClick }: { onSelectClick: (toolType: ToolType
                             {tool ? (
                                 <CardContent className="pt-4 px-0 pb-0">
                                     <div className="flex items-center gap-2 mb-2">
-                                        <Image src={craftedToolImageMap[tool.item]} alt={name} width={32} height={32} />
+                                        <Image src={getItemImage(tool.item) ?? `https://placehold.co/32x32.png`} alt={name} width={32} height={32} />
                                         <p className="text-sm font-medium">{getItemName(tool.item)}</p>
                                     </div>
                                     <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-muted-foreground">
@@ -272,7 +254,12 @@ export default function MinePage() {
             className="absolute inset-0 flex flex-col justify-between px-4 pt-20 pb-28 bg-cover bg-bottom bg-no-repeat"
             style={{ backgroundImage: "url('/images/mine-background.jpg')" }}
         >
-            <div className="w-full flex justify-end">
+            <div className="w-full flex justify-end gap-2">
+                <Link href="/gifts">
+                    <Button variant="outline" size="icon" className="bg-card/50 backdrop-blur-sm border-primary/50">
+                        <Gift className="h-6 w-6 text-primary" />
+                    </Button>
+                </Link>
                 <ToolManagerDialog />
             </div>
 
@@ -395,5 +382,7 @@ export default function MinePage() {
         </div>
     );
 }
+
+    
 
     
