@@ -62,8 +62,12 @@ classifiers:
     description: Подтипы валют для класса currencies
 
     items:
-      - code: diamonds
-        description: Диаманты
+      - code: gold
+        description: Золото
+      - code: sapphires
+        description: Сапфиры
+      - code: slcw
+        description: $SLCW токен
 
   - code: blueprint_type
     description: Подтипы чертежей для класса blueprints

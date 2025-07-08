@@ -3,6 +3,18 @@ items:
     code: key
     class: keys
     type: key
+    quality_levels_classifier: key_quality_levels
+
+    images:
+      - collection: base
+        quality_level: small
+        url: /statics/images/items/key-small.png
+      - collection: base
+        quality_level: medium
+        url: /statics/images/items/key-middle.png
+      - collection: base
+        quality_level: large
+        url: /statics/images/items/key-big.png
 
     translations:
       ru:
@@ -16,6 +28,12 @@ items:
     code: blueprint_key
     class: keys
     type: blueprint_key
+    quality_levels_classifier: key_quality_levels
+
+    images:
+      - collection: base
+        quality_level: base
+        url: /statics/images/items/key-blueprint.png
 
     translations:
       ru:
@@ -23,4 +41,4 @@ items:
         description: Используется для открытия сундука с чертежами (Blueprint Chest).
       en:
         name: Blueprint Key
-        description: Used to open a Blueprint Chest. 
+        description: Used to open a Blueprint Chest.

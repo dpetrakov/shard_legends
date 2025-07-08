@@ -1,0 +1,54 @@
+items:
+  - id: a1b2c3d4-e5f6-7890-1234-567890abcdef
+    code: gold
+    class: currencies
+    type: gold
+
+    translations:
+      ru:
+        name: Золото
+        description: Основная игровая валюта, используется для покупки предметов и улучшений.
+      en:
+        name: Gold
+        description: Main game currency used for purchasing items and upgrades.
+
+    images:
+      - collection: base
+        quality_level: base
+        url: /statics/images/items/gold.png
+
+  - id: f1e2d3c4-b5a6-9788-4321-098765fedcba
+    code: sapphires
+    class: currencies
+    type: sapphires
+
+    translations:
+      ru:
+        name: Сапфиры
+        description: Премиальная валюта для покупки эксклюзивных предметов и ускорителей.
+      en:
+        name: Sapphires
+        description: Premium currency for purchasing exclusive items and boosters.
+
+    images:
+      - collection: base
+        quality_level: base
+        url: /statics/images/items/diamond.png
+
+  - id: 12345678-9abc-def0-1234-56789abcdef0
+    code: slcw
+    class: currencies
+    type: slcw
+
+    translations:
+      ru:
+        name: $SLCW
+        description: Токен блокчейна APTOS для участия в экономике игры.
+      en:
+        name: $SLCW
+        description: APTOS blockchain token for participating in the game economy.
+
+    images:
+      - collection: base
+        quality_level: base
+        url: /statics/images/items/sl.png
