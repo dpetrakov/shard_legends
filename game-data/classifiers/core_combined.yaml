@@ -24,6 +24,12 @@ classifiers:
       - code: currencies
         description: Игровые валюты
 
+      - code: processed
+        description: Обработанные материалы
+
+      - code: chests
+        description: Сундуки с наградами
+
   - code: inventory_section
     description: Разделы инвентаря пользователя
 

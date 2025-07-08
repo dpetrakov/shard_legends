@@ -69,6 +69,32 @@ classifiers:
       - code: slcw
         description: $SLCW токен
 
+  - code: processed_type
+    description: Подтипы обработанных материалов для класса processed
+
+    items:
+      - code: wooden_plank
+        description: Деревянный брусок
+      - code: stone_block
+        description: Каменный блок
+      - code: metal_ingot
+        description: Металлический слиток
+      - code: cut_diamond
+        description: Огранённый алмаз
+
+  - code: chest_type
+    description: Подтипы сундуков для класса chests
+
+    items:
+      - code: resource_chest
+        description: Ресурсный сундук
+      - code: reagent_chest
+        description: Реагентный сундук
+      - code: booster_chest
+        description: Сундук ускорителей
+      - code: blueprint_chest
+        description: Сундук чертежей
+
   - code: blueprint_type
     description: Подтипы чертежей для класса blueprints
 

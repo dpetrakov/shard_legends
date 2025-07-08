@@ -126,6 +126,7 @@ var typeClassifierByClass = map[string]string{
 	"keys":       "key_type",
 	"chests":     "chest_type",
 	"currencies": "currency_type",
+	"processed":  "processed_type",
 }
 
 func usage() {

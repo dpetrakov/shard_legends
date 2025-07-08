@@ -28,7 +28,7 @@ items:
     code: blueprint_key
     class: keys
     type: blueprint_key
-    quality_levels_classifier: key_quality_levels
+    quality_levels_classifier: quality_level
 
     images:
       - collection: base

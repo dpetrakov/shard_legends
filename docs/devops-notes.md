@@ -115,7 +115,7 @@ docker compose exec redis redis-cli -n 1 FLUSHDB
 
 Пролить предметы
 ```bash
-cd /scripts/item_loader
+cd scripts/item_loader/
 go mod tidy  
 
 go run . --files ../../game-data/items/resources.yaml
