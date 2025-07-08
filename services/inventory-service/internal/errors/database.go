@@ -228,6 +228,39 @@ func GetInsufficientBalanceDetails(err error) (*InsufficientBalanceError, bool) 
 	return nil, false
 }
 
+// ReservationNotFoundError represents a case when reservation operation is not found
+type ReservationNotFoundError struct {
+	OperationID string `json:"operation_id"`
+	Message     string `json:"message"`
+}
+
+func (e *ReservationNotFoundError) Error() string {
+	return e.Message
+}
+
+// NewReservationNotFoundError creates a new ReservationNotFoundError
+func NewReservationNotFoundError(operationID string) *ReservationNotFoundError {
+	return &ReservationNotFoundError{
+		OperationID: operationID,
+		Message:     "no reservation found for the given operation ID",
+	}
+}
+
+// IsReservationNotFoundError checks if error is a reservation not found error
+func IsReservationNotFoundError(err error) bool {
+	var reservationErr *ReservationNotFoundError
+	return errors.As(err, &reservationErr)
+}
+
+// GetReservationNotFoundDetails extracts details from reservation not found error
+func GetReservationNotFoundDetails(err error) (*ReservationNotFoundError, bool) {
+	var reservationErr *ReservationNotFoundError
+	if errors.As(err, &reservationErr) {
+		return reservationErr, true
+	}
+	return nil, false
+}
+
 // GetConcurrentOperationDetails extracts details from concurrent operation error
 func GetConcurrentOperationDetails(err error) (*ConcurrentOperationError, bool) {
 	var concurrentErr *ConcurrentOperationError

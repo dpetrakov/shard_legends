@@ -35,14 +35,14 @@ func (s *MockDataService) GenerateVIPStatus() models.VIPStatus {
 // GetProfileData возвращает моковые данные профиля пользователя
 func (s *MockDataService) GetProfileData(userID string, telegramID int64) models.ProfileResponse {
 	return models.ProfileResponse{
-		UserID:      userID,
-		TelegramID:  telegramID,
-		DisplayName: "John Doe", // Статическое имя
-		VIPStatus:   s.GenerateVIPStatus(),
-		ProfileImage: "https://t.me/i/userpic/320/abc123.jpg", // Статическое изображение
-		Level:             15,   // Статический уровень
-		Experience:        2850, // Статический опыт
-		AchievementsCount: 7,    // Статическое количество достижений
+		UserID:            userID,
+		TelegramID:        telegramID,
+		DisplayName:       "John Doe", // Статическое имя
+		VIPStatus:         s.GenerateVIPStatus(),
+		ProfileImage:      "https://t.me/i/userpic/320/abc123.jpg", // Статическое изображение
+		Level:             15,                                      // Статический уровень
+		Experience:        2850,                                    // Статический опыт
+		AchievementsCount: 7,                                       // Статическое количество достижений
 		Clan: &models.Clan{
 			ID:   "clan-uuid-12345",
 			Name: "Dragon Warriors", // Статический клан
@@ -55,7 +55,7 @@ func (s *MockDataService) GetProfileData(userID string, telegramID int64) models
 func (s *MockDataService) GetProductionSlots(userID string) models.ProductionSlotsResponse {
 	return models.ProductionSlotsResponse{
 		UserID:     userID,
-		TotalSlots: 3, // 1 chest_opening + 2 smithy
+		TotalSlots: 4, // 1 chest_opening + 2 smithy + 1 trade_purchase
 		Slots: []models.ProductionSlot{
 			{
 				SlotType:            "chest_opening",
@@ -67,6 +67,11 @@ func (s *MockDataService) GetProductionSlots(userID string) models.ProductionSlo
 				SupportedOperations: []string{"crafting", "smelting"},
 				Count:               2,
 			},
+			{
+				SlotType:            "trade_purchase",
+				SupportedOperations: []string{"trade_purchase"},
+				Count:               1,
+			},
 		},
 	}
 }
@@ -77,12 +82,12 @@ func (s *MockDataService) GetProductionModifiers(userID string) models.Productio
 		UserID: userID,
 		Modifiers: models.ProductionModifiers{
 			VIPStatus: models.VIPModifier{
-				Level:               "none",
+				Level:                "none",
 				ProductionSpeedBonus: 0.0,
-				QualityBonus:        0.0,
+				QualityBonus:         0.0,
 			},
 			CharacterLevel: models.CharacterLevelModifier{
-				Level:        1,
+				Level:         1,
 				CraftingBonus: 0.0,
 			},
 			Achievements: []models.Achievement{},

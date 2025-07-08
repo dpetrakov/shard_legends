@@ -73,22 +73,38 @@ func (c *ProductionCalculator) PrecalculateProduction(ctx context.Context, userI
 func (c *ProductionCalculator) CalculateOutputItems(ctx context.Context, calcCtx *CalculationContext) ([]models.TaskOutputItem, error) {
 	var outputs []models.TaskOutputItem
 
+	c.logger.Info("Starting output items calculation",
+		zap.String("recipe_id", calcCtx.Recipe.ID.String()),
+		zap.String("user_id", calcCtx.UserID.String()),
+		zap.Int("execution_count", calcCtx.Request.ExecutionCount),
+		zap.Int("recipe_output_items", len(calcCtx.Recipe.OutputItems)))
+
 	// Применяем количество исполнений
 	for execution := 0; execution < calcCtx.Request.ExecutionCount; execution++ {
 		executionOutputs, err := c.calculateSingleExecution(ctx, calcCtx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to calculate execution %d: %w", execution+1, err)
 		}
+		c.logger.Info("Execution output calculated",
+			zap.Int("execution", execution+1),
+			zap.Int("items_count", len(executionOutputs)))
 		outputs = append(outputs, executionOutputs...)
 	}
 
 	// Группируем одинаковые предметы
-	return c.consolidateOutputs(outputs), nil
+	consolidated := c.consolidateOutputs(outputs)
+	c.logger.Info("Output items calculation completed",
+		zap.Int("total_items", len(consolidated)))
+	return consolidated, nil
 }
 
 // calculateSingleExecution рассчитывает результат одного исполнения рецепта
 func (c *ProductionCalculator) calculateSingleExecution(ctx context.Context, calcCtx *CalculationContext) ([]models.TaskOutputItem, error) {
 	var outputs []models.TaskOutputItem
+
+	c.logger.Info("Starting single execution calculation",
+		zap.String("recipe_id", calcCtx.Recipe.ID.String()),
+		zap.Int("recipe_output_items", len(calcCtx.Recipe.OutputItems)))
 
 	// Группируем выходные предметы по группам
 	outputGroups := make(map[string][]models.RecipeOutputItem)
@@ -101,6 +117,10 @@ func (c *ProductionCalculator) calculateSingleExecution(ctx context.Context, cal
 			ungroupedItems = append(ungroupedItems, output)
 		}
 	}
+
+	c.logger.Info("Items grouped",
+		zap.Int("grouped_items", len(outputGroups)),
+		zap.Int("ungrouped_items", len(ungroupedItems)))
 
 	// Обрабатываем альтернативные группы (взаимоисключающие)
 	for groupName, groupItems := range outputGroups {

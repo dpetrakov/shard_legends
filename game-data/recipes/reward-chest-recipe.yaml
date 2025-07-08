@@ -27,14 +27,14 @@ recipes:
         output_group: main
         fixed_quality_level_code: small
 
-      - item_id: 6c0f7fd6-4a6e-4d42-b596-a1a2b775cdbc  # resource_chest_m
+      - item_id: 9421cc9f-a56e-4c7d-b636-4c8fdfef7166  # resource_chest_m
         min_quantity: 1
         max_quantity: 1
         probability_percent: 15.25
         output_group: main
         fixed_quality_level_code: medium
 
-      - item_id: 0f8aa2c1-25b8-4aed-9d6b-8c1e927bf71f  # resource_chest_l
+      - item_id: 9421cc9f-a56e-4c7d-b636-4c8fdfef7166  # resource_chest_l
         min_quantity: 1
         max_quantity: 1
         probability_percent: 4.75
@@ -49,14 +49,14 @@ recipes:
         output_group: main
         fixed_quality_level_code: small
 
-      - item_id: b6dde60a-6530-4fa3-836b-415520d05f37  # reagent_chest_m
+      - item_id: a2e20668-380d-43eb-87db-cb19e4fed0ab  # reagent_chest_m
         min_quantity: 1
         max_quantity: 1
         probability_percent: 8.75
         output_group: main
         fixed_quality_level_code: medium
 
-      - item_id: 359e86d5-d094-4b2b-b96e-6114e3c66d6b  # reagent_chest_l
+      - item_id: a2e20668-380d-43eb-87db-cb19e4fed0ab  # reagent_chest_l
         min_quantity: 1
         max_quantity: 1
         probability_percent: 2.25
@@ -71,14 +71,14 @@ recipes:
         output_group: main
         fixed_quality_level_code: small
 
-      - item_id: d9a3e79a-50d3-4ab5-be86-8137145c34e3  # booster_chest_m
+      - item_id: 3b5c8322-c00d-44e2-875e-d5bd9097d1c4  # booster_chest_m
         min_quantity: 1
         max_quantity: 1
         probability_percent: 2.75
         output_group: main
         fixed_quality_level_code: medium
 
-      - item_id: aa58eb38-5e91-47f0-bd4e-6ed02cb059b1  # booster_chest_l
+      - item_id: 3b5c8322-c00d-44e2-875e-d5bd9097d1c4  # booster_chest_l
         min_quantity: 1
         max_quantity: 1
         probability_percent: 0.75

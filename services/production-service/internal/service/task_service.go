@@ -7,9 +7,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
+
 	"github.com/shard-legends/production-service/internal/models"
 	"github.com/shard-legends/production-service/internal/storage"
-	"go.uber.org/zap"
 )
 
 // TaskService реализует бизнес-логику для работы с производственными заданиями
@@ -387,25 +388,19 @@ func (s *TaskService) ClaimTaskResults(ctx context.Context, userID uuid.UUID, ta
 
 		tasksToProcess = append(tasksToProcess, task)
 	} else {
-		// Claim всех готовых заданий
-		completedTasks, err := s.GetCompletedTasks(ctx, userID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get completed tasks: %w", err)
-		}
+// Claim всех готовых заданий
+completedTasks, err := s.GetCompletedTasks(ctx, userID)
+if err != nil {
+    return nil, fmt.Errorf("failed to get completed tasks: %w", err)
+}
 
-		for i := range completedTasks {
-			tasksToProcess = append(tasksToProcess, &completedTasks[i])
-		}
-	}
-
-	if len(tasksToProcess) == 0 {
-		return &models.ClaimResponse{
-			Success:       true,
-			ItemsReceived: []models.TaskOutputItem{},
-		}, nil
+for i := range completedTasks {
+    tasksToProcess = append(tasksToProcess, &completedTasks[i])
+}
 	}
 
 	var allItemsReceived []models.TaskOutputItem
+	var failedTasks []string
 
 	// Обрабатываем каждое задание
 	for _, task := range tasksToProcess {
@@ -415,7 +410,22 @@ func (s *TaskService) ClaimTaskResults(ctx context.Context, userID uuid.UUID, ta
 				zap.Error(err),
 				zap.String("taskID", task.ID.String()),
 				zap.String("userID", userID.String()))
-			return nil, fmt.Errorf("failed to process claim for task %s: %w", task.ID, err)
+			
+			// Для единичного клайма возвращаем ошибку
+			if taskID != nil {
+				return nil, fmt.Errorf("failed to process claim for task %s: %w", task.ID, err)
+			}
+			
+			// Для массового клайма добавляем в список неудачных и продолжаем
+			failedTasks = append(failedTasks, task.ID.String())
+			continue
+		}
+
+		// Если нет выходных предметов, это не ошибка
+		if len(task.OutputItems) == 0 {
+			s.logger.Info("No output items to claim for task",
+				zap.String("taskID", task.ID.String()),
+				zap.String("userID", userID.String()))
 		}
 
 		// Добавляем полученные предметы к общему списку
@@ -452,8 +462,9 @@ func (s *TaskService) ClaimTaskResults(ctx context.Context, userID uuid.UUID, ta
 	}
 
 	response := &models.ClaimResponse{
-		Success:       true,
+		Success:       len(failedTasks) == 0,
 		ItemsReceived: allItemsReceived,
+		FailedTasks:   failedTasks,
 	}
 
 	if updatedQueue != nil {
@@ -475,23 +486,30 @@ func (s *TaskService) ClaimTaskResults(ctx context.Context, userID uuid.UUID, ta
 
 // processTaskClaim обрабатывает claim одного задания атомарно
 func (s *TaskService) processTaskClaim(ctx context.Context, task *models.ProductionTask) error {
-	// 1. Готовим данные для AddItems
-	itemsToAdd := make([]models.AddItem, len(task.OutputItems))
-	for i, outputItem := range task.OutputItems {
-		itemsToAdd[i] = models.AddItem{
-			ItemID:           outputItem.ItemID,
-			Quantity:         outputItem.Quantity,
-			CollectionID:     outputItem.CollectionID,
-			QualityLevelID:   outputItem.QualityLevelID,
-			CollectionCode:   outputItem.CollectionCode,
-			QualityLevelCode: outputItem.QualityLevelCode,
+	// 1. Проверяем, есть ли выходные предметы для добавления
+	if len(task.OutputItems) > 0 {
+		// Готовим данные для AddItems
+		itemsToAdd := make([]models.AddItem, len(task.OutputItems))
+		for i, outputItem := range task.OutputItems {
+			itemsToAdd[i] = models.AddItem{
+				ItemID:           outputItem.ItemID,
+				Quantity:         outputItem.Quantity,
+				CollectionID:     outputItem.CollectionID,
+				QualityLevelID:   outputItem.QualityLevelID,
+				CollectionCode:   outputItem.CollectionCode,
+				QualityLevelCode: outputItem.QualityLevelCode,
+			}
 		}
-	}
 
-	// 2. Пытаемся добавить предметы игроку
-	if err := s.inventoryClient.AddItems(ctx, task.UserID, "main", "craft_result", task.ID, itemsToAdd); err != nil {
-		// Неудача – не трогаем резерв, оставляем задание в completed, чтобы пользователь попробовал ещё раз
-		return fmt.Errorf("failed to add items to inventory: %w", err)
+		// 2. Пытаемся добавить предметы игроку
+		if err := s.inventoryClient.AddItems(ctx, task.UserID, "main", "craft_result", task.ID, itemsToAdd); err != nil {
+			// Неудача – не трогаем резерв, оставляем задание в completed, чтобы пользователь попробовал ещё раз
+			return fmt.Errorf("failed to add items to inventory: %w", err)
+		}
+	} else {
+		s.logger.Info("Task has no output items, skipping inventory addition",
+			zap.String("taskID", task.ID.String()),
+			zap.String("userID", task.UserID.String()))
 	}
 
 	// 3. Проверяем, был ли создан резерв для этой задачи
@@ -511,22 +529,30 @@ func (s *TaskService) processTaskClaim(ctx context.Context, task *models.Product
 
 		// Проверяем есть ли входные предметы у рецепта
 		if len(recipe.InputItems) > 0 {
-			s.logger.Error("DEBUG: Recipe has input items, calling ConsumeReserve",
+			s.logger.Info("Recipe has input items, attempting ConsumeReserve",
 				zap.String("taskID", task.ID.String()),
 				zap.Int("inputItemsCount", len(recipe.InputItems)))
 
-			// Только если есть входные предметы - уничтожаем резерв
+			// Только если есть входные предметы - пытаемся уничтожить резерв
 			if err := s.inventoryClient.ConsumeReserve(ctx, task.UserID, task.ID); err != nil {
-				// Если не удалось уничтожить резерв, это приведёт к двойной выдаче при повторной попытке.
-				// Поэтому логируем ошибку и ОТКАТЫВАЕМ AddItems через ReturnReserve (best-effort).
+				// ConsumeReserve возвращает ошибку только в случае реальных проблем
+				// Ситуация "резервирование не найдено" уже обрабатывается в inventory_client.go
 				s.logger.Error("Failed to consume reserve after AddItems", zap.Error(err), zap.String("taskID", task.ID.String()))
-				if returnErr := s.inventoryClient.ReturnReserve(ctx, task.UserID, task.ID); returnErr != nil {
-					s.logger.Error("ReturnReserve also failed", zap.Error(returnErr), zap.String("taskID", task.ID.String()))
+				if len(task.OutputItems) > 0 {
+					// Пытаемся откатить AddItems через ReturnReserve (best-effort)
+					if returnErr := s.inventoryClient.ReturnReserve(ctx, task.UserID, task.ID); returnErr != nil {
+						s.logger.Error("ReturnReserve also failed", zap.Error(returnErr), zap.String("taskID", task.ID.String()))
+					}
 				}
 				return fmt.Errorf("failed to consume reserved items: %w", err)
+			} else {
+				// Успешно потребили резерв или он не был найден (оба случая нормальные)
+				s.logger.Info("Successfully consumed reserve or no reservation was needed",
+					zap.String("taskID", task.ID.String()),
+					zap.String("userID", task.UserID.String()))
 			}
 		} else {
-			s.logger.Error("DEBUG: Recipe has no input items, skipping ConsumeReserve", zap.String("taskID", task.ID.String()), zap.String("recipeName", recipe.Name))
+			s.logger.Info("Recipe has no input items, skipping ConsumeReserve", zap.String("taskID", task.ID.String()))
 		}
 	}
 

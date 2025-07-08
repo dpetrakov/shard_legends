@@ -130,6 +130,7 @@ type ClaimRequest struct {
 type ClaimResponse struct {
 	Success            bool             `json:"success"`
 	ItemsReceived      []TaskOutputItem `json:"items_received"`
+	FailedTasks        []string         `json:"failed_tasks,omitempty"`
 	UpdatedQueueStatus *QueueResponse   `json:"updated_queue_status,omitempty"`
 }
 

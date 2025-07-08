@@ -425,7 +425,7 @@ func (oc *operationCreator) CreateReturnOperations(ctx context.Context, req *mod
 	}
 
 	if len(reservedOps) == 0 {
-		return errors.New("no reservation found for the given operation ID")
+		return internalerrors.NewReservationNotFoundError(req.OperationID.String())
 	}
 
 	// Get operation type ID for return and validation
@@ -518,7 +518,7 @@ func (oc *operationCreator) CreateConsumptionOperations(ctx context.Context, req
 	}
 
 	if len(reservedOps) == 0 {
-		return errors.New("no reservation found for the given operation ID")
+		return internalerrors.NewReservationNotFoundError(req.OperationID.String())
 	}
 
 	// Get operation type ID for consumption

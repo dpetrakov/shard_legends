@@ -225,10 +225,31 @@ func (c *HTTPInventoryClient) ConsumeReserve(ctx context.Context, userID uuid.UU
 	if resp.StatusCode != http.StatusOK {
 		var errorResp map[string]interface{}
 		json.NewDecoder(resp.Body).Decode(&errorResp)
+		
+		// DEBUG: Логируем что получили от inventory-service
+		c.logger.Error("DEBUG: ConsumeReserve response from inventory-service",
+			zap.String("operation_id", operationID.String()),
+			zap.Int("status_code", resp.StatusCode),
+			zap.Any("error_response", errorResp))
+		
+		// Проверяем специфичный код ошибки "operation_not_found" (новый, корректный способ)
 		if code, ok := errorResp["error"].(string); ok && code == "operation_not_found" {
-			// резерв отсутствует – это не критично, считаем, что всё уже потреблено/не требовалось
+			// резерв отсутствует – это нормальная ситуация, когда резервирование не было создано
+			c.logger.Info("No reservation found for operation - this is normal when no reservation was made",
+				zap.String("operation_id", operationID.String()),
+				zap.String("error_code", code))
 			return nil
 		}
+		
+		// Проверяем ошибки со словами "no reservation found" (для обратной совместимости)
+		if message, ok := errorResp["message"].(string); ok && strings.Contains(message, "no reservation found") {
+			// резерв отсутствует – это нормальная ситуация, когда резервирование не было создано или не найдено
+			c.logger.Info("No reservation found for operation - this is normal when no reservation was made",
+				zap.String("operation_id", operationID.String()),
+				zap.String("message", message))
+			return nil
+		}
+		
 		return fmt.Errorf("consume reserve failed: %v", errorResp)
 	}
 

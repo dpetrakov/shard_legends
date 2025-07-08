@@ -106,6 +106,107 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
+  /api/deck-game/buy-item:
+    post:
+      summary: Покупка предмета по рецепту или коду товара
+      description: |
+        Позволяет купить предмет по идентификатору рецепта или по коду товара (с указанием качества и серии).
+        Если найден ровно один подходящий рецепт — используется его id. Если не найден или найдено несколько — возвращается ошибка.
+      tags:
+        - DeckGame
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                recipe_id:
+                  type: string
+                  format: uuid
+                  description: Идентификатор рецепта
+                item_code:
+                  type: string
+                  description: Код покупаемого предмета
+                quality_level_code:
+                  type: string
+                  description: Качество (например, small/medium/large/base)
+                collection_code:
+                  type: string
+                  description: Серия/коллекция (если применимо)
+                quantity:
+                  type: integer
+                  default: 1
+                  minimum: 1
+      responses:
+        '200':
+          description: Успешная покупка
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        code:
+                          type: string
+                        quality:
+                          type: string
+                        collection:
+                          type: string
+                        quantity:
+                          type: integer
+        '400':
+          description: Ошибка запроса
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+        '404':
+          description: Рецепт не найден
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+        '409':
+          description: Найдено несколько подходящих рецептов
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+        '500':
+          description: Внутренняя ошибка
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+
 components:
   securitySchemes:
     bearerAuth:

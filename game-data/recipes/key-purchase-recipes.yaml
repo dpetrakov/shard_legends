@@ -1,0 +1,136 @@
+recipes:
+  # Purchase Small Key (S)
+  - id: 1b7eac70-7c64-4b15-a73a-6d3b86dbea01
+    code: key_s_buy
+    operation_class_code: trade_purchase
+    is_active: true
+    production_time_seconds: 0
+
+    input_items:
+      - item_id: f1e2d3c4-b5a6-9788-4321-098765fedcba  # sapphires
+        quantity: 10
+        fixed_quality_level_code: base
+
+    output_items:
+      - item_id: 7e1d9e48-49cd-4ef2-b93e-1e32a0cb9a18  # key (small)
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 100
+        output_group: main
+        fixed_quality_level_code: small
+
+    translations:
+      - language_code: en
+        field_name: name
+        content: "Purchase Small Key"
+      - language_code: ru
+        field_name: name
+        content: "Покупка ключа S"
+      - language_code: en
+        field_name: description
+        content: "Buy a small chest key for 10 sapphires."
+      - language_code: ru
+        field_name: description
+        content: "Купите ключ S за 10 сапфиров."
+
+  # Purchase Medium Key (M)
+  - id: 2d3f9c64-8e82-4fea-98a7-76d0ebec8dc0
+    code: key_m_buy
+    operation_class_code: trade_purchase
+    is_active: true
+    production_time_seconds: 0
+
+    input_items:
+      - item_id: f1e2d3c4-b5a6-9788-4321-098765fedcba  # sapphires
+        quantity: 300
+        fixed_quality_level_code: base
+
+    output_items:
+      - item_id: 7e1d9e48-49cd-4ef2-b93e-1e32a0cb9a18  # key (medium)
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 100
+        output_group: main
+        fixed_quality_level_code: medium
+
+    translations:
+      - language_code: en
+        field_name: name
+        content: "Purchase Medium Key"
+      - language_code: ru
+        field_name: name
+        content: "Покупка ключа M"
+      - language_code: en
+        field_name: description
+        content: "Buy a medium chest key for 300 sapphires."
+      - language_code: ru
+        field_name: description
+        content: "Купите ключ M за 300 сапфиров."
+
+  # Purchase Large Key (L)
+  - id: 3c9e7b52-612d-4953-9527-11be00e439f7
+    code: key_l_buy
+    operation_class_code: trade_purchase
+    is_active: true
+    production_time_seconds: 0
+
+    input_items:
+      - item_id: f1e2d3c4-b5a6-9788-4321-098765fedcba  # sapphires
+        quantity: 3300
+        fixed_quality_level_code: base
+
+    output_items:
+      - item_id: 7e1d9e48-49cd-4ef2-b93e-1e32a0cb9a18  # key (large)
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 100
+        output_group: main
+        fixed_quality_level_code: large
+
+    translations:
+      - language_code: en
+        field_name: name
+        content: "Purchase Large Key"
+      - language_code: ru
+        field_name: name
+        content: "Покупка ключа L"
+      - language_code: en
+        field_name: description
+        content: "Buy a large chest key for 3,300 sapphires."
+      - language_code: ru
+        field_name: description
+        content: "Купите ключ L за 3 300 сапфиров."
+
+  # Purchase Blueprint Key
+  - id: 4d0f3e11-1f9c-4b06-bc0d-9c6f099d66fb
+    code: blueprint_key_buy
+    operation_class_code: trade_purchase
+    is_active: true
+    production_time_seconds: 0
+
+    input_items:
+      - item_id: f1e2d3c4-b5a6-9788-4321-098765fedcba  # sapphires
+        quantity: 10000  # Предположительная цена, TBD
+        fixed_quality_level_code: base
+
+    output_items:
+      - item_id: 4e25a5dc-a814-4102-b5cb-54c39fce969f  # blueprint_key
+        min_quantity: 1
+        max_quantity: 1
+        probability_percent: 100
+        output_group: main
+        fixed_quality_level_code: base
+
+    translations:
+      - language_code: en
+        field_name: name
+        content: "Purchase Blueprint Key"
+      - language_code: ru
+        field_name: name
+        content: "Покупка ключа чертежей"
+      - language_code: en
+        field_name: description
+        content: "Buy a blueprint chest key for 10,000 sapphires. (Price TBD)"
+      - language_code: ru
+        field_name: description
+        content: "Купите ключ для сундука с чертежами за 10 000 сапфиров. (Цена уточняется)" 

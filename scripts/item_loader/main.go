@@ -63,6 +63,54 @@ type ClassifiersFile struct {
 	Classifiers []Classifier `yaml:"classifiers"`
 }
 
+// === NEW TYPES FOR RECIPES ===
+
+type RecipeInputItem struct {
+	ItemID                string `yaml:"item_id"`
+	ItemCode              string `yaml:"item_code"`
+	QualityLevelCode      string `yaml:"quality_level_code"`
+	FixedQualityLevelCode string `yaml:"fixed_quality_level_code"`
+	Quantity              int    `yaml:"quantity"`
+}
+
+type RecipeOutputItem struct {
+	ItemID                string  `yaml:"item_id"`
+	ItemCode              string  `yaml:"item_code"`
+	MinQuantity           int     `yaml:"min_quantity"`
+	MaxQuantity           int     `yaml:"max_quantity"`
+	ProbabilityPercent    float64 `yaml:"probability_percent"`
+	OutputGroup           string  `yaml:"output_group"`
+	FixedQualityLevelCode string  `yaml:"fixed_quality_level_code"`
+}
+
+type RecipeTranslation struct {
+	LanguageCode string `yaml:"language_code"`
+	FieldName    string `yaml:"field_name"`
+	Content      string `yaml:"content"`
+}
+
+type RecipeLimit struct {
+	LimitType string `yaml:"limit_type"`
+	MaxUses   int    `yaml:"max_uses"`
+}
+
+type Recipe struct {
+	ID                    string `yaml:"id"`
+	Code                  string `yaml:"code"`
+	OperationClassCode    string `yaml:"operation_class_code"`
+	IsActive              bool   `yaml:"is_active"`
+	ProductionTimeSeconds int    `yaml:"production_time_seconds"`
+
+	InputItems   []RecipeInputItem   `yaml:"input_items"`
+	OutputItems  []RecipeOutputItem  `yaml:"output_items"`
+	Translations []RecipeTranslation `yaml:"translations"`
+	Limits       []RecipeLimit       `yaml:"limits"`
+}
+
+type RecipesFile struct {
+	Recipes []Recipe `yaml:"recipes"`
+}
+
 var (
 	clsCache  = make(map[string]string)            // classifier_code -> id
 	itemCache = make(map[string]map[string]string) // classifier_code -> (item_code -> id)
@@ -116,6 +164,30 @@ func getClassifierItemID(ctx context.Context, tx pgx.Tx, classifierCode, itemCod
 	return id, nil
 }
 
+// cache for item code -> id
+var (
+	itemCodeCache = make(map[string]string)
+)
+
+func getItemIDByCode(ctx context.Context, tx pgx.Tx, code string) (string, error) {
+	cacheMu.RLock()
+	if id, ok := itemCodeCache[code]; ok {
+		cacheMu.RUnlock()
+		return id, nil
+	}
+	cacheMu.RUnlock()
+
+	var id string
+	err := tx.QueryRow(ctx, `SELECT id FROM inventory.items WHERE code=$1`, code).Scan(&id)
+	if err != nil {
+		return "", fmt.Errorf("item code %s not found: %w", code, err)
+	}
+	cacheMu.Lock()
+	itemCodeCache[code] = id
+	cacheMu.Unlock()
+	return id, nil
+}
+
 // mapping item class -> type classifier code
 var typeClassifierByClass = map[string]string{
 	"resources":  "resource_type",
@@ -138,10 +210,12 @@ type ImportStats struct {
 	fileTotal       int
 	itemFiles       int
 	classifierFiles int
+	recipeFiles     int
 
 	itemUpserts       int
 	classifierUpserts int
 	elementUpserts    int
+	recipeUpserts     int
 
 	failed int
 }
@@ -221,6 +295,14 @@ func main() {
 			}
 			continue
 		}
+		if kind == "recipe" {
+			stats.recipeFiles++
+			if err := processRecipeFile(ctx, pool, fp, stats); err != nil {
+				log.Printf("❌ recipe file %s error: %v", fp, err)
+				stats.failed++
+			}
+			continue
+		}
 
 		stats.itemFiles++
 		if err := processItemFile(ctx, pool, fp, stats); err != nil {
@@ -235,6 +317,8 @@ func main() {
 	fmt.Printf("Elements upserted: %d\n", stats.elementUpserts)
 	fmt.Printf("Item files: %d\n", stats.itemFiles)
 	fmt.Printf("Items upserted: %d\n", stats.itemUpserts)
+	fmt.Printf("Recipe files: %d\n", stats.recipeFiles)
+	fmt.Printf("Recipes upserted: %d\n", stats.recipeUpserts)
 	fmt.Printf("Failed : %d\n", stats.failed)
 }
 
@@ -347,6 +431,10 @@ func upsertItem(ctx context.Context, tx pgx.Tx, it Item) error {
 			return err
 		}
 	}
+	// Cache code->id for later recipe resolution
+	cacheMu.Lock()
+	itemCodeCache[it.Code] = it.ID
+	cacheMu.Unlock()
 	return nil
 }
 
@@ -434,5 +522,142 @@ func detectFileKind(path string) (string, error) {
 	if _, ok := m["items"]; ok {
 		return "item", nil
 	}
+	if _, ok := m["recipes"]; ok {
+		return "recipe", nil
+	}
 	return "", fmt.Errorf("unknown yaml structure")
+}
+
+func processRecipeFile(ctx context.Context, pool *pgxpool.Pool, path string, stats *ImportStats) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read: %w", err)
+	}
+
+	var rf RecipesFile
+	if err := yaml.Unmarshal(data, &rf); err != nil {
+		return fmt.Errorf("yaml parse: %w", err)
+	}
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("tx begin: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	for _, rec := range rf.Recipes {
+		if err := upsertRecipe(ctx, tx, rec); err != nil {
+			log.Printf("recipe %s error: %v", rec.Code, err)
+		} else {
+			stats.recipeUpserts++
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("tx commit: %w", err)
+	}
+	return nil
+}
+
+func upsertRecipe(ctx context.Context, tx pgx.Tx, r Recipe) error {
+	// Cleanup dependent tables (translations, limits, io items)
+	if _, err := tx.Exec(ctx, `DELETE FROM i18n.translations WHERE entity_type='recipe' AND entity_id=$1`, r.ID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM production.recipe_limits WHERE recipe_id=$1`, r.ID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM production.recipe_output_items WHERE recipe_id=$1`, r.ID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM production.recipe_input_items WHERE recipe_id=$1`, r.ID); err != nil {
+		return err
+	}
+
+	// Upsert core recipe record
+	if _, err := tx.Exec(ctx, `INSERT INTO production.recipes (id, code, operation_class_code, is_active, production_time_seconds)
+        VALUES ($1,$2,$3,$4,$5)
+        ON CONFLICT (id) DO UPDATE SET
+            code=EXCLUDED.code,
+            operation_class_code=EXCLUDED.operation_class_code,
+            is_active=EXCLUDED.is_active,
+            production_time_seconds=EXCLUDED.production_time_seconds`,
+		r.ID, r.Code, r.OperationClassCode, r.IsActive, r.ProductionTimeSeconds); err != nil {
+		return err
+	}
+
+	// Insert input items
+	for _, inItem := range r.InputItems {
+		// Resolve item ID by code if necessary
+		itemID := inItem.ItemID
+		if itemID == "" && inItem.ItemCode != "" {
+			var err error
+			itemID, err = getItemIDByCode(ctx, tx, inItem.ItemCode)
+			if err != nil {
+				return err
+			}
+		}
+		if itemID == "" {
+			return fmt.Errorf("input item missing id/code in recipe %s", r.Code)
+		}
+
+		qlvl := inItem.QualityLevelCode
+		if qlvl == "" {
+			qlvl = inItem.FixedQualityLevelCode
+		}
+
+		if _, err := tx.Exec(ctx, `INSERT INTO production.recipe_input_items (recipe_id, item_id, quality_level_code, quantity)
+            VALUES ($1,$2,$3,$4)`,
+			r.ID, itemID, qlvl, inItem.Quantity); err != nil {
+			return err
+		}
+	}
+
+	// Insert output items
+	for _, out := range r.OutputItems {
+		var fq interface{}
+		if out.FixedQualityLevelCode == "" {
+			fq = nil
+		} else {
+			fq = out.FixedQualityLevelCode
+		}
+		itemID := out.ItemID
+		if itemID == "" && out.ItemCode != "" {
+			var err error
+			itemID, err = getItemIDByCode(ctx, tx, out.ItemCode)
+			if err != nil {
+				return err
+			}
+		}
+		if itemID == "" {
+			return fmt.Errorf("output item missing id/code in recipe %s", r.Code)
+		}
+
+		if _, err := tx.Exec(ctx, `INSERT INTO production.recipe_output_items (recipe_id, item_id, min_quantity, max_quantity, probability_percent, output_group, fixed_quality_level_code)
+            VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+			r.ID, itemID, out.MinQuantity, out.MaxQuantity, out.ProbabilityPercent, out.OutputGroup, fq); err != nil {
+			return err
+		}
+	}
+
+	// Insert limits
+	for _, lim := range r.Limits {
+		if _, err := tx.Exec(ctx, `INSERT INTO production.recipe_limits (recipe_id, limit_type, max_uses)
+            VALUES ($1,$2,$3)`,
+			r.ID, lim.LimitType, lim.MaxUses); err != nil {
+			return err
+		}
+	}
+
+	// Insert translations
+	for _, tr := range r.Translations {
+		if _, err := tx.Exec(ctx, `INSERT INTO i18n.translations (entity_type, entity_id, field_name, language_code, content, created_at, updated_at)
+            VALUES ('recipe',$1,$2,$3,$4,now(),now())
+            ON CONFLICT (entity_type,entity_id,field_name,language_code) DO UPDATE SET content=EXCLUDED.content, updated_at=now()`,
+			r.ID, tr.FieldName, tr.LanguageCode, tr.Content); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

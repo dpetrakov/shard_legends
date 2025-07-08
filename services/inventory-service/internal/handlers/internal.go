@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	internalerrors "github.com/shard-legends/inventory-service/internal/errors"
 	"github.com/shard-legends/inventory-service/internal/models"
 )
 
@@ -105,8 +106,17 @@ func (h *InventoryHandler) ReturnReservedItems(c *gin.Context) {
 			"operation_id", req.OperationID,
 			"error", err)
 
-		// Check if operation not found
+		// Check if operation not found (backwards compatibility)
 		if err.Error() == "operation not found" {
+			c.JSON(http.StatusNotFound, models.ErrorResponse{
+				Error:   "operation_not_found",
+				Message: "Reservation operation not found",
+			})
+			return
+		}
+		
+		// Check if reservation not found using specific error type
+		if internalerrors.IsReservationNotFoundError(err) {
 			c.JSON(http.StatusNotFound, models.ErrorResponse{
 				Error:   "operation_not_found",
 				Message: "Reservation operation not found",
@@ -168,8 +178,17 @@ func (h *InventoryHandler) ConsumeReservedItems(c *gin.Context) {
 			"operation_id", req.OperationID,
 			"error", err)
 
-		// Check if operation not found
+		// Check if operation not found (backwards compatibility)
 		if err.Error() == "operation not found" {
+			c.JSON(http.StatusNotFound, models.ErrorResponse{
+				Error:   "operation_not_found",
+				Message: "Reservation operation not found",
+			})
+			return
+		}
+		
+		// Check if reservation not found using specific error type
+		if internalerrors.IsReservationNotFoundError(err) {
 			c.JSON(http.StatusNotFound, models.ErrorResponse{
 				Error:   "operation_not_found",
 				Message: "Reservation operation not found",
