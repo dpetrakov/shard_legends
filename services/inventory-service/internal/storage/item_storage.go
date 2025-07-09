@@ -287,14 +287,60 @@ func (s *itemStorage) GetItemImagesBatch(ctx context.Context, requests []models.
 		return make(map[string]string), nil
 	}
 
+	// Get item details to determine which quality classifier to use for each item
+	itemIDs := make([]uuid.UUID, len(requests))
+	for i, req := range requests {
+		itemIDs[i] = req.ItemID
+	}
+
+	itemsMap, err := s.GetItemsBatch(ctx, itemIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get items batch: %w", err)
+	}
+
 	// Get all classifier mappings once using the cached repository method.
 	collectionCodeToID, err := s.classifierRepo.GetCodeToUUIDMapping(ctx, "collection")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get collection mapping: %w", err)
 	}
-	qualityCodeToID, err := s.classifierRepo.GetCodeToUUIDMapping(ctx, "quality_level")
-	if err != nil {
-		return nil, fmt.Errorf("failed to get quality level mapping: %w", err)
+
+	// Get quality level mappings for all required classifiers
+	qualityClassifierCodes := make(map[string]bool)
+	qualityClassifierCodes["quality_level"] = true // Default classifier
+
+	// Determine which quality classifiers are needed
+	for _, req := range requests {
+		if item, exists := itemsMap[req.ItemID]; exists {
+			// Get the quality classifier code from the item
+			qualityClassifierID := item.QualityLevelsClassifierID
+			// Query the classifier code directly from the database
+			var classifierCode string
+			query := `SELECT code FROM inventory.classifiers WHERE id = $1`
+			err := s.pool.QueryRow(ctx, query, qualityClassifierID).Scan(&classifierCode)
+			if err == nil {
+				qualityClassifierCodes[classifierCode] = true
+			}
+		}
+	}
+
+	// Load all required quality level mappings
+	qualityMappings := make(map[string]map[string]uuid.UUID)
+	for classifierCode := range qualityClassifierCodes {
+		mapping, err := s.classifierRepo.GetCodeToUUIDMapping(ctx, classifierCode)
+		if err != nil {
+			s.logger.Warn("Failed to get quality level mapping", "classifier", classifierCode, "error", err)
+			continue
+		}
+		qualityMappings[classifierCode] = mapping
+	}
+
+	// Ensure default quality_level mapping exists
+	if _, exists := qualityMappings["quality_level"]; !exists {
+		defaultMapping, err := s.classifierRepo.GetCodeToUUIDMapping(ctx, "quality_level")
+		if err != nil {
+			return nil, fmt.Errorf("failed to get default quality level mapping: %w", err)
+		}
+		qualityMappings["quality_level"] = defaultMapping
 	}
 
 	// Final map for results, keyed by the composite key the service layer expects.
@@ -305,7 +351,7 @@ func (s *itemStorage) GetItemImagesBatch(ctx context.Context, requests []models.
 
 	// --- Fallback Attempt 1: Exact Match ---
 	s.logger.Debug("Image fallback: Attempt 1 (Exact Match)", "pending_count", len(pendingRequests))
-	pendingRequests, err = s.findImagesForRequests(ctx, pendingRequests, finalImageMap, collectionCodeToID, qualityCodeToID, false, false)
+	pendingRequests, err = s.findImagesForRequests(ctx, pendingRequests, finalImageMap, collectionCodeToID, qualityMappings, itemsMap, false, false)
 	if err != nil {
 		return nil, fmt.Errorf("error in fallback attempt 1 (exact match): %w", err)
 	}
@@ -313,7 +359,7 @@ func (s *itemStorage) GetItemImagesBatch(ctx context.Context, requests []models.
 	// --- Fallback Attempt 2: Base Collection, Original Quality ---
 	if len(pendingRequests) > 0 {
 		s.logger.Debug("Image fallback: Attempt 2 (Base Collection)", "pending_count", len(pendingRequests))
-		pendingRequests, err = s.findImagesForRequests(ctx, pendingRequests, finalImageMap, collectionCodeToID, qualityCodeToID, true, false)
+		pendingRequests, err = s.findImagesForRequests(ctx, pendingRequests, finalImageMap, collectionCodeToID, qualityMappings, itemsMap, true, false)
 		if err != nil {
 			return nil, fmt.Errorf("error in fallback attempt 2 (base collection): %w", err)
 		}
@@ -323,7 +369,7 @@ func (s *itemStorage) GetItemImagesBatch(ctx context.Context, requests []models.
 	if len(pendingRequests) > 0 {
 		s.logger.Debug("Image fallback: Attempt 3 (Base Collection & Quality)", "pending_count", len(pendingRequests))
 		// This is the last attempt, so we don't need to update the pending list anymore.
-		_, err = s.findImagesForRequests(ctx, pendingRequests, finalImageMap, collectionCodeToID, qualityCodeToID, true, true)
+		_, err = s.findImagesForRequests(ctx, pendingRequests, finalImageMap, collectionCodeToID, qualityMappings, itemsMap, true, true)
 		if err != nil {
 			return nil, fmt.Errorf("error in fallback attempt 3 (base fallback): %w", err)
 		}
@@ -339,7 +385,9 @@ func (s *itemStorage) findImagesForRequests(
 	ctx context.Context,
 	requests []models.ItemDetailRequestItem,
 	finalImageMap map[string]string,
-	collectionCodeToID, qualityCodeToID map[string]uuid.UUID,
+	collectionCodeToID map[string]uuid.UUID,
+	qualityMappings map[string]map[string]uuid.UUID,
+	itemsMap map[uuid.UUID]*models.ItemWithDetails,
 	useBaseCollection, useBaseQuality bool,
 ) ([]models.ItemDetailRequestItem, error) {
 
@@ -348,9 +396,18 @@ func (s *itemStorage) findImagesForRequests(
 	}
 
 	baseCollectionID, baseCollOK := collectionCodeToID["base"]
-	baseQualityLevelID, baseQualOK := qualityCodeToID["base"]
-	if !baseCollOK || !baseQualOK {
-		return requests, fmt.Errorf("base collection or quality level not found in classifiers")
+	if !baseCollOK {
+		return requests, fmt.Errorf("base collection not found in classifiers")
+	}
+
+	// Get default quality level ID from the default quality_level classifier
+	defaultQualityMapping, hasDefault := qualityMappings["quality_level"]
+	if !hasDefault {
+		return requests, fmt.Errorf("default quality_level classifier not found")
+	}
+	baseQualityLevelID, baseQualOK := defaultQualityMapping["base"]
+	if !baseQualOK {
+		return requests, fmt.Errorf("base quality level not found in default classifier")
 	}
 
 	batch := &pgx.Batch{}
@@ -377,11 +434,29 @@ func (s *itemStorage) findImagesForRequests(
 		if useBaseQuality {
 			qualityLevelID = baseQualityLevelID
 		} else if req.QualityLevel != nil {
-			id, ok := qualityCodeToID[*req.QualityLevel]
-			if ok {
-				qualityLevelID = id
+			// Find the correct quality classifier for this item
+			item, itemExists := itemsMap[req.ItemID]
+			if itemExists {
+				// Get the quality classifier code from the item
+				qualityClassifierID := item.QualityLevelsClassifierID
+				var classifierCode string
+				classifierQuery := `SELECT code FROM inventory.classifiers WHERE id = $1`
+				err := s.pool.QueryRow(ctx, classifierQuery, qualityClassifierID).Scan(&classifierCode)
+				if err == nil {
+					if qualityMapping, exists := qualityMappings[classifierCode]; exists {
+						if id, ok := qualityMapping[*req.QualityLevel]; ok {
+							qualityLevelID = id
+						} else {
+							qualityLevelID = baseQualityLevelID // Fallback to base if code is unknown
+						}
+					} else {
+						qualityLevelID = baseQualityLevelID // Fallback to base if classifier not found
+					}
+				} else {
+					qualityLevelID = baseQualityLevelID // Fallback to base if classifier lookup fails
+				}
 			} else {
-				qualityLevelID = baseQualityLevelID // Fallback to base if code is unknown
+				qualityLevelID = baseQualityLevelID // Fallback to base if item not found
 			}
 		} else {
 			qualityLevelID = baseQualityLevelID // Fallback to base if not provided
