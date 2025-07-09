@@ -297,3 +297,122 @@ func (h *DeckGameHandler) OpenChest(c *gin.Context) {
 	h.logger.Info("Chest opened successfully", "user_id", userID, "items_count", len(response.Items), "quantity_opened", response.QuantityOpened)
 	c.JSON(http.StatusOK, response)
 }
+
+// BuyItem handles POST /api/deck-game/buy-item
+func (h *DeckGameHandler) BuyItem(c *gin.Context) {
+	h.logger.Info("BuyItem called")
+
+	// Extract user from JWT context
+	userValue, exists := c.Get("user")
+	if !exists {
+		h.logger.Error("User not found in context")
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse{
+			Error:   "missing_user_context",
+			Message: "User context not found",
+		})
+		return
+	}
+
+	user, ok := userValue.(*auth.UserContext)
+	if !ok {
+		h.logger.Error("Invalid user context type")
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse{
+			Error:   "invalid_user_context",
+			Message: "Invalid user context type",
+		})
+		return
+	}
+
+	// Parse user ID from UUID string
+	userID, err := uuid.Parse(user.UserID)
+	if err != nil {
+		h.logger.Error("Invalid user ID format", "user_id", user.UserID, "error", err)
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_user_id",
+			Message: "Invalid user ID format",
+		})
+		return
+	}
+
+	// Parse request body
+	var request models.BuyItemRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		h.logger.Error("Invalid request body", "user_id", userID, "error", err)
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: "Invalid request body: " + err.Error(),
+		})
+		return
+	}
+
+	// Validate request
+	if err := request.Validate(); err != nil {
+		h.logger.Error("Invalid buy item request", "user_id", userID, "error", err)
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: "Request validation failed: " + err.Error(),
+		})
+		return
+	}
+
+	// Extract JWT token from context
+	jwtToken, exists := c.Get("jwt_token")
+	if !exists {
+		h.logger.Error("JWT token not found in context")
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse{
+			Error:   "missing_jwt_token",
+			Message: "JWT token not found in context",
+		})
+		return
+	}
+
+	jwtTokenStr, ok := jwtToken.(string)
+	if !ok {
+		h.logger.Error("Invalid JWT token type in context")
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse{
+			Error:   "invalid_jwt_token",
+			Message: "Invalid JWT token type in context",
+		})
+		return
+	}
+
+	h.logger.Info("Processing buy item request",
+		"user_id", userID,
+		"item_code", request.ItemCode,
+		"quantity", request.Quantity)
+
+	// Process buy item
+	response, err := h.deckGameService.BuyItem(c.Request.Context(), jwtTokenStr, userID, &request)
+	if err != nil {
+		h.logger.Error("Failed to buy item", "user_id", userID, "error", err)
+
+		// Handle errors
+		errorMessage := err.Error()
+		switch {
+		case strings.Contains(errorMessage, "recipe_not_found"):
+			c.JSON(http.StatusNotFound, models.ErrorResponse{
+				Error:   "recipe_not_found",
+				Message: "Recipe not found",
+			})
+		case strings.Contains(errorMessage, "recipe_ambiguous"):
+			c.JSON(http.StatusConflict, models.ErrorResponse{
+				Error:   "recipe_ambiguous",
+				Message: "Multiple suitable recipes found",
+			})
+		case strings.Contains(errorMessage, "production_error"):
+			c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+				Error:   "production_error",
+				Message: "Error during production",
+			})
+		default:
+			c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+				Error:   "internal_error",
+				Message: "Failed to buy item",
+			})
+		}
+		return
+	}
+
+	h.logger.Info("Item bought successfully", "user_id", userID, "items_count", len(response.Items))
+	c.JSON(http.StatusOK, response)
+}

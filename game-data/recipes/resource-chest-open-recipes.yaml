@@ -10,6 +10,9 @@ recipes:
       - item_id: 9421cc9f-a56e-4c7d-b636-4c8fdfef7166  # resource_chest_s
         quantity: 1
         fixed_quality_level_code: small
+      - item_id: 7e1d9e48-49cd-4ef2-b93e-1e32a0cb9a18  # key (small)
+        quantity: 1
+        fixed_quality_level_code: small
 
     # OUTPUTS — получает 100 ед. ресурса одного типа; вероятности суммарно 100%
     output_items:
@@ -68,6 +71,9 @@ recipes:
       - item_id: 9421cc9f-a56e-4c7d-b636-4c8fdfef7166  # resource_chest_m
         quantity: 1
         fixed_quality_level_code: medium
+      - item_id: 7e1d9e48-49cd-4ef2-b93e-1e32a0cb9a18  # key (medium)
+        quantity: 1
+        fixed_quality_level_code: medium
 
     # OUTPUTS — 3 500 ед. ресурсов, вероятности 40/40/15/5 %
     output_items:
@@ -121,6 +127,9 @@ recipes:
     # INPUTS — только большой сундук (без ключа)
     input_items:
       - item_id: 9421cc9f-a56e-4c7d-b636-4c8fdfef7166  # resource_chest_l
+        quantity: 1
+        fixed_quality_level_code: large
+      - item_id: 7e1d9e48-49cd-4ef2-b93e-1e32a0cb9a18  # key (large)
         quantity: 1
         fixed_quality_level_code: large
 

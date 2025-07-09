@@ -147,8 +147,7 @@
   - ✅ Обработка ошибок: `invalid_input`, `recipe_not_found`, `insufficient_chests`
 - **Тестирование:** Все тесты проходят успешно, сборка без ошибок
 
-- [ ] D-XXX: Публичный метод покупки предметов в deck-game-service
-
+- [ ] D-O-2: Публичный метод покупки предметов в deck-game-service
 **Описание:**
 Реализовать публичный endpoint для покупки предметов через deck-game-service. Метод должен принимать либо идентификатор рецепта, либо код покупаемого товара (с качеством и серией). Если передан код товара, сервис ищет подходящий рецепт с operation_class_code: trade_purchase и нужным output_items. Если найден ровно один рецепт — используется его id, иначе возвращается ошибка. Далее сервис ставит задание на покупку в production-service (/factory/start) с нужным количеством, после чего сразу делает claim через /factory/claim. В случае успеха возвращает купленные предметы.
 
@@ -163,6 +162,13 @@
 **Связанные файлы:**
 - docs/specs/deck-game-service.md
 - docs/specs/deck-game-service-openapi.yml
+
+**Референсная реализация:**
+- Метод `/deck/chest/open` в этом же сервисе deck-game-service (см. реализацию поиска рецепта, интеграции с production-service и обработки claim)
+
+**См. спецификацию:**
+- [docs/specs/deck-game-service.md](../docs/specs/deck-game-service.md)
+- [docs/specs/deck-game-service-openapi.yml](../docs/specs/deck-game-service-openapi.yml)
 
 
 

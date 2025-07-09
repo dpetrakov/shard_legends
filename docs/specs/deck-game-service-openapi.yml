@@ -106,106 +106,49 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
-  /api/deck-game/buy-item:
+  /deck/item/buy:
     post:
+      tags: [Public]
       summary: Покупка предмета по рецепту или коду товара
       description: |
         Позволяет купить предмет по идентификатору рецепта или по коду товара (с указанием качества и серии).
         Если найден ровно один подходящий рецепт — используется его id. Если не найден или найдено несколько — возвращается ошибка.
-      tags:
-        - DeckGame
+      operationId: buyItem
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                recipe_id:
-                  type: string
-                  format: uuid
-                  description: Идентификатор рецепта
-                item_code:
-                  type: string
-                  description: Код покупаемого предмета
-                quality_level_code:
-                  type: string
-                  description: Качество (например, small/medium/large/base)
-                collection_code:
-                  type: string
-                  description: Серия/коллекция (если применимо)
-                quantity:
-                  type: integer
-                  default: 1
-                  minimum: 1
+              $ref: '#/components/schemas/BuyItemRequest'
       responses:
         '200':
           description: Успешная покупка
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  items:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id:
-                          type: string
-                          format: uuid
-                        code:
-                          type: string
-                        quality:
-                          type: string
-                        collection:
-                          type: string
-                        quantity:
-                          type: integer
+                $ref: '#/components/schemas/BuyItemResponse'
         '400':
-          description: Ошибка запроса
+          description: Ошибка бизнес-валидации
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                  message:
-                    type: string
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           description: Рецепт не найден
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                  message:
-                    type: string
+                $ref: '#/components/schemas/ErrorResponse'
         '409':
           description: Найдено несколько подходящих рецептов
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                  message:
-                    type: string
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
-          description: Внутренняя ошибка
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                  message:
-                    type: string
+          $ref: '#/components/responses/InternalError'
 
 components:
   securitySchemes:
@@ -254,29 +197,38 @@ components:
 
     ItemInfo:
       type: object
-      required: [item_id, item_class, item_type, name, description, image_url, collection, quality_level, quantity]
+      required: [item_id, item_class, item_type, name, description, image_url, quantity]
       properties:
         item_id:
           type: string
-          format: uuid
+          description: Уникальный идентификатор предмета
         item_class:
           type: string
+          description: Класс предмета
         item_type:
           type: string
+          description: Тип предмета
         name:
           type: string
+          description: Название предмета
         description:
           type: string
+          description: Описание предмета
         image_url:
           type: string
+          description: URL изображения предмета
         collection:
           type: string
           nullable: true
+          description: Серия/коллекция предмета
         quality_level:
           type: string
+          nullable: true
+          description: Уровень качества предмета
         quantity:
           type: integer
           minimum: 1
+          description: Количество предметов
 
     ClaimResponse:
       type: object
@@ -328,6 +280,48 @@ components:
             $ref: '#/components/schemas/ItemInfo'
         quantity_opened:
           type: integer
+
+    BuyItemRequest:
+      type: object
+      description: |
+        Запрос на покупку предмета. Должен содержать либо recipe_id, либо item_code с дополнительными параметрами.
+      properties:
+        recipe_id:
+          type: string
+          format: uuid
+          description: Идентификатор рецепта для покупки
+        item_code:
+          type: string
+          description: Код покупаемого предмета
+        quality_level_code:
+          type: string
+          description: Качество предмета (например, small/medium/large/base)
+        collection_code:
+          type: string
+          description: Серия/коллекция предмета (если применимо)
+        quantity:
+          type: integer
+          default: 1
+          minimum: 1
+          description: Количество предметов для покупки
+      oneOf:
+        - required: [recipe_id]
+        - required: [item_code]
+      example:
+        item_code: "sword"
+        quality_level_code: "medium"
+        collection_code: "warrior"
+        quantity: 1
+
+    BuyItemResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ItemInfo'
+          description: Список купленных предметов
 
     ErrorResponse:
       type: object

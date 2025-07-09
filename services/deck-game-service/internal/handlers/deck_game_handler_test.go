@@ -48,6 +48,14 @@ func (m *MockDeckGameService) OpenChest(ctx context.Context, jwtToken string, us
 	return args.Get(0).(*models.OpenChestResponse), args.Error(1)
 }
 
+func (m *MockDeckGameService) BuyItem(ctx context.Context, jwtToken string, userID uuid.UUID, request *models.BuyItemRequest) (*models.BuyItemResponse, error) {
+	args := m.Called(ctx, jwtToken, userID, request)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.BuyItemResponse), args.Error(1)
+}
+
 func setupTestRouter() (*gin.Engine, *MockDeckGameService) {
 	gin.SetMode(gin.TestMode)
 
@@ -73,6 +81,7 @@ func setupTestRouter() (*gin.Engine, *MockDeckGameService) {
 		deckAPI.GET("/daily-chest/status", handler.GetDailyChestStatus)
 		deckAPI.POST("/daily-chest/claim", handler.ClaimDailyChest)
 		deckAPI.POST("/chest/open", handler.OpenChest)
+		deckAPI.POST("/item/buy", handler.BuyItem)
 	}
 
 	return router, mockService

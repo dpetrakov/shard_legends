@@ -18,6 +18,9 @@ type DeckGameService interface {
 
 	// OpenChest opens specified chests and returns the aggregated items received
 	OpenChest(ctx context.Context, jwtToken string, userID uuid.UUID, request *models.OpenChestRequest) (*models.OpenChestResponse, error)
+
+	// BuyItem processes the buy item request
+	BuyItem(ctx context.Context, jwtToken string, userID uuid.UUID, request *models.BuyItemRequest) (*models.BuyItemResponse, error)
 }
 
 // DailyChestRepository defines the interface for daily chest data access
@@ -27,6 +30,12 @@ type DailyChestRepository interface {
 
 	// GetLastRewardTime returns the time of the last completed daily chest task for user
 	GetLastRewardTime(ctx context.Context, userID uuid.UUID, recipeID uuid.UUID) (*time.Time, error)
+}
+
+// RecipeRepository defines the interface for recipe data access
+type RecipeRepository interface {
+	// FindRecipesByOutputItem finds recipes by output item characteristics
+	FindRecipesByOutputItem(ctx context.Context, itemCode string, qualityLevelCode, collectionCode *string) ([]Recipe, error)
 }
 
 // ProductionClient defines the interface for Production Service integration
@@ -100,4 +109,15 @@ type ItemDetails struct {
 	ImageURL     string    `json:"image_url"`
 	Collection   *string   `json:"collection,omitempty"`
 	QualityLevel *string   `json:"quality_level,omitempty"`
+}
+
+// Recipe represents a recipe from the database
+type Recipe struct {
+	ID                   uuid.UUID `json:"id"`
+	Code                 string    `json:"code"`
+	OperationClassCode   string    `json:"operation_class_code"`
+	ProductionTimeSeconds int      `json:"production_time_seconds"`
+	IsActive             bool      `json:"is_active"`
+	FixedQualityLevel    *string   `json:"fixed_quality_level,omitempty"`
+	FixedCollectionCode  *string   `json:"fixed_collection_code,omitempty"`
 }

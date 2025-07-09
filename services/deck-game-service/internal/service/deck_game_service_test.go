@@ -79,8 +79,21 @@ func (m *MockInventoryClient) GetInventory(ctx context.Context, jwtToken string)
 	return args.Get(0).([]InventoryItem), args.Error(1)
 }
 
-func setupDeckGameService() (*deckGameService, *MockDailyChestRepository, *MockProductionClient, *MockInventoryClient) {
+type MockRecipeRepository struct {
+	mock.Mock
+}
+
+func (m *MockRecipeRepository) FindRecipesByOutputItem(ctx context.Context, itemCode string, qualityLevelCode, collectionCode *string) ([]Recipe, error) {
+	args := m.Called(ctx, itemCode, qualityLevelCode, collectionCode)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]Recipe), args.Error(1)
+}
+
+func setupDeckGameService() (*deckGameService, *MockDailyChestRepository, *MockRecipeRepository, *MockProductionClient, *MockInventoryClient) {
 	mockRepo := &MockDailyChestRepository{}
+	mockRecipeRepo := &MockRecipeRepository{}
 	mockProductionClient := &MockProductionClient{}
 	mockInventoryClient := &MockInventoryClient{}
 
@@ -89,9 +102,9 @@ func setupDeckGameService() (*deckGameService, *MockDailyChestRepository, *MockP
 		CooldownSec:        30,
 	}
 
-	service := NewDeckGameService(mockRepo, mockProductionClient, mockInventoryClient, cfg, slog.Default()).(*deckGameService)
+	service := NewDeckGameService(mockRepo, mockRecipeRepo, mockProductionClient, mockInventoryClient, cfg, slog.Default()).(*deckGameService)
 
-	return service, mockRepo, mockProductionClient, mockInventoryClient
+	return service, mockRepo, mockRecipeRepo, mockProductionClient, mockInventoryClient
 }
 
 // stringPtr returns a pointer to the given string value
@@ -100,7 +113,7 @@ func stringPtr(s string) *string {
 }
 
 func TestClaimDailyChest_Success(t *testing.T) {
-	service, mockRepo, mockProductionClient, mockInventoryClient := setupDeckGameService()
+	service, mockRepo, _, mockProductionClient, mockInventoryClient := setupDeckGameService()
 
 	userID := uuid.New()
 	recipeID := uuid.MustParse("9b9a4a62-7e79-4f1c-8dbe-62784be4c9d2")
@@ -183,7 +196,7 @@ func TestClaimDailyChest_Success(t *testing.T) {
 }
 
 func TestClaimDailyChest_InvalidCombo(t *testing.T) {
-	service, mockRepo, _, _ := setupDeckGameService()
+	service, mockRepo, _, _, _ := setupDeckGameService()
 
 	userID := uuid.New()
 	recipeID := uuid.MustParse("9b9a4a62-7e79-4f1c-8dbe-62784be4c9d2")
@@ -209,7 +222,7 @@ func TestClaimDailyChest_InvalidCombo(t *testing.T) {
 }
 
 func TestClaimDailyChest_DailyLimitReached(t *testing.T) {
-	service, mockRepo, _, _ := setupDeckGameService()
+	service, mockRepo, _, _, _ := setupDeckGameService()
 
 	userID := uuid.New()
 	recipeID := uuid.MustParse("9b9a4a62-7e79-4f1c-8dbe-62784be4c9d2")
@@ -234,7 +247,7 @@ func TestClaimDailyChest_DailyLimitReached(t *testing.T) {
 }
 
 func TestClaimDailyChest_CooldownViolation(t *testing.T) {
-	service, mockRepo, _, _ := setupDeckGameService()
+	service, mockRepo, _, _, _ := setupDeckGameService()
 
 	userID := uuid.New()
 	recipeID := uuid.MustParse("9b9a4a62-7e79-4f1c-8dbe-62784be4c9d2")
@@ -261,7 +274,7 @@ func TestClaimDailyChest_CooldownViolation(t *testing.T) {
 }
 
 func TestClaimDailyChest_ProductionStartError(t *testing.T) {
-	service, mockRepo, mockProductionClient, _ := setupDeckGameService()
+	service, mockRepo, _, mockProductionClient, _ := setupDeckGameService()
 
 	userID := uuid.New()
 	recipeID := uuid.MustParse("9b9a4a62-7e79-4f1c-8dbe-62784be4c9d2")
@@ -291,7 +304,7 @@ func TestClaimDailyChest_ProductionStartError(t *testing.T) {
 }
 
 func TestClaimDailyChest_ItemDetailsNotFound(t *testing.T) {
-	service, mockRepo, mockProductionClient, mockInventoryClient := setupDeckGameService()
+	service, mockRepo, _, mockProductionClient, mockInventoryClient := setupDeckGameService()
 
 	userID := uuid.New()
 	recipeID := uuid.MustParse("9b9a4a62-7e79-4f1c-8dbe-62784be4c9d2")
@@ -352,7 +365,7 @@ func TestClaimDailyChest_ItemDetailsNotFound(t *testing.T) {
 // Test cases for OpenChest service method
 
 func TestOpenChest_Success_WithQuantity(t *testing.T) {
-	service, _, mockProductionClient, mockInventoryClient := setupDeckGameService()
+	service, _, _, mockProductionClient, mockInventoryClient := setupDeckGameService()
 
 	userID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	jwtToken := "test-jwt-token"
@@ -422,7 +435,7 @@ func TestOpenChest_Success_WithQuantity(t *testing.T) {
 }
 
 func TestOpenChest_Success_WithOpenAll(t *testing.T) {
-	service, _, mockProductionClient, mockInventoryClient := setupDeckGameService()
+	service, _, _, mockProductionClient, mockInventoryClient := setupDeckGameService()
 
 	userID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	jwtToken := "test-jwt-token"
@@ -495,7 +508,7 @@ func TestOpenChest_Success_WithOpenAll(t *testing.T) {
 }
 
 func TestOpenChest_ValidationError_BothFieldsSet(t *testing.T) {
-	service, _, _, _ := setupDeckGameService()
+	service, _, _, _, _ := setupDeckGameService()
 
 	userID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	jwtToken := "test-jwt-token"
@@ -517,7 +530,7 @@ func TestOpenChest_ValidationError_BothFieldsSet(t *testing.T) {
 }
 
 func TestOpenChest_ValidationError_NoFieldsSet(t *testing.T) {
-	service, _, _, _ := setupDeckGameService()
+	service, _, _, _, _ := setupDeckGameService()
 
 	userID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	jwtToken := "test-jwt-token"
@@ -537,7 +550,7 @@ func TestOpenChest_ValidationError_NoFieldsSet(t *testing.T) {
 }
 
 func TestOpenChest_RecipeNotFound(t *testing.T) {
-	service, _, _, _ := setupDeckGameService()
+	service, _, _, _, _ := setupDeckGameService()
 
 	userID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	jwtToken := "test-jwt-token"
@@ -558,7 +571,7 @@ func TestOpenChest_RecipeNotFound(t *testing.T) {
 }
 
 func TestOpenChest_InsufficientChests_OpenAll(t *testing.T) {
-	service, _, _, mockInventoryClient := setupDeckGameService()
+	service, _, _, _, mockInventoryClient := setupDeckGameService()
 
 	userID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	jwtToken := "test-jwt-token"
@@ -583,7 +596,7 @@ func TestOpenChest_InsufficientChests_OpenAll(t *testing.T) {
 }
 
 func TestOpenChest_ProductionStartError(t *testing.T) {
-	service, _, mockProductionClient, mockInventoryClient := setupDeckGameService()
+	service, _, _, mockProductionClient, mockInventoryClient := setupDeckGameService()
 
 	userID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	jwtToken := "test-jwt-token"

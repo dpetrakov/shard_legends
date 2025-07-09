@@ -99,13 +99,14 @@ func main() {
 
 	// Initialize repositories
 	dailyChestRepo := storage.NewDailyChestStorage(postgres.Pool(), log)
+	recipeRepo := storage.NewRecipeStorage(postgres.Pool(), log)
 
 	// Initialize external service clients
 	productionClient := service.NewProductionClient(cfg.ProductionExternalURL, log)
 	inventoryClient := service.NewInventoryClient(cfg.InventoryInternalURL, log)
 
 	// Initialize services
-	deckGameService := service.NewDeckGameService(dailyChestRepo, productionClient, inventoryClient, cfg, log)
+	deckGameService := service.NewDeckGameService(dailyChestRepo, recipeRepo, productionClient, inventoryClient, cfg, log)
 
 	// Initialize handlers
 	deckGameHandler := handlers.NewDeckGameHandler(deckGameService, log)
@@ -117,6 +118,7 @@ func main() {
 		deckAPI.GET("/daily-chest/status", deckGameHandler.GetDailyChestStatus)
 		deckAPI.POST("/daily-chest/claim", deckGameHandler.ClaimDailyChest)
 		deckAPI.POST("/chest/open", deckGameHandler.OpenChest)
+		deckAPI.POST("/item/buy", deckGameHandler.BuyItem)
 	}
 
 	// Create public HTTP server

@@ -119,8 +119,10 @@ cd scripts/item_loader/
 go mod tidy  
 
 go run . --files ../../game-data/items/resources.yaml
-go run . --all ../../game-data/items/
 go run . --all ../../game-data/classifiers/
+go run . --all ../../game-data/items/
+go run . --all ../../game-data/recipes/
+
 ```
 
 

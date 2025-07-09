@@ -23,6 +23,7 @@ const (
 // deckGameService implements DeckGameService interface
 type deckGameService struct {
 	repo             DailyChestRepository
+	recipeRepo       RecipeRepository
 	productionClient ProductionClient
 	inventoryClient  InventoryClient
 	config           *config.Config
@@ -32,6 +33,7 @@ type deckGameService struct {
 // NewDeckGameService creates a new deck game service
 func NewDeckGameService(
 	repo DailyChestRepository,
+	recipeRepo RecipeRepository,
 	productionClient ProductionClient,
 	inventoryClient InventoryClient,
 	cfg *config.Config,
@@ -39,6 +41,7 @@ func NewDeckGameService(
 ) DeckGameService {
 	return &deckGameService{
 		repo:             repo,
+		recipeRepo:       recipeRepo,
 		productionClient: productionClient,
 		inventoryClient:  inventoryClient,
 		config:           cfg,
@@ -406,6 +409,117 @@ func (s *deckGameService) OpenChest(ctx context.Context, jwtToken string, userID
 		"task_id", startResp.TaskID,
 		"items_count", len(responseItems),
 		"quantity_opened", executionCount)
+
+	return response, nil
+}
+
+// BuyItem processes the buy item request
+func (s *deckGameService) BuyItem(ctx context.Context, jwtToken string, userID uuid.UUID, request *models.BuyItemRequest) (*models.BuyItemResponse, error) {
+	var recipeID uuid.UUID
+	var err error
+
+	if request.RecipeID != nil {
+		// Use the provided recipe ID
+		recipeID = *request.RecipeID
+		s.logger.Info("Using provided recipe ID", "user_id", userID, "recipe_id", recipeID)
+	} else {
+		// Search for recipe by item code
+		recipes, err := s.recipeRepo.FindRecipesByOutputItem(ctx, *request.ItemCode, request.QualityLevelCode, request.CollectionCode)
+		if err != nil {
+			s.logger.Error("Failed to find recipes", "user_id", userID, "item_code", *request.ItemCode, "error", err)
+			return nil, errors.Wrap(err, "failed to find recipes")
+		}
+
+		if len(recipes) == 0 {
+			s.logger.Warn("No recipes found for item", "user_id", userID, "item_code", *request.ItemCode, "quality_level", request.QualityLevelCode, "collection", request.CollectionCode)
+			return nil, fmt.Errorf("recipe_not_found")
+		}
+
+		if len(recipes) > 1 {
+			s.logger.Warn("Multiple recipes found for item", "user_id", userID, "item_code", *request.ItemCode, "quality_level", request.QualityLevelCode, "collection", request.CollectionCode, "count", len(recipes))
+			return nil, fmt.Errorf("recipe_ambiguous")
+		}
+
+		recipeID = recipes[0].ID
+		s.logger.Info("Found recipe for item", "user_id", userID, "item_code", *request.ItemCode, "recipe_id", recipeID)
+	}
+
+	// Start production task
+	startResp, err := s.productionClient.StartProduction(ctx, jwtToken, userID, recipeID, request.Quantity)
+	if err != nil {
+		s.logger.Error("Failed to start buy item production", "user_id", userID, "recipe_id", recipeID, "error", err)
+		return nil, errors.Wrap(err, "production_error")
+	}
+
+	// Claim production results immediately
+	claimResp, err := s.productionClient.ClaimProduction(ctx, jwtToken, userID, startResp.TaskID)
+	if err != nil {
+		s.logger.Error("Failed to claim buy item production", "user_id", userID, "task_id", startResp.TaskID, "error", err)
+		return nil, errors.Wrap(err, "production_error")
+	}
+
+	// Get detailed item information
+	itemDetailsRequests := make([]ItemDetailsRequest, len(claimResp.ItemsReceived))
+	for i, item := range claimResp.ItemsReceived {
+		s.logger.Info("Processing bought item",
+			"user_id", userID,
+			"item_id", item.ItemID,
+			"collection", item.Collection,
+			"quality_level", item.QualityLevel,
+			"quantity", item.Quantity)
+
+		itemDetailsRequests[i] = ItemDetailsRequest{
+			ItemID:       item.ItemID,
+			Collection:   item.Collection,
+			QualityLevel: item.QualityLevel,
+		}
+	}
+
+	itemDetails, err := s.inventoryClient.GetItemsDetails(ctx, jwtToken, itemDetailsRequests, "ru")
+	if err != nil {
+		s.logger.Error("Failed to get item details for buy item", "user_id", userID, "error", err)
+		return nil, errors.Wrap(err, "failed to get item details")
+	}
+
+	// Build response items
+	responseItems := make([]models.ItemInfo, len(claimResp.ItemsReceived))
+	for i, receivedItem := range claimResp.ItemsReceived {
+		// Find corresponding item details
+		var details *ItemDetails
+		for _, detail := range itemDetails.Items {
+			if detail.ItemID == receivedItem.ItemID {
+				details = &detail
+				break
+			}
+		}
+
+		if details == nil {
+			s.logger.Error("Item details not found for buy item", "item_id", receivedItem.ItemID)
+			return nil, fmt.Errorf("item details not found for item %s", receivedItem.ItemID)
+		}
+
+		responseItems[i] = models.ItemInfo{
+			ItemID:       details.ItemID.String(),
+			ItemClass:    details.ItemClass,
+			ItemType:     details.ItemType,
+			Name:         details.Name,
+			Description:  details.Description,
+			ImageURL:     details.ImageURL,
+			Collection:   filterBaseValue(details.Collection),
+			QualityLevel: filterBaseValue(details.QualityLevel),
+			Quantity:     receivedItem.Quantity,
+		}
+	}
+
+	response := &models.BuyItemResponse{
+		Items: responseItems,
+	}
+
+	s.logger.Info("Buy item completed successfully",
+		"user_id", userID,
+		"task_id", startResp.TaskID,
+		"items_count", len(responseItems),
+		"quantity", request.Quantity)
 
 	return response, nil
 }
