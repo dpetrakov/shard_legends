@@ -91,6 +91,14 @@ func (m *MockRecipeRepository) FindRecipesByOutputItem(ctx context.Context, item
 	return args.Get(0).([]Recipe), args.Error(1)
 }
 
+func (m *MockRecipeRepository) GetSapphireShopRecipes(ctx context.Context) ([]SapphireShopRecipe, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]SapphireShopRecipe), args.Error(1)
+}
+
 func setupDeckGameService() (*deckGameService, *MockDailyChestRepository, *MockRecipeRepository, *MockProductionClient, *MockInventoryClient) {
 	mockRepo := &MockDailyChestRepository{}
 	mockRecipeRepo := &MockRecipeRepository{}
@@ -619,6 +627,100 @@ func TestOpenChest_ProductionStartError(t *testing.T) {
 
 	mockProductionClient.AssertExpectations(t)
 	mockInventoryClient.AssertExpectations(t)
+}
+
+func TestDeckGameService_GetSapphiresShopItems(t *testing.T) {
+	tests := []struct {
+		name           string
+		mockRecipes    []SapphireShopRecipe
+		mockError      error
+		expectedResult []models.SapphiresShopRecipe
+		expectedError  string
+	}{
+		{
+			name: "successful_retrieval",
+			mockRecipes: []SapphireShopRecipe{
+				{
+					RecipeID: uuid.New(),
+					Code:     "sapphire_key_buy",
+					Input: []SapphireShopItemInfo{
+						{
+							ItemID:           uuid.New(),
+							Code:             "sapphire",
+							CollectionCode:   nil,
+							QualityLevelCode: stringPtr("small"),
+						},
+					},
+					Output: SapphireShopItemInfo{
+						ItemID:           uuid.New(),
+						Code:             "key",
+						CollectionCode:   nil,
+						QualityLevelCode: stringPtr("small"),
+					},
+				},
+			},
+			mockError: nil,
+			expectedResult: []models.SapphiresShopRecipe{
+				{
+					RecipeID: uuid.UUID{}, // Will be set from mock
+					Code:     "sapphire_key_buy",
+					Input: []models.SapphiresShopItem{
+						{
+							ItemID:           uuid.UUID{}, // Will be set from mock
+							Code:             "sapphire",
+							CollectionCode:   nil,
+							QualityLevelCode: stringPtr("small"),
+						},
+					},
+					Output: models.SapphiresShopItem{
+						ItemID:           uuid.UUID{}, // Will be set from mock
+						Code:             "key",
+						CollectionCode:   nil,
+						QualityLevelCode: stringPtr("small"),
+					},
+				},
+			},
+		},
+		{
+			name:           "empty_result",
+			mockRecipes:    []SapphireShopRecipe{},
+			mockError:      nil,
+			expectedResult: []models.SapphiresShopRecipe{},
+		},
+		{
+			name:          "repository_error",
+			mockRecipes:   nil,
+			mockError:     errors.New("database error"),
+			expectedError: "failed to get sapphire shop recipes",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create service with mock repository
+			service, _, mockRecipeRepo, _, _ := setupDeckGameService()
+
+			// Setup mock
+			mockRecipeRepo.On("GetSapphireShopRecipes", mock.Anything).Return(tt.mockRecipes, tt.mockError)
+
+			// Call method
+			result, err := service.GetSapphiresShopItems(context.Background())
+
+			// Check error
+			if tt.expectedError != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.expectedError)
+				return
+			}
+
+			// Check success
+			assert.NoError(t, err)
+			assert.Len(t, result, len(tt.expectedResult))
+
+			// Verify mock calls
+			mockRecipeRepo.AssertExpectations(t)
+		})
+	}
 }
 
 // Helper functions for test cases

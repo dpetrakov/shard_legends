@@ -524,6 +524,69 @@ func (s *deckGameService) BuyItem(ctx context.Context, jwtToken string, userID u
 	return response, nil
 }
 
+// GetSapphiresShopItems returns list of items available for purchase with sapphires
+func (s *deckGameService) GetSapphiresShopItems(ctx context.Context) ([]models.SapphiresShopRecipe, error) {
+	// Get sapphire shop recipes from repository
+	recipes, err := s.recipeRepo.GetSapphireShopRecipes(ctx)
+	if err != nil {
+		s.logger.Error("Failed to get sapphire shop recipes", "error", err)
+		return nil, errors.Wrap(err, "failed to get sapphire shop recipes")
+	}
+
+	// Convert to response format
+	response := make([]models.SapphiresShopRecipe, 0, len(recipes))
+	for _, recipe := range recipes {
+		// Convert input items
+		inputItems := make([]models.SapphiresShopItem, 0, len(recipe.Input))
+		for _, input := range recipe.Input {
+			inputItems = append(inputItems, models.SapphiresShopItem{
+				ItemID:           input.ItemID,
+				Code:             input.Code,
+				CollectionCode:   normalizeCollectionCode(input.CollectionCode),
+				QualityLevelCode: normalizeQualityLevelCode(input.QualityLevelCode),
+				Quantity:         input.Quantity,
+			})
+		}
+
+		// Convert output item
+		outputItem := models.SapphiresShopItem{
+			ItemID:           recipe.Output.ItemID,
+			Code:             recipe.Output.Code,
+			CollectionCode:   normalizeCollectionCode(recipe.Output.CollectionCode),
+			QualityLevelCode: normalizeQualityLevelCode(recipe.Output.QualityLevelCode),
+			MinQuantity:      recipe.Output.MinQuantity,
+			MaxQuantity:      recipe.Output.MaxQuantity,
+		}
+
+		response = append(response, models.SapphiresShopRecipe{
+			RecipeID: recipe.RecipeID,
+			Code:     recipe.Code,
+			Input:    inputItems,
+			Output:   outputItem,
+		})
+	}
+
+	s.logger.Info("Sapphire shop items retrieved successfully", "items_count", len(response))
+
+	return response, nil
+}
+
+// normalizeCollectionCode returns nil if the collection code is null or "base"
+func normalizeCollectionCode(code *string) *string {
+	if code == nil || *code == "" || *code == "base" {
+		return nil
+	}
+	return code
+}
+
+// normalizeQualityLevelCode returns nil if the quality level code is null or "base"
+func normalizeQualityLevelCode(code *string) *string {
+	if code == nil || *code == "" || *code == "base" {
+		return nil
+	}
+	return code
+}
+
 // filterBaseValue returns nil if the value is nil or represents a base/default value
 // Otherwise returns the original pointer
 func filterBaseValue(s *string) *string {

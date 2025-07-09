@@ -150,6 +150,27 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
+  /deck/shop/sapphires:
+    get:
+      tags: [Public]
+      summary: Получить список товаров в магазине за сапфиры
+      description: |
+        Возвращает список товаров, которые можно купить за сапфиры. В ответе только те рецепты, у которых на входе только сапфиры.
+        Снятие ограничения по количеству выходных предметов позволяет получить все доступные товары.
+        Поля collection_code и quality_level_code не включаются в ответ, если их значение равно "base" (значение по умолчанию).
+      operationId: getSapphiresShopItems
+      responses:
+        '200':
+          description: Список товаров
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SapphiresShopRecipe'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -331,6 +352,53 @@ components:
           type: string
         message:
           type: string
+
+    SapphiresShopRecipe:
+      type: object
+      required: [recipe_id, code, input, output]
+      properties:
+        recipe_id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        input:
+          type: array
+          items:
+            $ref: '#/components/schemas/SapphiresShopItem'
+        output:
+          $ref: '#/components/schemas/SapphiresShopItem'
+    SapphiresShopItem:
+      type: object
+      required: [item_id, code]
+      properties:
+        item_id:
+          type: string
+          format: uuid
+          description: Уникальный идентификатор предмета
+        code:
+          type: string
+          description: Код предмета
+        collection_code:
+          type: string
+          nullable: true
+          description: Код коллекции (опущается для "base")
+        quality_level_code:
+          type: string
+          nullable: true
+          description: Код качества (опущается для "base")
+        quantity:
+          type: integer
+          minimum: 1
+          description: Количество предметов (для входных предметов)
+        min_quantity:
+          type: integer
+          minimum: 1
+          description: Минимальное количество предметов (для выходных предметов)
+        max_quantity:
+          type: integer
+          minimum: 1
+          description: Максимальное количество предметов (для выходных предметов)
 
   responses:
     Unauthorized:

@@ -21,6 +21,9 @@ type DeckGameService interface {
 
 	// BuyItem processes the buy item request
 	BuyItem(ctx context.Context, jwtToken string, userID uuid.UUID, request *models.BuyItemRequest) (*models.BuyItemResponse, error)
+
+	// GetSapphiresShopItems returns list of items available for purchase with sapphires
+	GetSapphiresShopItems(ctx context.Context) ([]models.SapphiresShopRecipe, error)
 }
 
 // DailyChestRepository defines the interface for daily chest data access
@@ -36,6 +39,9 @@ type DailyChestRepository interface {
 type RecipeRepository interface {
 	// FindRecipesByOutputItem finds recipes by output item characteristics
 	FindRecipesByOutputItem(ctx context.Context, itemCode string, qualityLevelCode, collectionCode *string) ([]Recipe, error)
+
+	// GetSapphireShopRecipes returns recipes that can be purchased with sapphires only
+	GetSapphireShopRecipes(ctx context.Context) ([]SapphireShopRecipe, error)
 }
 
 // ProductionClient defines the interface for Production Service integration
@@ -120,4 +126,23 @@ type Recipe struct {
 	IsActive             bool      `json:"is_active"`
 	FixedQualityLevel    *string   `json:"fixed_quality_level,omitempty"`
 	FixedCollectionCode  *string   `json:"fixed_collection_code,omitempty"`
+}
+
+// SapphireShopRecipe represents a recipe that can be purchased with sapphires
+type SapphireShopRecipe struct {
+	RecipeID uuid.UUID               `json:"recipe_id"`
+	Code     string                  `json:"code"`
+	Input    []SapphireShopItemInfo  `json:"input"`
+	Output   SapphireShopItemInfo    `json:"output"`
+}
+
+// SapphireShopItemInfo represents item information for sapphire shop
+type SapphireShopItemInfo struct {
+	ItemID           uuid.UUID `json:"item_id"`
+	Code             string    `json:"code"`
+	CollectionCode   *string   `json:"collection_code,omitempty"`
+	QualityLevelCode *string   `json:"quality_level_code,omitempty"`
+	Quantity         *int      `json:"quantity,omitempty"`         // For input items
+	MinQuantity      *int      `json:"min_quantity,omitempty"`      // For output items
+	MaxQuantity      *int      `json:"max_quantity,omitempty"`      // For output items
 }

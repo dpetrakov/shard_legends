@@ -119,6 +119,7 @@ func main() {
 		deckAPI.POST("/daily-chest/claim", deckGameHandler.ClaimDailyChest)
 		deckAPI.POST("/chest/open", deckGameHandler.OpenChest)
 		deckAPI.POST("/item/buy", deckGameHandler.BuyItem)
+		deckAPI.GET("/shop/sapphires", deckGameHandler.GetSapphiresShopItems)
 	}
 
 	// Create public HTTP server

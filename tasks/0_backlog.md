@@ -170,5 +170,39 @@
 - [docs/specs/deck-game-service.md](../docs/specs/deck-game-service.md)
 - [docs/specs/deck-game-service-openapi.yml](../docs/specs/deck-game-service-openapi.yml)
 
+## D-O-3 Публичный метод получения списка товаров в магазине за сапфиры
+**Описание:**
+Реализовать публичный endpoint для получения списка товаров, доступных для покупки за сапфиры через deck-game-service. Метод возвращает список идентификаторов рецептов, у которых на вход только сапфиры, а на выход только один предмет. Для каждого рецепта возвращаются идентификаторы, код, редкость и коллекция входящих и исходящих предметов. Редкость и коллекция берутся из fixed_collection_code, fixed_quality_level_code (если null — считаем, что это base и в выходной набор параметров можно не включать).
+**Приоритет:** Средний
+**Оценка:** M
+**Зависимости:** production.recipes, production.recipe_input_items, production.recipe_output_items
+**Критерии готовности:**
+- [ ] Новый публичный endpoint доступен по спецификации
+- [ ] Корректно фильтруются рецепты: вход — только сапфиры, выход — только один предмет
+- [ ] В ответе присутствуют все необходимые идентификаторы, коды, коллекции и редкости
+- [ ] Корректно обрабатываются значения fixed_collection_code, fixed_quality_level_code (null → base)
+- [ ] Покрытие unit-тестами не менее 80%
+- [ ] Документация и OpenAPI обновлены
+
+**Пошаговый план:**
+1. Изучить структуру production.recipes, recipe_input_items, recipe_output_items
+2. Реализовать фильтрацию рецептов по условиям (вход — только сапфиры, выход — один предмет)
+3. Собрать для каждого рецепта нужные данные (id, code, входящие/исходящие предметы, коллекция, редкость)
+4. Реализовать публичный endpoint (GET /deck/shop/sapphires)
+5. Покрыть логику unit-тестами
+6. Обновить спецификацию и OpenAPI
+
+**Связанные файлы:**
+- docs/specs/deck-game-service.md
+- docs/specs/deck-game-service-openapi.yml
+
+**Референсная реализация:**
+- Логика поиска и фильтрации рецептов аналогична реализации поиска рецепта для покупки предмета (см. buyItem endpoint, D-O-2)
+- Использовать подходы из методов поиска и агрегации рецептов в Deck Game Service
+
+**См. спецификацию:**
+- [docs/specs/deck-game-service.md](../docs/specs/deck-game-service.md)
+- [docs/specs/deck-game-service-openapi.yml](../docs/specs/deck-game-service-openapi.yml)
+
 
 

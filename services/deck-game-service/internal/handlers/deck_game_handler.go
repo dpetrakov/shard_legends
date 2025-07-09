@@ -416,3 +416,22 @@ func (h *DeckGameHandler) BuyItem(c *gin.Context) {
 	h.logger.Info("Item bought successfully", "user_id", userID, "items_count", len(response.Items))
 	c.JSON(http.StatusOK, response)
 }
+
+// GetSapphiresShopItems returns list of items available for purchase with sapphires
+func (h *DeckGameHandler) GetSapphiresShopItems(c *gin.Context) {
+	h.logger.Info("GetSapphiresShopItems called")
+
+	// Get sapphire shop items
+	response, err := h.deckGameService.GetSapphiresShopItems(c.Request.Context())
+	if err != nil {
+		h.logger.Error("Failed to get sapphire shop items", "error", err)
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+			Error:   "internal_error",
+			Message: "Failed to get sapphire shop items",
+		})
+		return
+	}
+
+	h.logger.Info("Sapphire shop items retrieved successfully", "items_count", len(response))
+	c.JSON(http.StatusOK, response)
+}
